@@ -29,6 +29,12 @@ fn main() {
         if !ok {
             println!("cargo::warning=building without craft-fonts (once it is there, `cargo clean -p figcraft-text` makes the next build use it)");
         }
+        // A family named in FIGCRAFT_WEB_FONTS that nothing embedded is most likely misspelt.
+        for name in std::env::var("FIGCRAFT_WEB_FONTS").unwrap_or_default().split(',').map(str::trim).filter(|n| ok && !n.is_empty()) {
+            if !src.contains(&format!("family: {name:?},")) {
+                println!("cargo::warning=FIGCRAFT_WEB_FONTS: no craft-fonts manifest family {name:?} was embedded");
+            }
+        }
     }
     src.push_str("];\n");
     let out = PathBuf::from(std::env::var_os("OUT_DIR").unwrap_or_default()).join("craft_fonts.rs");
