@@ -12,8 +12,8 @@ fn main() {
     println!("cargo::rerun-if-env-changed=FIGCRAFT_EMBED_CJK");
     println!("cargo::rerun-if-env-changed=FIGCRAFT_WEB_FONTS");
     let mut src = String::from("pub static CRAFT_FONTS: &[CraftFont] = &[\n");
+    let mut ok = false;
     if let Some(dir) = std::env::var_os("CRAFT_FONTS_DIR").map(PathBuf::from) {
-        let mut ok = false;
         for manifest in ["fonts/latin-manifest.txt", "fonts/manifest.txt"] {
             match craft_fonts(&dir, manifest) {
                 Ok(entries) => {
@@ -29,11 +29,17 @@ fn main() {
         if !ok {
             println!("cargo::warning=building without craft-fonts (once it is there, `cargo clean -p figcraft-text` makes the next build use it)");
         }
-        // A family named in FIGCRAFT_WEB_FONTS that nothing embedded is most likely misspelt.
-        for name in std::env::var("FIGCRAFT_WEB_FONTS").unwrap_or_default().split(',').map(str::trim).filter(|n| ok && !n.is_empty()) {
-            if !src.contains(&format!("family: {name:?},")) {
-                println!("cargo::warning=FIGCRAFT_WEB_FONTS: no craft-fonts manifest family {name:?} was embedded");
-            }
+    }
+    // Say which families named in FIGCRAFT_WEB_FONTS nothing embedded: with craft-fonts there the
+    // name is most likely misspelt.
+    for name in std::env::var("FIGCRAFT_WEB_FONTS").unwrap_or_default().split(',').map(str::trim).filter(|n| !n.is_empty()) {
+        if !src.contains(&format!("family: {name:?},")) {
+            let why = if ok {
+                "no craft-fonts manifest entry was embedded for it (misspelt? CJK also needs FIGCRAFT_EMBED_CJK)"
+            } else {
+                "this build has no craft-fonts"
+            };
+            println!("cargo::warning=FIGCRAFT_WEB_FONTS: {name:?} isn't embedded: {why}");
         }
     }
     src.push_str("];\n");
