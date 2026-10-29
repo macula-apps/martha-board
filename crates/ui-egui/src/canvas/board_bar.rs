@@ -357,14 +357,14 @@ pub(crate) fn grid_settings(app: &mut FigApp, ui: &mut Ui) {
     let mut set = None;
     ui.horizontal(|ui| {
         ui.label(tr("Board grid"));
-        for style in GridStyle::ALL {
-            let label = match style {
-                GridStyle::Dots => tr("Dots"),
-                GridStyle::Lines => tr("Lines"),
-                GridStyle::Graph => tr("Graph paper"),
-                GridStyle::None => tr("None"),
-            };
-            if ui.selectable_label(g.style == style, label).clicked() {
+        let styles = [
+            (GridStyle::Dots, tr_noop("Dots")),
+            (GridStyle::Lines, tr_noop("Lines")),
+            (GridStyle::Graph, tr_noop("Graph paper")),
+            (GridStyle::None, tr_noop("None")),
+        ];
+        for (style, label) in styles {
+            if ui.selectable_label(g.style == style, tr(label)).clicked() {
                 set = Some(json!({"style": style.id()}));
             }
         }
