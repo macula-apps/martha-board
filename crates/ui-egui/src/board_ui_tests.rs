@@ -242,7 +242,7 @@ fn a_board_page_has_a_dot_grid_under_its_layers_thinned_out_zoomed_out() {
     let fill = u.app.session.doc().unwrap().node(sticky).unwrap().fills[0].solid_color().unwrap().to_rgba8();
     assert_eq!(at(2.0 * step, 2.0 * step), [fill[0], fill[1], fill[2]], "the sticky covers the dot under it");
     // Zoomed out, the dots space out: every second, fourth… stays, the next to go fading.
-    use crate::board_bar::dot_spacing;
+    let dot_spacing = |z: f64| crate::board_bar::grid_spacing(z, 24.0, 2, 14.0);
     assert_eq!(dot_spacing(1.0), Some((24.0, ((24.0 - 14.0) / 14.0) as f32)));
     assert_eq!(dot_spacing(0.25).map(|d| d.0), Some(96.0));
     assert_eq!(dot_spacing(4.0), Some((24.0, 1.0)));
@@ -270,4 +270,41 @@ fn a_selected_connector_shows_its_ends_as_handles() {
         let ring = shapes.iter().any(|s| matches!(s, egui::Shape::Circle(c) if (c.center - end).length() < 0.5 && c.radius == 5.0));
         assert!(ring, "a handle at {end:?}");
     }
+}
+
+#[test]
+fn the_board_grid_follows_its_settings() {
+    let mut u = board();
+    u.app.session.execute("view.zoom100", &json!({})).unwrap();
+    u.frame(vec![]);
+    let t = crate::theme::Tokens::get(&u.ctx);
+    let bg = egui::Color32::from_rgb(240, 240, 240);
+    let usual = crate::board_bar::dots(&u.app, bg, &t).unwrap();
+    assert!(!usual.lines && usual.major == 2);
+    // Lines, as fine at any zoom.
+    u.app.run("board.grid", json!({"style": "lines"}));
+    let lines = crate::board_bar::dots(&u.app, bg, &t).unwrap();
+    assert!(lines.lines && lines.major == 2 && lines.color.a < usual.color.a, "lines start fainter than dots");
+    // Graph paper: a strong line every 5 cells of 8, the cells in between fainter even zoomed in.
+    u.app.run("board.grid", json!({"style": "graph", "spacing": 8, "major": 5}));
+    u.app.session.ds_mut().unwrap().view.zoom = 4.0;
+    let graph = crate::board_bar::dots(&u.app, bg, &t).unwrap();
+    assert_eq!((graph.lines, graph.major, graph.step), (true, 5, 8.0));
+    assert!(graph.faded.a < graph.color.a);
+    // Zoomed out, the fine cells go and the strong lines stay: the step grows by fives.
+    u.app.session.ds_mut().unwrap().view.zoom = 0.25;
+    let far = crate::board_bar::dots(&u.app, bg, &t).unwrap();
+    assert_eq!(far.step, 8.0 * 5.0, "40 × 0.25 = 10 points apart, the closest lines come");
+    assert_eq!(far.faded.a, 0.0, "the cells the next step drops have faded out");
+    // More contrast: stronger marks; larger: larger.
+    u.app.run("board.grid", json!({"style": "dots", "contrast": 3, "size": 2}));
+    let strong = crate::board_bar::dots(&u.app, bg, &t).unwrap();
+    assert!(strong.color.a > usual.color.a * 2.5 && strong.size > usual.size * 0.25 * 1.5, "{strong:?}");
+    // None: no grid.
+    u.app.run("board.grid", json!({"style": "none"}));
+    assert!(crate::board_bar::dots(&u.app, bg, &t).is_none());
+    use crate::board_bar::grid_spacing;
+    assert_eq!(grid_spacing(1.0, 24.0, 5, 0.0), None);
+    assert_eq!(grid_spacing(1e-320, 512.0, 2, 14.0), None, "no finite step that far out");
+    assert!(grid_spacing(1e-300, 4.0, 12, 10.0).is_some_and(|(step, _)| step.is_finite()));
 }
