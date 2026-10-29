@@ -308,3 +308,32 @@ fn the_board_grid_follows_its_settings() {
     assert_eq!(grid_spacing(1e-320, 512.0, 2, 14.0), None, "no finite step that far out");
     assert!(grid_spacing(1e-300, 4.0, 12, 10.0).is_some_and(|(step, _)| step.is_finite()));
 }
+
+#[test]
+fn preferences_set_the_board_grid_and_the_default_dots_keep_their_size() {
+    let mut u = board();
+    let bg = egui::Color32::from_rgb(240, 240, 240);
+    // The default grid: dots a point and a half across at 100 %, one to three points on screen.
+    for (zoom, on_screen) in [(1.0, 1.5), (0.25, 1.0), (4.0, 3.0)] {
+        u.app.session.ds_mut().unwrap().view.zoom = zoom;
+        let t = crate::theme::Tokens::get(&u.ctx);
+        let size = crate::board_bar::dots(&u.app, bg, &t).unwrap().size;
+        assert!((size * zoom - on_screen).abs() < 1e-9, "at {zoom}: {size}");
+    }
+    u.app.session.ds_mut().unwrap().view.zoom = 1.0;
+    u.app.ui.preferences = true;
+    u.frame(vec![]);
+    let shapes = flat(&u.frame_output(vec![]).shapes);
+    assert!(has_text(&shapes, "Board grid") && has_text(&shapes, "Spacing"));
+    assert!(!has_text(&shapes, "Strong line every") && !has_text(&shapes, "Reset grid"), "dots, as usual");
+    click(&mut u, text_center(&shapes, "Graph paper"));
+    assert_eq!(u.app.session.prefs.board_grid.style, figcraft_engine::board_grid::GridStyle::Graph);
+    let shapes = flat(&u.frame_output(vec![]).shapes);
+    assert!(has_text(&shapes, "Strong line every"), "graph paper's cells per strong line");
+    click(&mut u, text_center(&shapes, "Reset grid"));
+    assert_eq!(u.app.session.prefs.board_grid, Default::default());
+    // No grid: nothing to set but the style.
+    u.app.run("board.grid", json!({"style": "none"}));
+    let shapes = flat(&u.frame_output(vec![]).shapes);
+    assert!(has_text(&shapes, "Board grid") && !has_text(&shapes, "Spacing"));
+}

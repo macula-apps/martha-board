@@ -321,10 +321,10 @@ pub fn dots(app: &FigApp, bg: Color32, t: &Tokens) -> Option<figcraft_render::Do
     // Graph paper's in-between lines stay fainter than its strong ones even zoomed in.
     let faded = alpha * fade * if g.style == GridStyle::Graph { 0.5 } else { 1.0 };
     let color = |a: f32| figcraft_color::Color::from_rgba8(ink.r(), ink.g(), ink.b(), (a * 255.0).round() as u8);
-    // Dots grow a little zoomed in, and never shrink below their size at 100 % zoomed out (where
-    // a pixel-sized dot all but disappears).
+    // Dots are about a point and a half across on screen, growing a little zoomed in, scaled by
+    // the size setting (1, the default, keeps the usual dots).
     let k = g.size;
-    let size = if lines { k.max(0.5) / zoom } else { (1.5 * k * zoom.max(1.0).sqrt()).min(3.0 * k.max(1.0)) / zoom };
+    let size = if lines { k.max(0.5) / zoom } else { (1.5 * zoom.sqrt()).clamp(1.0, 3.0) * k / zoom };
     Some(figcraft_render::Dots { step, size, color: color(alpha), faded: color(faded), lines, major })
 }
 
