@@ -619,3 +619,19 @@ fn library_styles_that_are_unpublished_not_colors_or_not_enabled_are_refused() {
     assert!(s.doc().unwrap().styles.is_empty());
     assert_eq!(s.doc().unwrap().node(a).unwrap().styles.fill, None);
 }
+
+#[test]
+fn a_library_that_is_not_a_string_is_refused_rather_than_linking_a_local_style() {
+    let mut s = Session::new();
+    let a = rectangle(&mut s, "#ff0000");
+    run(&mut s, "style.create", json!({"type":"paint","name":"Brand","value":"#0000ff"}));
+    let red = group(&s, &[a], "FF0000");
+    let before = s.undo_depth();
+    for lib in [json!({}), json!([]), json!({"id":"Brand"})] {
+        let err = s.execute("selection.applyColorStyle", &json!({"targets":red.targets,"style":"Brand","library":lib})).unwrap_err();
+        assert!(err.to_string().contains("`library` must be a string"), "{lib}: {err}");
+    }
+    assert_eq!(s.undo_depth(), before);
+    assert_eq!(s.doc().unwrap().node(a).unwrap().styles.fill, None);
+    assert_eq!(fill(&s, a), "FF0000");
+}

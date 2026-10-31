@@ -212,7 +212,7 @@ fn apply_style(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "selection.applyColorStyle";
     let targets = checked_targets(s, p, CMD)?;
     let name = req_string(CMD, p, "style")?;
-    let name = if string(p, "library").is_some() { import_library_style(s, CMD, p, &name)? } else { name };
+    let name = if get(p, "library").is_some() { import_library_style(s, CMD, p, &name)? } else { name };
     let style = s.doc()?.style(&name).cloned().ok_or_else(|| bad(CMD, "no such color style"))?;
     if !matches!(style.kind, StyleKind::Paint { .. }) {
         return Err(bad(CMD, "a color style is required"));
