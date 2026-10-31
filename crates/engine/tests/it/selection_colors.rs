@@ -2,7 +2,7 @@ use figcraft_color::Paint;
 use figcraft_doc::NodeId;
 use figcraft_engine::{
     Session,
-    selection_colors::{SelectionColor, collect},
+    selection_colors::{self, SelectionColor, collect},
 };
 use serde_json::{Value, json};
 
@@ -503,6 +503,30 @@ fn creating_a_style_refuses_taken_or_empty_names_and_stale_rows_and_changes_noth
     assert_eq!(doc.styles.len(), styles);
     assert_eq!(doc.node(a).unwrap().styles.fill, None);
     assert_eq!(fill(&s, a), "FF0000");
+}
+
+#[test]
+fn creating_a_style_refuses_a_row_whose_list_holds_other_paints() {
+    let mut s = Session::new();
+    let a = rectangle(&mut s, "#ff0000");
+    let b = rectangle(&mut s, "#ff0000");
+    run(&mut s, "fill.add", json!({"id":a,"paint":"#0000ff"}));
+    let red = group(&s, &[a, b], "FF0000");
+    let before = s.undo_depth();
+    let styles = s.doc().unwrap().styles.len();
+    let err = s.execute("selection.createColorStyle", &json!({"targets":red.targets,"name":"Red"})).unwrap_err();
+    assert!(err.to_string().contains("holds this one paint"), "{err}");
+    assert!(selection_colors::create_refusal(s.doc().unwrap(), &red.targets).is_some());
+    assert_eq!(s.undo_depth(), before);
+    let doc = s.doc().unwrap();
+    assert_eq!(doc.styles.len(), styles);
+    assert_eq!(doc.node(a).unwrap().fills.len(), 2, "the layer keeps its other fill");
+    assert!(doc.node(b).unwrap().styles.fill.is_none());
+    // The single-paint layer alone still makes a style.
+    let b_only: Vec<_> = red.targets.iter().filter(|t| t.id == b).cloned().collect();
+    assert!(selection_colors::create_refusal(s.doc().unwrap(), &b_only).is_none());
+    run(&mut s, "selection.createColorStyle", json!({"targets":b_only,"name":"Red"}));
+    assert!(s.doc().unwrap().node(b).unwrap().styles.fill.is_some());
 }
 
 #[test]

@@ -7,7 +7,7 @@ use egui::{Id, Ui};
 use figcraft_color::{Color, Paint};
 use figcraft_doc::{Document, NodeId, PublishedLibrary, Style, StyleKind, VariableType};
 use figcraft_engine::library;
-use figcraft_engine::selection_colors::{PaintTarget, SelectionColor, bind_refusal, collect, in_scope};
+use figcraft_engine::selection_colors::{PaintTarget, SelectionColor, bind_refusal, collect, create_refusal, in_scope};
 use serde_json::json;
 
 use crate::a11y::Tip;
@@ -122,7 +122,7 @@ pub fn section(app: &mut FigApp, ui: &mut Ui, doc: &Arc<Document>, ids: &[NodeId
                             style_items(app, ui, doc, group, &t);
                             if linked_name.is_none() {
                                 ui.separator();
-                                if crate::right::menu_item(ui, tr("Create style"), "") {
+                                if create_refusal(doc, &group.targets).is_none() && crate::right::menu_item(ui, tr("Create style"), "") {
                                     open_create_form(app, ui, doc, group);
                                     ui.close();
                                 }
@@ -534,6 +534,17 @@ mod tests {
         assert!(doc.node(b).unwrap().styles.fill.is_none());
         assert_eq!(p.app.session.undo_depth().0, before.0 + 1);
         assert!(p.frame(vec![]).iter().any(|(s, _)| s == "Brand"));
+    }
+
+    #[test]
+    fn create_style_is_left_out_for_a_row_whose_list_holds_other_paints() {
+        let (mut p, a, _) = Panel::new();
+        p.app.run("fill.add", json!({"id":a,"paint":"#00ff00"}));
+        let red = text_at(&p.frame(vec![]), "FF0000");
+        p.click(Pos2::new(228.0, red.y));
+        let texts = p.frame(vec![]);
+        assert!(texts.iter().any(|(s, _)| s == "No color styles"), "the Styles menu opens");
+        assert!(!texts.iter().any(|(s, _)| s == "Create style"));
     }
 
     #[test]

@@ -134,7 +134,7 @@ pub fn specs() -> Vec<CommandSpec> {
         spec!(
             "selection.createColorStyle",
             "Create selection color style",
-            "{targets, name, description?} → {id}; makes a color style of the paint the targets share and applies it to them as selection.applyColorStyle does; a name another style has is refused",
+            "{targets, name, description?} → {id}; makes a color style of the paint the targets share and applies it to them as selection.applyColorStyle does; a name another style has, or a target whose list holds other paints, is refused",
             true,
             create_style
         ),
@@ -252,6 +252,9 @@ fn create_style(s: &mut Session, p: &Value) -> Result<Value> {
     if targets.iter().any(|t| t.paint(doc).as_ref() != Some(&paint)) {
         return Err(bad(CMD, "the targets no longer share one paint"));
     }
+    if let Some(why) = create_refusal(doc, &targets) {
+        return Err(bad(CMD, why));
+    }
     let name = crate::cmd::variables::clean_name(&req_string(CMD, p, "name")?).ok_or_else(|| bad(CMD, "name can't be empty"))?;
     if doc.styles.iter().any(|st| st.name == name) {
         return Err(bad(CMD, format!("a style named `{name}` already exists")));
@@ -268,6 +271,16 @@ fn create_style(s: &mut Session, p: &Value) -> Result<Value> {
     doc.styles.push(style.clone());
     link_style(s, &targets, &style)?;
     Ok(json!({"id": id}))
+}
+
+/// Why a color style can't be made from `targets` (`selection.createColorStyle`), if it can't: a
+/// linked style replaces the whole fill or stroke list, so a target whose list holds other paints
+/// would lose them. The Selection colors menu leaves Create style out for such rows.
+pub fn create_refusal(doc: &Document, targets: &[PaintTarget]) -> Option<&'static str> {
+    targets
+        .iter()
+        .any(|t| t.paints(doc).is_none_or(|paints| paints.len() != 1))
+        .then_some("a style can only be made from a fill or stroke list that holds this one paint")
 }
 
 /// Apply paint style `style` to every target: a fill or stroke list is linked to it; a text range
