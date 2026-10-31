@@ -530,6 +530,63 @@ fn creating_a_style_refuses_a_row_whose_list_holds_other_paints() {
 }
 
 #[test]
+fn a_style_created_from_a_variable_bound_row_keeps_following_the_variable() {
+    let mut s = Session::new();
+    let a = rectangle(&mut s, "#ff0000");
+    let b = rectangle(&mut s, "#ff0000");
+    let v = theme_variable(&mut s, "Brand", "#ff0000");
+    for id in [a, b] {
+        run(&mut s, "variable.bind", json!({"id":id,"field":"fill","variable":v}));
+    }
+    let red = group(&s, &[a, b], "FF0000");
+    assert_eq!(red.targets.len(), 2);
+    run(&mut s, "selection.createColorStyle", json!({"targets":red.targets,"name":"Brand"}));
+    let style = s.doc().unwrap().style("Brand").unwrap();
+    assert_eq!(style.bound.get("fills/0/color").map(String::as_str), v.as_str());
+    run(&mut s, "variable.set", json!({"variable":v,"value":"#00ff00"}));
+    assert_eq!(fill(&s, a), "00FF00");
+    assert_eq!(fill(&s, b), "00FF00");
+}
+
+#[test]
+fn a_style_created_from_a_gradient_keeps_its_stop_variables() {
+    use figcraft_color::{Color, Gradient, GradientKind, PaintKind};
+    let mut s = Session::new();
+    let a = rectangle(&mut s, "#ff0000");
+    let paint = Paint::gradient(Gradient::default_for(GradientKind::Linear, Color::BLACK));
+    run(&mut s, "fill.set", json!({"id":a,"paint":paint}));
+    let v = theme_variable(&mut s, "Brand", "#ff0000");
+    run(&mut s, "variable.bind", json!({"id":a,"field":"fills/0/stops/0/color","variable":v}));
+    let row = collect(s.doc().unwrap(), &[a]).into_iter().next().unwrap();
+    run(&mut s, "selection.createColorStyle", json!({"targets":row.targets,"name":"Shade"}));
+    assert!(s.doc().unwrap().style("Shade").unwrap().bound.contains_key("fills/0/stops/0/color"));
+    run(&mut s, "variable.set", json!({"variable":v,"value":"#00ff00"}));
+    let PaintKind::Gradient(g) = &s.doc().unwrap().node(a).unwrap().fills[0].kind else { panic!("not a gradient") };
+    assert_eq!(g.stops[0].color.to_hex(), "00FF00");
+}
+
+#[test]
+fn creating_a_style_refuses_targets_bound_to_different_variables() {
+    let mut s = Session::new();
+    let a = rectangle(&mut s, "#ff0000");
+    let b = rectangle(&mut s, "#ff0000");
+    let v = theme_variable(&mut s, "Brand", "#ff0000");
+    run(&mut s, "variable.bind", json!({"id":a,"field":"fill","variable":v}));
+    let targets: Vec<_> = collect(s.doc().unwrap(), &[a, b]).into_iter().flat_map(|g| g.targets).collect();
+    assert_eq!(targets.len(), 2);
+    assert!(selection_colors::create_refusal(s.doc().unwrap(), &targets).is_some());
+    let before = s.undo_depth();
+    let styles = s.doc().unwrap().styles.len();
+    let err = s.execute("selection.createColorStyle", &json!({"targets":targets,"name":"Red"})).unwrap_err();
+    assert!(err.to_string().contains("different variables"), "{err}");
+    assert_eq!(s.undo_depth(), before);
+    let doc = s.doc().unwrap();
+    assert_eq!(doc.styles.len(), styles);
+    assert!(!doc.node(a).unwrap().bound.is_empty());
+    assert!(doc.node(b).unwrap().styles.fill.is_none());
+}
+
+#[test]
 fn a_linked_row_switches_to_another_style() {
     let mut s = Session::new();
     let a = rectangle(&mut s, "#ff0000");

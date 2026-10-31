@@ -5,7 +5,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use figcraft_color::{Paint, PaintKind};
-use figcraft_doc::{Document, NodeId, NodeKind, Style, StyleKind, VariableType, VariableValue};
+use figcraft_doc::{Document, NodeId, NodeKind, Style, StyleKind, VariableId, VariableType, VariableValue};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -134,7 +134,7 @@ pub fn specs() -> Vec<CommandSpec> {
         spec!(
             "selection.createColorStyle",
             "Create selection color style",
-            "{targets, name, description?} → {id}; makes a color style of the paint the targets share and applies it to them as selection.applyColorStyle does; a name another style has, or a target whose list holds other paints, is refused",
+            "{targets, name, description?} → {id}; makes a color style of the paint the targets share and applies it to them as selection.applyColorStyle does, keeping the variables bound to the paint; a name another style has, a target whose list holds other paints, or targets bound to different variables are refused",
             true,
             create_style
         ),
@@ -259,15 +259,11 @@ fn create_style(s: &mut Session, p: &Value) -> Result<Value> {
     if doc.styles.iter().any(|st| st.name == name) {
         return Err(bad(CMD, format!("a style named `{name}` already exists")));
     }
+    let kind = StyleKind::Paint { paints: vec![paint] };
+    let bound = targets.first().map(|t| target_bindings(doc, t, &kind)).unwrap_or_default();
     let doc = s.doc_mut()?;
     let id = doc.new_style_id();
-    let style = Style {
-        id: id.clone(),
-        name,
-        description: string(p, "description").unwrap_or_default(),
-        kind: StyleKind::Paint { paints: vec![paint] },
-        bound: BTreeMap::new(),
-    };
+    let style = Style { id: id.clone(), name, description: string(p, "description").unwrap_or_default(), kind, bound };
     doc.styles.push(style.clone());
     link_style(s, &targets, &style)?;
     Ok(json!({"id": id}))
@@ -275,12 +271,27 @@ fn create_style(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// Why a color style can't be made from `targets` (`selection.createColorStyle`), if it can't: a
 /// linked style replaces the whole fill or stroke list, so a target whose list holds other paints
-/// would lose them. The Selection colors menu leaves Create style out for such rows.
+/// would lose them. The new style takes over the variables bound to the paint, so targets bound to
+/// different variables are refused too. The Selection colors menu leaves Create style out for such rows.
 pub fn create_refusal(doc: &Document, targets: &[PaintTarget]) -> Option<&'static str> {
-    targets
-        .iter()
-        .any(|t| t.paints(doc).is_none_or(|paints| paints.len() != 1))
-        .then_some("a style can only be made from a fill or stroke list that holds this one paint")
+    if targets.iter().any(|t| t.paints(doc).is_none_or(|paints| paints.len() != 1)) {
+        return Some("a style can only be made from a fill or stroke list that holds this one paint");
+    }
+    let paint = targets.first().and_then(|t| t.paint(doc))?;
+    let kind = StyleKind::Paint { paints: vec![paint] };
+    let mut bindings = targets.iter().map(|t| target_bindings(doc, t, &kind));
+    let first = bindings.next()?;
+    bindings.any(|b| b != first).then_some("the targets are bound to different variables")
+}
+
+/// The variable bindings a paint style of `kind` made from `target` takes over: those on the fill or
+/// stroke list the target stands for. A text range with fills of its own holds none.
+fn target_bindings(doc: &Document, target: &PaintTarget, kind: &StyleKind) -> BTreeMap<String, VariableId> {
+    if list_field(doc, target).is_none() {
+        return BTreeMap::new();
+    }
+    let field = if target.fills { "fillStyle" } else { "strokeStyle" };
+    doc.node(target.id).map(|n| crate::style_vars::from_layer(n, field, kind)).unwrap_or_default()
 }
 
 /// Apply paint style `style` to every target: a fill or stroke list is linked to it; a text range
