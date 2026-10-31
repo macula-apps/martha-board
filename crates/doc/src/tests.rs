@@ -790,6 +790,33 @@ fn smoothed_vector_corners_stay_finite_on_awkward_networks() {
 }
 
 #[test]
+fn clicks_on_a_smoothed_vector_corner_follow_the_drawn_fill() {
+    // A closed square with rounded points and smoothing: a click between the plain arc and the
+    // smoothed corner selects the layer only where the smoothed fill is drawn.
+    let pts = [Point::new(0.0, 0.0), Point::new(1000.0, 0.0), Point::new(1000.0, 1000.0), Point::new(0.0, 1000.0)];
+    let mut net = VectorNetwork::from_points(&pts, true);
+    for v in &mut net.vertices {
+        v.radius = 200.0;
+    }
+    let smoothed = net.rounded_smoothed(1.0).unwrap();
+    let mut d = Document::new("x");
+    let p = page(&d);
+    let v = d.create(p, NodeKind::Vector { network: net.clone() }, "V", 0.0, 0.0, 1000.0, 1000.0).unwrap();
+    let n = d.node_mut(v).unwrap();
+    n.corners.smoothing = 1.0;
+    n.strokes.clear();
+    // Walk the row 20 units below the top edge inward to where each outline starts covering it.
+    let first_inside = |inside: &dyn Fn(Point) -> bool| (0..5_000).map(|i| f64::from(i) * 0.1).find(|&x| inside(Point::new(x, 20.0)));
+    let plain = first_inside(&|pt| net.fill_contains(pt)).unwrap();
+    let drawn = first_inside(&|pt| smoothed.fill_contains(pt)).unwrap();
+    assert!((plain - drawn).abs() > 5.0, "smoothing moves the corner: plain {plain}, smoothed {drawn}");
+    let pt = Point::new((plain + drawn) / 2.0, 20.0);
+    assert_ne!(net.fill_contains(pt), smoothed.fill_contains(pt));
+    assert_eq!(d.hit_test(p, pt, 0.0, None).is_some(), smoothed.fill_contains(pt), "the click follows the smoothed corner at {pt:?}");
+    assert_eq!(d.hit_test(p, Point::new(500.0, 500.0), 0.0, None), Some(v));
+}
+
+#[test]
 fn stored_variable_ids_resolve_only_their_exact_collection() {
     let mut vars = crate::proto_expr_tests::vars();
     // The wrong collection's modes force the old resolver's first-value fallback (dark).

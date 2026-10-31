@@ -107,10 +107,11 @@ fn hits_node_itself(doc: &Document, id: NodeId, n: &Node, pt: Point, tol: f64, o
 }
 
 /// Whether the fill of `n`, drawn as `path`, covers `lp` (vectors follow the rule of
-/// [`VectorNetwork::fill_contains`](crate::VectorNetwork::fill_contains): even-odd when any region asks for it).
+/// [`VectorNetwork::fill_contains`](crate::VectorNetwork::fill_contains) on the network as drawn: even-odd when any
+/// region asks for it).
 fn fills_point(n: &Node, path: &BezPath, lp: Point) -> bool {
     match &n.kind {
-        NodeKind::Vector { network } => network.fill_contains(lp),
+        NodeKind::Vector { network } => drawn_network(network, n.corners.smoothing).fill_contains(lp),
         _ => path.winding(lp) != 0,
     }
 }
