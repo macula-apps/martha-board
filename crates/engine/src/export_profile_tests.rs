@@ -116,6 +116,19 @@ fn jpg_and_webp_follow_the_setting() {
 }
 
 #[test]
+fn a_translucent_jpg_is_flattened_before_its_conversion() {
+    let (mut s, r) = session();
+    s.execute("fill.set", &json!({"ids": [r], "opacity": 0.5})).unwrap();
+    // The sRGB document shows 50% red over white; the Display P3 JPG holds that color converted.
+    let flat = export(&mut s, json!({"ids": [r], "format": "jpg", "colorProfile": "srgb"}));
+    let [fr, fg, fb] = middle(&flat);
+    let shown = Color::new(f32::from(fr) / 255.0, f32::from(fg) / 255.0, f32::from(fb) / 255.0, 1.0);
+    let want = rgb8(ColorProfile::Srgb.conversion_to(ColorProfile::DisplayP3).apply(shown));
+    let p3 = export(&mut s, json!({"ids": [r], "format": "jpg", "colorProfile": "displayP3"}));
+    assert!(close(middle(&p3), want, 2), "{:?} vs {want:?} (sRGB {:?})", middle(&p3), [fr, fg, fb]);
+}
+
+#[test]
 fn svg_pdf_and_xml_stay_srgb() {
     let (mut s, r) = session();
     // A Display P3 file: its red converts back to sRGB #FF0000 whatever the setting says.

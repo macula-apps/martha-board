@@ -411,7 +411,19 @@ pub fn export_file(doc: &Document, ids: &[NodeId], setting: &ExportSetting, scal
             // The render is in the document's profile; the setting's profile converts the pixels
             // (out-of-gamut colors clip) and tags the file.
             let profile = setting.color_profile.resolve(doc.color_profile);
-            doc.color_profile.conversion_to(profile).apply_pixels(pix.data_mut());
+            let conversion = doc.color_profile.conversion_to(profile);
+            // JPG has no alpha: the render is flattened over white in the document's profile
+            // before the conversion, so translucent pixels match what the document shows.
+            if setting.format == ExportFormat::Jpg && !conversion.is_identity() {
+                for [r, g, b, a] in pix.data_mut().as_chunks_mut::<4>().0.iter_mut() {
+                    let under = 255 - *a;
+                    *r = r.saturating_add(under);
+                    *g = g.saturating_add(under);
+                    *b = b.saturating_add(under);
+                    *a = 255;
+                }
+            }
+            conversion.apply_pixels(pix.data_mut());
             Ok((figcraft_render::encode_export(&pix, setting.format, profile).map_err(EngineError::Other)?, Vec::new()))
         }
     }
