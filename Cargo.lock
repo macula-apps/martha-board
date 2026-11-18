@@ -1242,26 +1242,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "craft-web-api"
-version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=fd5e2feff6ea25bed371a99cc732b3968d621505#fd5e2feff6ea25bed371a99cc732b3968d621505"
-dependencies = [
- "js-sys",
- "serde_json",
- "wasm-bindgen",
- "wasm-bindgen-futures",
-]
-
-[[package]]
-name = "craft-web-host"
-version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=fd5e2feff6ea25bed371a99cc732b3968d621505#fd5e2feff6ea25bed371a99cc732b3968d621505"
-dependencies = [
- "wasm-bindgen",
- "web-sys",
-]
-
-[[package]]
 name = "craft-window"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=e11f9d9aebea5f6b8e74643c1ea1ed172ba5f545#e11f9d9aebea5f6b8e74643c1ea1ed172ba5f545"
@@ -1384,17 +1364,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ce6e4c961d6cd6c9a86db418387425e8bdeaf05b3c8bc1411e6dca4c252f1453"
 dependencies = [
  "hybrid-array",
-]
-
-[[package]]
-name = "ctrlc"
-version = "3.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0b1fab2ae45819af2d0731d60f2afe17227ebb1a1538a236da84c93e9a60162"
-dependencies = [
- "dispatch2",
- "nix",
- "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2176,31 +2145,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "figcraft-server"
-version = "0.18.1"
-dependencies = [
- "chrono",
- "crc32fast",
- "ctrlc",
- "env_logger",
- "figcraft-collab",
- "figcraft-collab-net",
- "figcraft-doc",
- "figcraft-engine",
- "figcraft-format",
- "figcraft-plugin",
- "log",
- "rustix 1.1.5",
- "serde",
- "serde_json",
- "sha2",
- "toml",
- "tungstenite",
- "wat",
- "zip 2.6.1",
-]
-
-[[package]]
 name = "figcraft-svg"
 version = "0.18.1"
 dependencies = [
@@ -2277,28 +2221,6 @@ dependencies = [
  "figcraft-text",
  "roxmltree 0.21.2",
  "thiserror 2.0.21",
-]
-
-[[package]]
-name = "figcraft-web"
-version = "0.18.1"
-dependencies = [
- "base64 0.22.1",
- "craft-web-api",
- "craft-web-host",
- "eframe",
- "egui",
- "figcraft-collab-net",
- "figcraft-engine",
- "figcraft-format",
- "figcraft-text",
- "figcraft-ui-egui",
- "js-sys",
- "log",
- "serde_json",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
 ]
 
 [[package]]
