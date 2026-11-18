@@ -1,11 +1,22 @@
+MarthaBoard
+Copyright (c) 2026 Macula and the MarthaBoard contributors.
+
+MarthaBoard is derived from FigCraft (https://github.com/storytold/figcraft, commit d4b4387),
+Copyright (c) 2026 ArtCraft Team and the FigCraft contributors,
+licensed under the MIT License or the Apache License, Version 2.0, at your option
+(LICENSE-MIT, LICENSE-APACHE). MarthaBoard's own changes are under the same terms.
+
+MarthaBoard carries no ArtCraft wordmark or logo: FigCraft's docs/brand/ is not part of it, in
+any commit. The ArtCraft name stays in FigCraft's copyright lines, which are kept as they are.
+Until MarthaBoard's rename, it also still appears in FigCraft's interface text, links and
+packaging, which that rename rewrites.
+
+-- FigCraft's notice follows --
+
 FigCraft
 Copyright (c) 2026 ArtCraft Team and the FigCraft contributors.
 Licensed under the MIT License or the Apache License, Version 2.0, at your option
 (LICENSE-MIT, LICENSE-APACHE).
-
-The ArtCraft name, wordmark and logos in docs/brand/ are trademarks of the ArtCraft Team. They are
-not open source and are not covered by the license above; their terms are in
-docs/brand/LICENSE-brand.txt.
 
 Third-party material
 
