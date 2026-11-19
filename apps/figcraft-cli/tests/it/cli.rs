@@ -378,3 +378,20 @@ fn an_unconfined_write_follows_a_symbolic_link() {
     assert!(written.starts_with(b"\x89PNG"), "the target holds the render, not the placeholder");
     let _ = std::fs::remove_dir_all(&d);
 }
+
+/// An `<out>` ending in `.xml` (the removed Android Vector Drawable, martha-board#20) is refused by
+/// name: no file and no folder of PNGs is written there.
+#[test]
+fn an_xml_out_is_refused_as_the_removed_vector_drawable() {
+    let dir = tmp("xml-out");
+    let mut doc = figcraft_doc::Document::new("Icons");
+    let page = doc.first_page().unwrap();
+    doc.create(page, figcraft_doc::NodeKind::Rectangle, "Icon", 0.0, 0.0, 24.0, 24.0).unwrap();
+    std::fs::write(dir.join("icons.figcraft"), figcraft_format::save_bytes(&doc, None).unwrap()).unwrap();
+    let output = bin().current_dir(&dir).args(["export", "--no-system-fonts", "icons.figcraft", "-o", "ic_icon.xml"]).output().unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "exported: {stderr}");
+    assert!(stderr.contains("Android Vector Drawable") && stderr.contains("removed"), "{stderr}");
+    assert!(!dir.join("ic_icon.xml").exists(), "something was written at ic_icon.xml");
+    std::fs::remove_dir_all(dir).unwrap();
+}

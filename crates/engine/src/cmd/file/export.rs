@@ -82,9 +82,14 @@ pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let mut setting = export_setting(cmd, ExportSetting::default(), p)?;
     if string(p, "format").is_none()
-        && let Some(f) = string(p, "path").and_then(|pp| ExportFormat::from_ext(&ext(&pp)))
+        && let Some(path_ext) = string(p, "path").map(|pp| ext(&pp))
     {
-        setting.format = f;
+        match ExportFormat::from_ext(&path_ext) {
+            Some(f) => setting.format = f,
+            // A path ending in the removed format's extension: refused by name, never written as a PNG.
+            None if is_vector_drawable(&path_ext) => return Err(super::vector_drawable_removed(cmd)),
+            None => {}
+        }
     }
     let scale = match size_param(cmd, p)? {
         Some(_) => export_scale(doc, &ids, &setting),

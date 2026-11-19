@@ -32,6 +32,9 @@ fn ext(path: &str) -> String {
 fn image_format(e: &str) -> Option<ExportFormat> {
     match e {
         "png" | "jpg" | "jpeg" | "svg" | "webp" | "pdf" => ExportFormat::from_ext(e),
+        // An `<out>` ending in the removed Android Vector Drawable's extension is one file of that
+        // format, which the exporter refuses by name (martha-board#20): never a folder of PNGs.
+        e if e == ExportFormat::VectorDrawable.ext() => Some(ExportFormat::VectorDrawable),
         _ => None,
     }
 }

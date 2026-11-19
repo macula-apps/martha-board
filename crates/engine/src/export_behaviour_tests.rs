@@ -670,6 +670,8 @@ fn a_kept_vector_drawable_setting_survives_a_save_and_its_export_is_refused() {
     for format in [serde_json::to_value(stored.format).unwrap(), json!("xml")] {
         removed(s.execute("file.export", &json!({"ids": [icon], "format": format, "path": out.to_string_lossy()})).unwrap_err());
     }
+    // And with no format, from a path that ends in the old extension (never a PNG written there).
+    removed(s.execute("file.export", &json!({"ids": [icon], "path": out.to_string_lossy()})).unwrap_err());
     // file.exportLayers with the layer's own settings.
     let dir = scratch.0.join("layers");
     removed(s.execute("file.exportLayers", &json!({"ids": [icon], "dir": dir.to_string_lossy()})).unwrap_err());
