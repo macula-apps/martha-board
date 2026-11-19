@@ -80,15 +80,28 @@ jobs:
       - name: Formatting
         run: cargo fmt --all --check
 
-      # clippy reads only the nearest clippy.toml, and crates/engine has its own. The structural caps
-      # must be the same lines in both, or the engine would quietly run on clippy's defaults.
-      - name: The engine's clippy.toml carries the workspace's structural caps
+      # clippy reads only the nearest clippy.toml, and crates/engine has its own. Each structural
+      # cap must be set once in both, and the engine's may not be above the workspace's, or the
+      # engine would quietly run on clippy's defaults or on a looser limit.
+      - name: The engine's clippy.toml carries the workspace's structural caps, at most as high
         run: |
-          caps='^(cognitive-complexity|excessive-nesting|too-many-lines)-threshold'
-          diff <(grep -E "$caps" clippy.toml) <(grep -E "$caps" crates/engine/clippy.toml) \
-            || { echo "::error::crates/engine/clippy.toml and clippy.toml differ in their structural caps (above)"; exit 1; }
-          [ "$(grep -cE "$caps" clippy.toml)" -eq 3 ] \
-            || { echo "::error::clippy.toml must set all three structural caps"; exit 1; }
+          # One integer per file and key: prints it, or nothing when the key is missing, repeated
+          # or not a plain number.
+          cap_of() {
+            local values
+            values=$(sed -nE "s/^$2[[:space:]]*=[[:space:]]*([0-9]+)[[:space:]]*$/\1/p" "$1")
+            [ "$(grep -c "^$2[[:space:]]*=" "$1")" -eq 1 ] && [ -n "$values" ] && echo "$values"
+          }
+          failed=0
+          for key in cognitive-complexity-threshold excessive-nesting-threshold too-many-lines-threshold; do
+            workspace=$(cap_of clippy.toml "$key") \
+              || { echo "::error::clippy.toml must set $key once, to a number"; failed=1; continue; }
+            engine=$(cap_of crates/engine/clippy.toml "$key") \
+              || { echo "::error::crates/engine/clippy.toml must set $key once, to a number"; failed=1; continue; }
+            [ "$engine" -le "$workspace" ] \
+              || { echo "::error::crates/engine/clippy.toml sets $key = $engine, above the workspace's $workspace"; failed=1; }
+          done
+          exit "$failed"
 
       - name: Clippy, with the structural caps
         run: cargo clippy --workspace --all-targets --locked --keep-going -- -D warnings
