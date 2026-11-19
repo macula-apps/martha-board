@@ -1,9 +1,9 @@
 # figcraft-cli
 
-> `server.md` and `plugins.md`, which this page names, are not in MarthaBoard: the collaboration server's guide and the plugin guide left at import (macula-apps/martha-board#1). The names are kept as plain text, not links (#25).
+> `server.md`, which this page names, is not in MarthaBoard: the collaboration server's guide left at import (macula-apps/martha-board#1). The name is kept as plain text, not a link (#25).
 
 FigCraft without a window: inspect, export, convert and render documents, run command scripts, list
-commands, serve MCP, publish plugins and measure performance. Build it with
+commands, serve MCP and measure performance. Build it with
 `cargo build --release -p figcraft-cli` (binary `target/release/figcraft-cli`).
 
 The CLI follows [RFC-0012](https://github.com/storytold/craft-contrib/blob/main/rfcs/0012-cli-conventions.md),
@@ -29,8 +29,8 @@ Not yet as RFC-0012 asks:
   error (exit 2) rather than reaching the command.
 - Failures are messages rather than error enums, and `main` isn't yet a `run(args, out, err)`
   function the tests call in-process.
-- `FIGCRAFT_NO_SYSTEM_FONTS` and `FIGCRAFT_SERVER_KEY` are read where they're used, not declared
-  on a flag, so `--help` names them only in the flag descriptions.
+- `FIGCRAFT_NO_SYSTEM_FONTS` is read where it's used, not declared on a flag, so `--help` names it
+  only in the flag description.
 - Packages don't install the generated shell completions or man pages yet.
 - There are no ast-grep checks in CI yet.
 
@@ -57,8 +57,7 @@ The directory contains completions for five shells:
 | PowerShell | `_figcraft-cli.ps1` |
 | Zsh | `_figcraft-cli` |
 
-It also contains `figcraft-cli.1` and one man page per subcommand, including nested commands such
-as `figcraft-cli-plugin-publish.1`. For example, `man target/cli-docs/figcraft-cli-export.1` shows
+It also contains `figcraft-cli.1` and one man page per subcommand. For example, `man target/cli-docs/figcraft-cli-export.1` shows
 the export subcommand's options. Generating these files doesn't install them; package installation
 is still outstanding in [#1396](https://github.com/storytold/figcraft/issues/1396).
 
@@ -165,7 +164,7 @@ Runs commands in a headless session (a new document, or `--in`), printing one JS
 ```
 
 The whole script is **one undo step**, and it is **all-or-nothing**, exactly like running the same
-commands through `command.batch` (the MCP tool `batch`, the control channel, plugins). A step key
+commands through `command.batch` (the MCP tool `batch`, the control channel). A step key
 other than `command`, `params` and `as`, or a parameter the command's doc (`figcraft-cli commands`)
 doesn't list, fails the script with an error naming it (`ids` and `id` are always taken). A step named
 with `"as"` can be used by later steps: `{"$ref": "name"}` in a step's params is the `id` in that
@@ -260,17 +259,8 @@ is confined by the app it attaches to, from the flags that app was started with.
 `--timeout SECONDS` (1–600, default 60) is how long the app may take over each request. The headless
 session can host, join and publish
 live sessions (`collab.*`: without a key on a server open to the public, with `collab.serverInfo`,
-`collab.manageFile` for the owner token and `collab.report`) and use plugin directories
-(`plugin.directory.*`); the one-shot `run` can't (no network link).
-
-### `plugin publish <folder> --server ws://host:port/[?key=KEY]`
-
-Publishes a plugin folder (`figcraft-plugin.json`, the module its `main` names, an optional `assets/`
-folder) to a `figcraft-server`'s plugin directory as a new version, and prints its name, version,
-size and SHA-256. The server's key comes from the address or, better, from the
-`FIGCRAFT_SERVER_KEY` environment variable (it then stays out of the shell history and process
-lists); it is never printed. The bundle is checked before it is sent and again by the server. See
-plugins.md.
+`collab.manageFile` for the owner token and `collab.report`); the one-shot `run` can't (no network
+link).
 
 ### `perf [--layers N[,N...]]`
 

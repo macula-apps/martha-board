@@ -110,7 +110,7 @@ Share reusable code through craft-libs. Do not depend on sibling application cra
 - **Programmatic calls never open dialogs.** Commands only request UI (`Session::request_ui`); the
   control channel drops dialog requests.
 - **Layering** is checked by `cargo xtask layers`: geom and color (L0), doc (L1), layout, text,
-  pathops, plugin and collab (L2), render and format (L3), svg and pdf (L4), engine (L5), ui-egui,
+  pathops and collab (L2), render and format (L3), svg and pdf (L4), engine (L5), ui-egui,
   mcp and collab-net (L6), then the apps. Nothing below L6 depends on egui, eframe, rfd or winit.
 - **The UI is thin.** Panels read engine state and act through `app.run(id, params)` and
   `app.set_props(ids, props)`. Colours come from `theme::Tokens`.

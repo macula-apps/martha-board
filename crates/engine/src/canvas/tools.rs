@@ -271,8 +271,6 @@ pub enum Cursor {
     Pen(PenCursor),
     /// A drag here makes a copy (Alt).
     Copy,
-    /// Over a clickable part of a widget.
-    Pointer,
     Eyedropper,
     Comment,
     /// What the gesture is doing will be undone when it ends (an edit only a main component can
@@ -593,8 +591,6 @@ pub struct ToolState {
     pub pick_only: bool,
     /// The colour the eyedropper sampled for a colour picker, until the picker takes it.
     pub picked: Option<figcraft_color::Color>,
-    /// The widget layers whose hover styles show while the pointer is over them (a live preview).
-    pub(crate) widget_hover: Vec<NodeId>,
     /// The placement crosshair: where Enter puts the next shape or frame once the arrows have
     /// shown it (in the middle of the view) and moved it (`tool.crosshair`), in page coordinates
     /// of the document and page in `place_on` (elsewhere it isn't shown: `Session::crosshair`).

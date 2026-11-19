@@ -1,6 +1,6 @@
 # FigCraft MCP server
 
-> `server.md` and `plugins.md`, which this page names, are not in MarthaBoard: the collaboration server's guide and the plugin guide left at import (macula-apps/martha-board#1). The names are kept as plain text, not links (#25).
+> `server.md`, which this page names, is not in MarthaBoard: the collaboration server's guide left at import (macula-apps/martha-board#1). The name is kept as plain text, not a link (#25).
 
 FigCraft ships a [Model Context Protocol](https://modelcontextprotocol.io) server so AI agents can
 design with it: create and edit layers, run any menu command, inspect the result as JSON and look at
@@ -84,8 +84,7 @@ Each may be given more than once, as `--flag DIR` or `--flag=DIR`:
   are never listed, opened, removed or named: `index` counts the files listed), `file.import`,
   `file.placeImage`, `image.place`, `file.save`, `file.saveAs`, `file.revert`, `file.recover`,
   `file.export`, `file.exportSvg`, `file.exportLayers` (and the folders it makes), `file.exportFramesPdf`,
-  `plugin.import {path}`, a development plugin's module read again from disk,
-  `plugin.directory.publish {path}` and its assets, `collab.recoverFile {path}`, and the headless
+  `collab.recoverFile {path}`, and the headless
   `ui.render` / `ui.screenshot` with a `path`.
 - **How paths are resolved:** a relative path is made absolute against the server's working
   directory, then its links are followed: the real path is what is compared and what is opened. For
@@ -102,16 +101,16 @@ Each may be given more than once, as `--flag DIR` or `--flag=DIR`:
   refused too. A local volume's `\\?\Volume{…}\` path is let through. A link whose text is a native NT name
   (`\Device\…`, `\??\…`, `\GLOBAL??\…`) is refused as a device path, and so is a name that ends in a period or a space, in a
   path or as a link's target, since Windows trims it where it looks a name up.
-- **The network:** a confined call reaches no FigCraft or plugin server, so it can't send a
+- **The network:** a confined call reaches no FigCraft server, so it can't send a
   document anywhere through one. Hosting, joining, publishing and sharing a file (`collab.host`,
-  `collab.join`, `collab.publish`, `collab.share` …) and plugin directories are refused with `automation roots are set: commands
+  `collab.join`, `collab.publish`, `collab.share` …) are refused with `automation roots are set: commands
   don't reach the network …`. The app started with the flags confines its own window too, so its
   sharing is off as well. One exception: a root on a network share (a UNC path such as
   `\\server\share\…`, or a mounted network drive) is still a root, so reading and writing inside
   it reaches that file server, and saving there sends the document to it. Give only roots you would
   let the agent's files go to.
 - Not confined: the app's own folders, which no tool names (preferences, Data Recovery copies,
-  plugins installed from a plugin directory, the system fonts).
+  the system fonts).
 - `--attach` with either flag is a usage error: the app runs the commands, so only the app can
   confine them. Start it with the same flags, `figcraft --control 7979 --automation-read-root DIR
   --automation-write-root DIR` (see [Control protocol](control-protocol.md#confining-file-access)),
@@ -1265,65 +1264,10 @@ only: a host stops hosting it, a guest leaves it.
 
 ### Plugins
 
-Sandboxed WebAssembly plugins act through the same commands (see `plugins.md` for the
-manifest, the ABI and the Rust SDK). Driven with `run_command`: `plugin.import {path}` (a
-`figcraft-plugin.json` or its folder) or `plugin.import {manifest, wasm}` (the manifest as an
-object or JSON text and the module as base64, for this session only), `plugin.list`,
-`plugin.remove {id}`, and `plugin.run {id, command?, params?, fuel?}`, which returns
-`{plugin, command, output, logs, calls, fuel, panel}`. A run is one undo step and is rolled back when it
-fails; a plugin only reads the document unless its manifest asks for `write`, may be limited to
-some commands, and can never touch files, other documents, the undo history, dialogs or other
-plugins. A headless MCP session starts with no plugins: import them first. `plugins.runLast` runs
-the last plugin command again.
-
-A plugin that shows a panel (API 2) can be used headless too: `plugin.ui {id?}` returns plugin
-`id`'s open panel, or without `id` the one opened last (`{plugin, command, title, controls,
-values}`, or null; several plugins can have panels open at once), `plugin.event {id, control, value?}`
-presses a button or sets a field as a click would (the plugin is called back; one undo step;
-returns like `plugin.run`, with the updated `panel`), and `plugin.close {id}` ends the session.
-Plugin settings are kept per plugin with the preferences (in a headless session, for the session).
-
-```json
-{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"run_command","arguments":{"command":"plugin.run","params":{"id":"org.figcraft.examples.swatch-grid","command":"panel"}}}}
-{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"run_command","arguments":{"command":"plugin.event","params":{"id":"org.figcraft.examples.swatch-grid","control":"palette","value":"Forest"}}}}
-{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"run_command","arguments":{"command":"plugin.event","params":{"id":"org.figcraft.examples.swatch-grid","control":"generate"}}}}
-```
-
-Widgets (API 3 and 4, layers on the canvas a plugin draws) are driven the same way: `widget.insert
-{plugin, x?, y?}` puts one on the page (centred in the view without a position) and returns `{id,
-plugin, state, targets, output, logs, calls, fuel}`; `widget.click {id, target}` clicks one of its
-`targets` as a click on the canvas would (the plugin redraws it; one undo step; returns the same);
-`widget.list` lists every widget in the file with its plugin, page, state and targets. With plugin
-API 4 a widget can have editable text fields and a property menu (both listed with it, as `fields`
-and `menu`): `widget.setText {id, field, value}` sets a field as typing in it would (the value,
-at most 1,000 characters, goes into the state under the field's name and the plugin redraws; one
-undo step), and `widget.menu {id, item, value?}` uses a menu item (a toggle's `value` is `true` or
-`false`, by default the opposite of now; a colour's is one of its options). With API 5 a widget's
-callback can open its plugin's panel: `plugin.ui` shows it (`command` is `widget`) and
-`plugin.event` uses it, the plugin redrawing the widget in the same undo step. A widget's state is
-layer data, so it is saved, undone and synced with the file.
-
-```json
-{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"run_command","arguments":{"command":"widget.insert","params":{"plugin":"org.figcraft.examples.counter"}}}}
-{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"run_command","arguments":{"command":"widget.click","params":{"id":12,"target":"increment"}}}}
-{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"run_command","arguments":{"command":"widget.list","params":{}}}}
-{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"run_command","arguments":{"command":"widget.setText","params":{"id":12,"field":"label","value":"Votes"}}}}
-{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"run_command","arguments":{"command":"widget.menu","params":{"id":12,"item":"big"}}}}
-```
-
-Plugins from a `figcraft-server`'s plugin directory (`plugins.md`):
-`plugin.directory.list {server?, query?}` lists the latest version of each plugin with the
-permissions it asks for (`access`, `commands`), its size and SHA-256, and `installed` / `update`;
-`plugin.directory.install {id, version?, confirm: true, sha256?}` downloads it, checks the SHA-256 and
-installs it for the session (an agent must pass `confirm: true`, after showing its user the
-permissions: without it nothing is downloaded); `plugin.directory.publish {path | plugin, server}` and
-`plugin.directory.unpublish {id, version?, server}` need the server's key in `server`
-(`ws://host:port/?key=…`).
-
-```json
-{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"run_command","arguments":{"command":"plugin.directory.list","params":{"server":"ws://127.0.0.1:47900/"}}}}
-{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"run_command","arguments":{"command":"plugin.directory.install","params":{"id":"org.figcraft.examples.swatch-grid","confirm":true}}}}
-```
+The WebAssembly plugins, their widgets and plugin directories left the app (#31): the `plugin.*`,
+`plugins.*` and `widget.*` commands are gone. Layer data (`pluginData`) stays: `node.set` writes it,
+`node.get` and `document.inspect` read it, and a file keeps what a plugin wrote there (a widget is
+then a plain frame).
 
 ### Developer Mode
 

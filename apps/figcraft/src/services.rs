@@ -31,7 +31,7 @@ pub struct Desktop {
 /// folder names), and craft-settings' app id: `FIGCRAFT_CONFIG_DIR` names another folder.
 const APP_ID: &str = "FigCraft";
 
-/// Where the preferences, recovery copies and installed plugins live ([`settings_dir`]).
+/// Where the preferences and recovery copies live ([`settings_dir`]).
 pub fn config_dir() -> Option<PathBuf> {
     settings_dir(&craft_settings::Probe { platform_config_dir: platform_dir(), ..Default::default() })
 }

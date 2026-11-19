@@ -20,7 +20,6 @@ replaced.
 | L2 | `figcraft-layout` | ~1.8k | Auto layout (horizontal, vertical, wrap, grid; hug/fill/fixed; min/max), constraints, layout grid geometry |
 | L2 | `figcraft-text` | ~3.1k | Font database (optional embedded craft-fonts + system scan), shaping (harfrust), bidi, line layout, glyph outlines (skrifa), variable fonts |
 | L2 | `figcraft-collab` | ~3.4k | Real-time collaboration core (no networking): synced object/property model, change sets, fractional positions, server ordering and validation, client reconciliation, wire messages |
-| L2 | `figcraft-plugin` | ~1.0k | Plugin manifest and the WebAssembly sandbox (wasmi, metered, memory cap, no file system, network or clock) |
 | L2 | `figcraft-pathops` | ~1.1k | Booleans (linesweeper), outline stroke with alignment, arrowheads |
 | L3 | `figcraft-render` | ~5.4k | Scene → pixels on tiny-skia (CPU): isolated layers for opacity/blend/effects, clips, masks, shadows, blurs (uniform, progressive, background), noise, texture, glass, text; banded in parallel; retained rendering of only what changed; levels of detail when zoomed out |
 | L3 | `figcraft-format` | ~1.5k | Native `.figcraft` (zip of `document.json` + images; streamed JSON), local library files, versions |
@@ -48,7 +47,7 @@ undo with one step per gesture.
 Every user-visible behaviour is a command in `crates/engine/src/cmd/*` (455 ids after #101)
 with an id, label, parameter docs and undo flag. The menus (generated from the catalog), keyboard
 shortcuts, Actions palette, CLI (`figcraft-cli run`), JSON control channel (`--control <port>`) and
-MCP server all dispatch the same ids, so agents can do anything a person can; WebAssembly plugins call them too, within their manifest's permissions. Commands never open
+MCP server all dispatch the same ids, so agents can do anything a person can. Commands never open
 dialogs themselves; they request UI, and programmatic callers drop those requests.
 
 ## Rendering

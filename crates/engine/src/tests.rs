@@ -381,14 +381,6 @@ fn every_command_survives_junk_params() {
         json!({"from": "x", "to": -1, "side": [1], "index": 1e308, "page": {"x": 1}}),
         json!({"from": 2, "to": 2, "side": "middle", "index": -1, "page": 2, "id": "nope"}),
         json!({"from": 2, "to": 1, "side": "auto"}),
-        // Widgets: plugins, targets and fuel as junk.
-        json!({"id": 1, "plugin": {"x": 1}, "target": [1], "fuel": -1e308, "x": 1e308}),
-        // Widget fields and menus: fields, items and values as junk.
-        json!({"id": 1, "field": {"x": 1}, "item": [1], "value": {"x": "\u{0}"}, "fuel": 1e308}),
-        json!({"id": [1], "field": "label\u{0}", "item": "", "value": "\u{7}".repeat(5000)}),
-        // Plugin directories: ids, versions, servers and confirmations as junk.
-        json!({"id": "../../x", "version": {"x": 1}, "server": "ws://\u{0}/?key=", "confirm": "yes", "path": [5], "plugin": [1], "query": 7, "sha256": 3}),
-        json!({"id": "org.example.x", "version": "1.0.0", "server": "wss://[::1", "confirm": true, "plugin": "nope"}),
         // Prototype expressions and gamepad keys as junk.
         json!({"id": -5, "expression": "x[\u{0}", "expr": {"op": {"op": "add", "args": [1]}}, "trigger": {"type": "keyPress", "key": "Gamepad \u{0}"}}),
         json!({"id": 1, "expr": {"inMode": {"variable": [], "mode": 1e308}}, "trigger": {"type": "keyPress", "key": 7}}),
@@ -655,5 +647,45 @@ fn damaged_sketch_data_fails_without_panicking() {
             let r = s.execute(cmd, &json!({"data": data, "name": "x.sketch"}));
             assert!(matches!(r, Err(ref e) if !matches!(e, EngineError::Internal { .. })), "{cmd}: {r:?}");
         }
+    }
+}
+
+/// The plugin host, its widgets and its plugin directory left (martha-board#31): no command they
+/// registered is registered, listed in a menu, bound to a key or run as a live preview.
+#[test]
+fn no_plugin_or_widget_command_is_left() {
+    const GONE_PREFIXES: [&str; 3] = ["plugin.", "plugins.", "widget."];
+    const REMOVED: [&str; 19] = [
+        "plugin.list",
+        "plugin.import",
+        "plugin.remove",
+        "plugin.run",
+        "plugin.ui",
+        "plugin.event",
+        "plugin.close",
+        "plugins.runLast",
+        "plugins.manage",
+        "plugin.directory.list",
+        "plugin.directory.install",
+        "plugin.directory.publish",
+        "plugin.directory.unpublish",
+        "widget.insert",
+        "widget.click",
+        "widget.setText",
+        "widget.menu",
+        "widget.hover",
+        "widget.list",
+    ];
+    let registered: Vec<&str> = all_commands().iter().map(|c| c.id).collect();
+    // The list is the real registry, not an empty one.
+    assert!(registered.contains(&"shape.rectangle") && registered.contains(&"board.nextSticky"), "{registered:?}");
+    let listed = catalog::MENU.iter().map(|m| m.id).filter(|id| !id.is_empty());
+    let bound = keymap::KEYS.iter().map(|b| b.id);
+    for id in registered.iter().copied().chain(listed).chain(bound).chain(textpreview::COMMANDS) {
+        assert!(!GONE_PREFIXES.iter().any(|p| id.starts_with(p)), "{id} is still there");
+    }
+    for id in REMOVED {
+        assert!(find_command(id).is_none(), "{id} is still registered");
+        assert!(matches!(Session::new().execute(id, &json!({})), Err(EngineError::UnknownCommand(_))), "{id} still runs");
     }
 }

@@ -51,13 +51,10 @@ fn completions_name_the_cli_its_subcommands_and_options() -> std::io::Result<()>
             "run",
             "commands",
             "mcp",
-            "plugin",
             "perf",
-            "publish",
             "no-system-fonts",
             "format",
             "automation-read-root",
-            "server",
         ] {
             assert!(text.contains(word), "{name} does not contain {word}");
         }
@@ -104,8 +101,6 @@ fn man_pages_cover_every_subcommand_without_synthetic_help_pages() -> std::io::R
             "figcraft-cli-info.1",
             "figcraft-cli-mcp.1",
             "figcraft-cli-perf.1",
-            "figcraft-cli-plugin-publish.1",
-            "figcraft-cli-plugin.1",
             "figcraft-cli-render.1",
             "figcraft-cli-run.1",
             "figcraft-cli.1",
@@ -117,12 +112,9 @@ fn man_pages_cover_every_subcommand_without_synthetic_help_pages() -> std::io::R
         assert!(text.contains(name.trim_end_matches(".1")), "{name} has the wrong command name");
         assert!(!text.contains("man-and-completions"), "{name} names the example instead of the CLI");
     }
-    for (page, option) in [
-        ("figcraft-cli.1", "--no-system-fonts"),
-        ("figcraft-cli-export.1", "--format"),
-        ("figcraft-cli-export.1", "--automation-read-root"),
-        ("figcraft-cli-plugin-publish.1", "--server"),
-    ] {
+    for (page, option) in
+        [("figcraft-cli.1", "--no-system-fonts"), ("figcraft-cli-export.1", "--format"), ("figcraft-cli-export.1", "--automation-read-root")]
+    {
         let text = fs::read_to_string(dir.join(page))?.replace("\\-", "-");
         assert!(text.contains(option), "{page} does not contain {option}");
     }
@@ -142,7 +134,7 @@ fn generation_creates_the_output_directory_and_can_run_again() -> std::io::Resul
     fs::write(&page, "old page")?;
     generator::generate(&output)?;
     assert_eq!(fs::read(page)?, first);
-    assert_eq!(fs::read_dir(output)?.count(), 16);
+    assert_eq!(fs::read_dir(output)?.count(), 14);
     Ok(())
 }
 

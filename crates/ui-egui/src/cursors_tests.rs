@@ -38,7 +38,6 @@ fn every_engine_cursor_has_a_system_cursor_or_a_glyph() {
         (Cursor::Pen(PenCursor::Add), Drawn(Glyph::Pen(PenCursor::Add)), "pen-add"),
         (Cursor::Pen(PenCursor::Bend), Drawn(Glyph::Pen(PenCursor::Bend)), "pen-bend"),
         (Cursor::Copy, System(CursorIcon::Copy), "copy"),
-        (Cursor::Pointer, System(CursorIcon::PointingHand), "pointer"),
         (Cursor::Eyedropper, Drawn(Glyph::Eyedropper), "eyedropper"),
         (Cursor::Comment, Drawn(Glyph::Comment), "comment"),
         (Cursor::NotAllowed, System(CursorIcon::NotAllowed), "not-allowed"),

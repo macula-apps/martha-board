@@ -17,7 +17,6 @@ pub mod catalog;
 pub mod cmd;
 mod content;
 pub mod events;
-mod extensions;
 pub mod fonts;
 pub mod guard;
 pub mod keymap;
@@ -52,9 +51,6 @@ pub use canvas::tools;
 pub use canvas::vectoredit;
 pub use content::templates;
 pub use content::textfit;
-pub use extensions::plugin_directory;
-pub use extensions::plugins;
-pub use extensions::widgets;
 pub use selection::rename;
 pub use selection::selection_colors;
 pub use selection::selection_reorder;
@@ -128,8 +124,6 @@ pub struct Session {
     pub last_command: Option<(String, Value)>,
     /// Status / toast message for the UI.
     pub message: Option<String>,
-    /// Plugin modules loaded in this session and the last plugin run.
-    pub plugins: plugins::Runtime,
     /// The live sessions (collaboration), one per document at most: status, peers, presence.
     /// [`Session::live`] is the active document's.
     pub live: live::Lives,
@@ -421,12 +415,6 @@ mod placed_image_size_tests;
 #[cfg(test)]
 mod plugin_data_tests;
 #[cfg(test)]
-mod plugin_directory_tests;
-#[cfg(test)]
-mod plugin_panels_tests;
-#[cfg(test)]
-pub(crate) mod plugins_tests;
-#[cfg(test)]
 mod progressive_blur_tests;
 #[cfg(test)]
 mod property_copy_tests;
@@ -536,16 +524,6 @@ mod version_tests;
 mod view_behaviour_tests;
 #[cfg(test)]
 mod vote_history_tests;
-#[cfg(test)]
-mod widget_hover_tests;
-#[cfg(test)]
-mod widget_input_tests;
-#[cfg(test)]
-mod widget_panel_tests;
-#[cfg(test)]
-mod widget_shapes_tests;
-#[cfg(test)]
-mod widgets_tests;
 
 #[cfg(test)]
 mod page_view_tests;

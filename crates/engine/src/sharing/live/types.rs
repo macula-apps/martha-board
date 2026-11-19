@@ -1,6 +1,6 @@
 use super::{
-    Access, Admin, AdminReply, Arc, ClientMsg, Code, Document, HostInfo, IpAddr, LibraryReply, LibraryReq, NO_TEAM_LIBRARIES, Peer, PluginReply,
-    PluginReq, Presence, Resume, Serialize, ServerMsg, Signal, code,
+    Access, Admin, AdminReply, Arc, ClientMsg, Code, Document, HostInfo, IpAddr, LibraryReply, LibraryReq, NO_PLUGIN_DIRECTORY, NO_TEAM_LIBRARIES,
+    Peer, PluginReply, PluginReq, Presence, Resume, Serialize, ServerMsg, Signal, code,
 };
 
 /// The server files are shared through online unless Preferences name another: the only place
@@ -316,8 +316,8 @@ pub enum Event {
     },
 }
 
-/// A request to a server outside a live session: its plugin directory, a team library, or keeping
-/// a file there.
+/// A request to a server outside a live session: a team library, keeping a file there, or (kept on
+/// the wire only, always refused here: [`NO_PLUGIN_DIRECTORY`]) its plugin directory.
 #[derive(Clone, Debug)]
 pub enum NetRequest {
     /// To the plugin directory of the server at `server` (`ws://host:port/`, with `?key=…` to
@@ -340,7 +340,7 @@ impl NetRequest {
     /// What a session without the network says.
     pub(crate) fn unavailable(&self) -> &'static str {
         match self {
-            NetRequest::Plugins { .. } => crate::plugin_directory::NO_DIRECTORY,
+            NetRequest::Plugins { .. } => NO_PLUGIN_DIRECTORY,
             NetRequest::Library { .. } | NetRequest::Upload(_) => NO_TEAM_LIBRARIES,
             NetRequest::Hosting { .. } | NetRequest::Share { .. } => NO_HOSTING,
         }
@@ -482,7 +482,7 @@ pub trait LiveLink: Send {
     /// `?key=…` to publish); waits for the answer (a few seconds at most when it can't be
     /// reached). Errors never echo the key.
     fn plugins(&mut self, _server: &str, _req: PluginReq) -> std::result::Result<PluginReply, String> {
-        Err(crate::plugin_directory::NO_DIRECTORY.into())
+        Err(NO_PLUGIN_DIRECTORY.into())
     }
     /// What the server at `server` says about its hosting, and with a file's owner token
     /// (`file` and `owner`) its answer to `req` about that file; waits for the server. Errors

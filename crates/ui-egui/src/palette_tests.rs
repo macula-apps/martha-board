@@ -1,11 +1,10 @@
 //! The Actions palette, driven headless: runs from it record recents (newest first, capped),
 //! sections group commands by menu, a search covers every command with the best matches first,
-//! Up/Down move the highlight and Enter runs it, gone entries drop out of Recents, a used plugin
+//! Up/Down move the highlight and Enter runs it, gone entries drop out of Recents, a used command
 //! resolves back to a row, and a press outside the panel closes it.
 
 use egui::{Event, Key, Modifiers, Pos2};
 use figcraft_engine::Session;
-use serde_json::json;
 
 use crate::layers_drag_tests::Ui;
 
@@ -38,7 +37,7 @@ fn sections_group_by_menu_in_catalog_order() {
     }
     let names: Vec<&str> = groups.iter().map(|(g, _)| g.as_str()).collect();
     assert!(names.contains(&"File") && names.contains(&"Edit"), "menus group: {names:?}");
-    assert!(!names.iter().any(|g| g.starts_with("Plugins")), "plugins have their own tab");
+    assert!(!names.iter().any(|g| g.starts_with("Plugins")), "there is no Plugins menu (#31)");
 }
 
 #[test]
@@ -52,34 +51,23 @@ fn query_filters_to_matches() {
 
 #[test]
 fn gone_entries_drop_out_of_recents() {
-    let u = Ui::new(Session::new());
-    assert!(crate::menus::recent_row(&u.app, "command:nope.nope", "").is_none(), "gone commands drop out");
-    assert!(crate::menus::recent_row(&u.app, "plugin:nope.nope/nope", "").is_none(), "gone plugins drop out");
-    assert!(crate::menus::recent_row(&u.app, "widget:nope", "").is_none(), "gone widgets drop out");
+    assert!(crate::menus::recent_row("command:nope.nope", "").is_none(), "gone commands drop out");
+    // Entries an older version recorded for plugins and widgets (#31).
+    assert!(crate::menus::recent_row("plugin:nope.nope/nope", "").is_none(), "plugin entries drop out");
+    assert!(crate::menus::recent_row("widget:nope", "").is_none(), "widget entries drop out");
 }
 
-/// A used plugin (API 4, several commands) resolves back to a Recents row.
+/// A command run from the palette resolves back to a Recents row, which the query filters.
 #[test]
-fn used_plugin_resolves_to_a_recent_row() {
+fn used_command_resolves_to_a_recent_row() {
     let mut u = Ui::new(Session::new());
-    let plugin: figcraft_engine::plugins::InstalledPlugin = serde_json::from_value(json!({
-        "manifest": {
-            "id": "dev.local.solar-icons",
-            "name": "Solar icons",
-            "main": "solar_icons.wasm",
-            "api": 4,
-            "commands": [
-                {"id": "panel", "label": "Panel"},
-                {"id": "grid", "label": "Grid"},
-            ],
-        },
-    }))
-    .unwrap();
-    u.app.session.prefs.plugins.push(plugin);
-    crate::menus::record_recent(&mut u.app, "plugin:dev.local.solar-icons/panel");
-    let row = crate::menus::recent_row(&u.app, "plugin:dev.local.solar-icons/panel", "").expect("a used plugin stays in Recents");
-    assert_eq!(row.label, "Solar icons — Panel");
-    assert!(crate::menus::recent_row(&u.app, "plugin:dev.local.solar-icons/panel", "zzz").is_none(), "the query filters recents");
+    let key = "command:view.zoomIn";
+    crate::menus::run_action(&mut u.app, key);
+    let recent = u.app.session.prefs.recent_actions.first().cloned().expect("the run is recorded");
+    let row = crate::menus::recent_row(&recent, "").expect("a used command stays in Recents");
+    assert_eq!(row.key, key);
+    assert!(!row.label.is_empty());
+    assert!(crate::menus::recent_row(&recent, "zzz-no-such-action").is_none(), "the query filters recents");
 }
 
 /// A press outside the panel closes it; the opening press is spared once.

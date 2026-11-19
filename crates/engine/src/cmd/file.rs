@@ -22,7 +22,6 @@ mod save;
 mod version;
 
 pub use assets::{Asset, AssetKind, asset_jobs, assets};
-pub(crate) use export::FORBIDDEN_FILE_NAME_CHARS;
 #[cfg(test)]
 use export::add_member;
 pub(super) use export::export_setting;

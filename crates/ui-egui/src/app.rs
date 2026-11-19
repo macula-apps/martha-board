@@ -5,8 +5,7 @@ use super::state::{LEFT_PANEL, MOBILE_STRIP, MobilePanel, NARROW_WIDTH, PANEL_DE
 use super::{
     Arc, Done, FigApp, NodeId, OsStr, Path, PathBuf, PendingAck, PendingDialog, Poll, Session, TaskContext, UiState, Value, Waker, a11y, branch_ui,
     canvas, cjk, comments, cursors, dialogs, frame_stats, home, home_recents, i18n, icons, import_report, json, layers, live, menus, missing_fonts,
-    online, plugins_ui, render_worker, right, selection_spacing, shortcuts, style_picker, tabs, theme, toolbar, ui_scale, updates_ui, versions,
-    widgets, windows,
+    online, render_worker, right, selection_spacing, shortcuts, style_picker, tabs, theme, toolbar, ui_scale, updates_ui, versions, widgets, windows,
 };
 
 mod clipboard;
@@ -204,12 +203,9 @@ impl FigApp {
         // its acknowledgement for the presented pass but never replays the input (its side effects
         // already happened and would otherwise duplicate).
         self.end_input_frame(&ctx);
-        // Plugins installed, removed or set up are kept at once: a crash doesn't lose them.
-        // So are the owner tokens of files put online, and preferences a command keeps at once.
-        if std::mem::take(&mut self.session.plugins.unsaved)
-            | std::mem::take(&mut self.session.live.unsaved)
-            | std::mem::take(&mut self.session.prefs_unsaved)
-        {
+        // The owner tokens of files put online are kept at once, so a crash doesn't lose them, and
+        // so are preferences a command keeps at once.
+        if std::mem::take(&mut self.session.live.unsaved) | std::mem::take(&mut self.session.prefs_unsaved) {
             self.services.save_prefs(&self.session.prefs);
         }
         #[cfg(not(target_arch = "wasm32"))]

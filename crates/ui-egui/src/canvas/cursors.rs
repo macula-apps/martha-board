@@ -59,7 +59,6 @@ pub fn of(cursor: Cursor) -> Shown {
         Cursor::Text => System(CursorIcon::Text),
         Cursor::Pen(p) => Drawn(Glyph::Pen(p)),
         Cursor::Copy => System(CursorIcon::Copy),
-        Cursor::Pointer => System(CursorIcon::PointingHand),
         Cursor::Eyedropper => Drawn(Glyph::Eyedropper),
         Cursor::Comment => Drawn(Glyph::Comment),
         Cursor::NotAllowed => System(CursorIcon::NotAllowed),

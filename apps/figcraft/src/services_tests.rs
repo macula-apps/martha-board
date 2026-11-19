@@ -1,5 +1,6 @@
-//! The preferences are kept as plugins change, not only when the app quits: a plugin imported
-//! (then removed) is still there (gone) when the app is killed and starts again.
+//! The preferences are kept as a command keeps them at once, not only when the app quits: an
+//! interface size stepped up (then back) is still there (back) when the app is killed and starts
+//! again.
 
 use std::sync::{Arc, Mutex};
 
@@ -9,25 +10,11 @@ use serde_json::json;
 
 use crate::services::Desktop;
 
-const ID: &str = "org.example.tiny";
-
 fn root(name: &str) -> std::path::PathBuf {
     let r = std::env::temp_dir().join(format!("figcraft-prefs-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&r);
     std::fs::create_dir_all(&r).unwrap();
     r
-}
-
-/// A plugin folder (manifest and module) in `root`.
-fn plugin(root: &std::path::Path) -> std::path::PathBuf {
-    let dir = root.join("tiny");
-    std::fs::create_dir_all(&dir).unwrap();
-    let manifest = json!({"id": ID, "name": "Tiny tool", "version": "1.0.0", "main": "tiny.wasm", "permissions": {"access": "read"}});
-    std::fs::write(dir.join("figcraft-plugin.json"), manifest.to_string()).unwrap();
-    let wasm =
-        wat::parse_str(r#"(module (memory (export "memory") 1) (func (export "figcraft_run") (param i32) (result i32) i32.const 0))"#).unwrap();
-    std::fs::write(dir.join("tiny.wasm"), wasm).unwrap();
-    dir
 }
 
 /// The app as it starts with its preferences in `dir`.
@@ -48,22 +35,56 @@ fn frames(fig: &mut FigApp, ctx: &egui::Context) {
 }
 
 #[test]
-fn plugins_are_kept_when_the_app_is_killed() {
+fn preferences_kept_at_once_are_kept_when_the_app_is_killed() {
     let dir = root("killed");
-    let folder = plugin(&dir);
     let ctx = egui::Context::default();
     let mut fig = start(&dir);
-    assert!(fig.run("plugin.import", json!({"path": folder.to_string_lossy()})).is_some());
+    let default = fig.session.prefs.ui_scale;
+    let stepped = fig.run("pref.uiScaleUp", json!({})).and_then(|r| r["scale"].as_f64()).unwrap();
+    assert_ne!(stepped, default, "the size changed");
     frames(&mut fig, &ctx);
     // Killed: no quit, so nothing saves on the way out.
     drop(fig);
     let mut fig = start(&dir);
-    assert_eq!(fig.session.prefs.plugins.iter().map(|p| p.manifest.id.as_str()).collect::<Vec<_>>(), [ID], "the plugin is still installed");
-    assert!(fig.run("plugin.remove", json!({"id": ID})).is_some());
+    assert_eq!(fig.session.prefs.ui_scale, stepped, "the size is still the one stepped to");
+    assert!(fig.run("pref.uiScaleReset", json!({})).is_some());
     frames(&mut fig, &ctx);
     drop(fig);
-    assert!(start(&dir).session.prefs.plugins.is_empty(), "the removal was kept too");
+    assert_eq!(start(&dir).session.prefs.ui_scale, default, "the reset was kept too");
     assert!(!dir.join("state.json.tmp").exists(), "no temporary file is left behind");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A settings file written before the plugins left (martha-board#31), with the installed plugins,
+/// their settings and the plugin directory browsed last: it still loads, keeps every other
+/// preference, and is written back without the plugin fields.
+#[test]
+fn settings_from_before_the_plugins_left_still_load() {
+    let dir = root("before-31");
+    let old = r#"{"prefs": {
+        "nudge_small": 2.0,
+        "nudge_big": 20.0,
+        "theme": "dark",
+        "user_name": "Ada",
+        "plugins": [{"manifest": {"id": "org.example.tiny", "name": "Tiny tool", "version": "1.0.0", "main": "tiny.wasm",
+                                  "permissions": {"access": "read"}},
+                     "path": "/home/ada/tiny/figcraft-plugin.json", "source": "ws://plugins.example:47900/"}],
+        "plugin_settings": {"org.example.tiny": {"size": 3}},
+        "plugin_directory": "ws://plugins.example:47900/",
+        "publish_server": "wss://boards.example/",
+        "recent_files": ["/home/ada/wall.figcraft"],
+        "recent_actions": ["plugin:org.example.tiny/run", "command:view.zoomIn"]
+    }}"#;
+    std::fs::write(dir.join("state.json"), old).unwrap();
+    let prefs = Desktop::load_from(Some(dir.clone()), Arc::new(Mutex::new(None))).prefs.expect("the old settings load");
+    assert_eq!((prefs.nudge_small, prefs.nudge_big), (2.0, 20.0));
+    assert_eq!((prefs.theme.as_str(), prefs.user_name.as_str(), prefs.publish_server.as_str()), ("dark", "Ada", "wss://boards.example/"));
+    assert_eq!(prefs.recent_files, ["/home/ada/wall.figcraft"]);
+    assert_eq!(prefs.recent_actions, ["plugin:org.example.tiny/run", "command:view.zoomIn"]);
+    let saved = serde_json::to_value(&prefs).unwrap();
+    for gone in ["plugins", "plugin_settings", "plugin_directory"] {
+        assert!(saved.get(gone).is_none(), "{gone} is written back: {saved}");
+    }
     let _ = std::fs::remove_dir_all(&dir);
 }
 

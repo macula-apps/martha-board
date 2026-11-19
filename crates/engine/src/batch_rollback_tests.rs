@@ -1,7 +1,6 @@
 use serde_json::json;
 
-use crate::plugins_tests::{OnRefusal, install, manifest, script};
-use crate::{EngineError, Session};
+use crate::Session;
 
 fn id(value: &serde_json::Value) -> crate::NodeId {
     crate::params::id_of(&value["id"]).unwrap()
@@ -144,26 +143,25 @@ fn failed_group_restores_each_tabs_history_after_undo_close_and_open() {
 }
 
 #[test]
-fn failed_plugin_run_restores_each_document_without_restoring_unrelated_state() {
+fn failed_batch_across_tabs_restores_each_document_without_restoring_unrelated_state() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"name": "Second"})).unwrap();
     let before_history: Vec<_> = s.docs.iter().map(|ds| ds.history.undo.len()).collect();
-    let calls = [
-        ("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})),
-        ("doc.nextTab", json!({})),
-        ("shape.rectangle", json!({"x": 20, "y": 0, "width": 10, "height": 10})),
-        ("node.set", json!({"id": 999999, "props": {"name": "must fail"}})),
-    ];
-    install(&mut s, manifest("org.test.rollback", "write", &[]), &script(&calls, OnRefusal::Fail, ""));
+    let commands = json!([
+        {"command": "shape.rectangle", "params": {"x": 0, "y": 0, "width": 10, "height": 10}},
+        {"command": "doc.nextTab"},
+        {"command": "shape.rectangle", "params": {"x": 20, "y": 0, "width": 10, "height": 10}},
+        {"command": "node.set", "params": {"id": 999999, "props": {"name": "must fail"}}}
+    ]);
     s.message = Some("keep this".into());
     let before_journal = s.journal.clone();
     let before_message = s.message.clone();
-    // The new file is the one in front when the plugin starts.
+    // The new file is the one in front when the batch starts.
     let before_active = s.active;
 
-    let result = s.execute("plugin.run", &json!({"id": "org.test.rollback"}));
+    let result = s.execute("command.batch", &json!({"commands": commands}));
 
-    assert!(matches!(result, Err(EngineError::Other(_))));
+    assert!(result.is_err());
     assert_eq!(s.docs.iter().map(|ds| ds.doc.node(ds.page).map_or(0, |page| page.children.len())).collect::<Vec<_>>(), vec![0, 0]);
     assert_eq!(s.active, before_active, "the tab in front is put back");
     assert_eq!(s.docs.iter().map(|ds| ds.history.undo.len()).collect::<Vec<_>>(), before_history);

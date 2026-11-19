@@ -8,11 +8,15 @@ use serde_json::json;
 
 use crate::Session;
 use crate::paint_tests::fill;
-use crate::plugins_tests::rect;
 use crate::test_helpers::{ex, idv};
 use crate::test_variables as tv;
 use figcraft_color::Color;
 use figcraft_doc::{ColorOperand, VariableValue};
+
+/// A 10 × 10 rectangle at `x`: its id.
+fn rect(s: &mut Session, x: f64) -> crate::NodeId {
+    idv(&ex(s, "shape.rectangle", json!({"x": x, "y": 0, "width": 10, "height": 10})))
+}
 
 /// A "C" collection (mode M) with `ink` #FF0000, `edge` #00FF00 and the number `size`; the ids of
 /// ink and edge.

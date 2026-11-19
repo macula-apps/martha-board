@@ -43,7 +43,6 @@ pub mod live_text;
 pub mod measure_overlay;
 pub mod render_worker;
 pub(crate) mod selection_spacing;
-pub mod widget_bar;
 
 pub struct CanvasState {
     pub rect: Rect,
@@ -394,7 +393,6 @@ pub fn show(app: &mut FigApp, ui: &mut Ui, worker: &mut Worker) {
     crate::board_bar::show(app, &ctx);
     crate::board_connect::show(app, &ctx);
     crate::board_facilitate::show(app, &ctx, rect);
-    crate::widget_bar::show(app, &ctx);
     crate::selection_spacing::draw(app, &painter);
     crate::comments::draw(app, &painter);
     crate::live_text::draw(app, &painter);

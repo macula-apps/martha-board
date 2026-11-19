@@ -9,7 +9,7 @@
 //!
 //! `--automation-read-root <dir>` / `--automation-write-root <dir>` (each repeatable) confine the
 //! files the window and the control channel read and write (`figcraft_engine::file_access`); the
-//! app's own folders (settings, recovery copies, installed plugins) and opening the files given on
+//! app's own folders (settings, recovery copies) and opening the files given on
 //! the command line are not. A root that isn't an existing folder stops the app at startup, and so
 //! does any flag the app doesn't know (a mistyped root flag must not start the app unconfined).
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
@@ -225,8 +225,6 @@ fn main() -> eframe::Result {
         r.adopt(recovered.waiting);
     }
     *recovery::lock(&recovery) = copies;
-    // Plugins installed from a server's plugin directory live with the user's settings.
-    session.plugins.install_dir = services::config_dir().map(|d| d.join("Plugins"));
     // Invite links open this app (Windows registers per user at run time; installed builds by
     // default, never a build from source unless asked).
     session.live.links = figcraft_collab_net::links::system();

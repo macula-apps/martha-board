@@ -1,6 +1,6 @@
 use super::{
-    Done, FigApp, MobilePanel, NodeId, PANEL_DEFAULT, Value, comments, dialogs, home, import_report, layers, live, menus, missing_fonts, plugins_ui,
-    updates_ui, versions,
+    Done, FigApp, MobilePanel, NodeId, PANEL_DEFAULT, Value, comments, dialogs, home, import_report, layers, live, menus, missing_fonts, updates_ui,
+    versions,
 };
 
 impl FigApp {
@@ -55,7 +55,7 @@ impl FigApp {
     /// Show command `id`'s error.
     pub(crate) fn failed(&mut self, id: &str, e: &figcraft_engine::EngineError) {
         let msg = e.to_string();
-        // A plugin's failure text may carry CR or terminal controls: log it escaped.
+        // A failure text (a server's, say) may carry CR or terminal controls: log it escaped.
         log::warn!("{id}: {}", msg.escape_debug());
         self.show_error(msg);
     }
@@ -212,8 +212,6 @@ impl FigApp {
                         self.ui.close_tab = Some(crate::windows::TabClose::Ask(d.uid));
                     }
                 }
-                "dialog.plugins" => self.ui.plugins_window = true,
-                "dialog.pluginSave" => plugins_ui::save_file(self, &r.data),
                 "dialog.cursorChat" => live::open_chat(self),
                 "window.new" | "window.focus" | "window.fullscreen" => self.window_requests.push(r),
                 _ => {}

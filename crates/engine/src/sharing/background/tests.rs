@@ -5,14 +5,14 @@
 
 use std::sync::{Arc, Mutex};
 
-use figcraft_collab::message::{ClientMsg, PluginEntry, PluginReply, PluginReq};
-use figcraft_plugin::bundle::{Bundle, sha256_hex};
+use figcraft_collab::message::{Admin, AdminReply, ClientMsg, HostInfo};
 use serde_json::json;
 
 use crate::live::{Event, HostOptions, LiveLink, NetReply, NetRequest, Presence, SessionInfo};
 use crate::{EngineError, Session};
 
-const ID: &str = "org.example.tiny";
+/// Who runs the scripted server, as its hosting answer says.
+const OPERATOR: &str = "ops@example.org";
 const SERVER: &str = "ws://127.0.0.1:9/";
 const LINK: &str = "ws://127.0.0.1:9/?file=f&token=t";
 
@@ -40,9 +40,9 @@ impl LiveLink for Link {
     fn poll(&mut self) -> Vec<(u64, Event)> {
         std::mem::take(&mut self.0.lock().unwrap().answers).into_iter().map(|e| (0, e)).collect()
     }
-    fn plugins(&mut self, _: &str, req: PluginReq) -> Result<PluginReply, String> {
+    fn hosting(&mut self, _: &str, _: &str, _: &str, _: Option<Admin>) -> Result<(HostInfo, Option<AdminReply>), String> {
         self.0.lock().unwrap().waited += 1;
-        Ok(directory(req))
+        Ok((hosting(), None))
     }
     fn background(&mut self, job: u64, req: NetRequest) -> bool {
         let mut w = self.0.lock().unwrap();
@@ -53,31 +53,9 @@ impl LiveLink for Link {
     }
 }
 
-fn wasm() -> Vec<u8> {
-    wat::parse_str(r#"(module (memory (export "memory") 1) (func (export "figcraft_run") (param i32) (result i32) i32.const 0))"#).unwrap()
-}
-
-fn bundle() -> Vec<u8> {
-    let manifest = json!({"id": ID, "name": "Tiny tool", "version": "1.0.0", "main": "t.wasm", "permissions": {"access": "write", "commands": ["shape.rectangle"]}});
-    Bundle { manifest: manifest.to_string(), wasm: wasm(), assets: Vec::new() }.encode()
-}
-
-fn directory(req: PluginReq) -> PluginReply {
-    let bytes = bundle();
-    let entry = PluginEntry {
-        id: ID.into(),
-        name: "Tiny tool".into(),
-        version: "1.0.0".into(),
-        access: "write".into(),
-        commands: vec!["shape.rectangle".into()],
-        sha256: sha256_hex(&bytes),
-        ..PluginEntry::default()
-    };
-    match req {
-        PluginReq::List { .. } => PluginReply::List(vec![entry]),
-        PluginReq::Fetch { .. } => PluginReply::Bundle { entry, bundle: bytes },
-        _ => PluginReply::Failed { reason: "no".into() },
-    }
+/// The scripted server's hosting.
+fn hosting() -> HostInfo {
+    HostInfo { operator: OPERATOR.into(), ..HostInfo::default() }
 }
 
 fn session(background: bool) -> (Session, Arc<Mutex<Wire>>) {
@@ -94,9 +72,11 @@ fn answer(s: &mut Session, wire: &Arc<Mutex<Wire>>) -> usize {
     for (job, req) in &out {
         let mut w = wire.lock().unwrap();
         let reply = match req.clone() {
-            NetRequest::Plugins { req, .. } => NetReply::Plugins(Ok(directory(req))),
+            NetRequest::Plugins { .. } => NetReply::Plugins(Err("no".into())),
             NetRequest::Library { .. } => NetReply::Library(Err("no".into())),
             NetRequest::Upload(_) => NetReply::Upload(Err("no".into())),
+            // `collab.serverInfo` asks about the hosting alone; `collab.files` about owned files.
+            NetRequest::Hosting { req: None, .. } => NetReply::Hosting(Ok((hosting(), None))),
             NetRequest::Hosting { .. } => NetReply::Hosting(Err("no".into())),
             NetRequest::Share { .. } => NetReply::Share(Err("no".into())),
         };
@@ -106,12 +86,15 @@ fn answer(s: &mut Session, wire: &Arc<Mutex<Wire>>) -> usize {
     out.len()
 }
 
+/// Asking the scripted server about its hosting.
+const INFO: &str = "collab.serverInfo";
+
 #[test]
 fn a_continue_batch_waits_instead_of_skipping_background_work() {
     for nested in [false, true] {
         let (mut s, wire) = session(true);
         let before = s.doc().unwrap().clone();
-        let request = json!({"command": "plugin.directory.list", "params": {"server": SERVER}});
+        let request = json!({"command": INFO, "params": {"server": SERVER}});
         let step = if nested { json!({"command": "command.batch", "params": {"onError": "continue", "commands": [request]}}) } else { request };
         let params = json!({"onError": "continue", "commands": [
             {"command": "page.rename", "params": {"name": "Before request"}},
@@ -127,8 +110,8 @@ fn a_continue_batch_waits_instead_of_skipping_background_work() {
         assert_eq!(command, "command.batch");
         let result = result.unwrap();
         assert!(result.as_array().unwrap().iter().all(|r| r["ok"] == true));
-        let directory = if nested { &result[1]["result"][0]["result"] } else { &result[1]["result"] };
-        assert_eq!(directory["plugins"][0]["id"], ID);
+        let info = if nested { &result[1]["result"][0]["result"] } else { &result[1]["result"] };
+        assert_eq!(info["operator"], OPERATOR);
         assert_eq!(s.doc().unwrap().node(s.page().unwrap()).unwrap().name, "After request");
         assert_eq!(s.undo_depth(), (1, 0));
         assert!(!s.waiting_for("command.batch"));
@@ -136,73 +119,64 @@ fn a_continue_batch_waits_instead_of_skipping_background_work() {
 }
 
 #[test]
-fn browsing_and_installing_wait_for_nothing_and_scripts_still_wait() {
+fn asking_waits_for_nothing_and_scripts_still_wait() {
     let (mut s, wire) = session(true);
-    assert_eq!(s.start_background("plugin.directory.list", json!({"server": SERVER})).unwrap(), None);
-    assert!(s.waiting_for("plugin.directory.list") && s.plugins.directory.is_none());
+    assert_eq!(s.start_background(INFO, json!({"server": SERVER})).unwrap(), None);
+    assert!(s.waiting_for(INFO));
     assert_eq!(wire.lock().unwrap().waited, 0, "nothing was waited for");
     // A script (the MCP server, the control channel) still gets its answer at once.
-    let r = s.execute("plugin.directory.list", &json!({"server": SERVER})).unwrap();
-    assert_eq!(r["plugins"][0]["id"], ID);
+    let r = s.execute(INFO, &json!({"server": SERVER})).unwrap();
+    assert_eq!(r["operator"], OPERATOR);
     assert_eq!(wire.lock().unwrap().waited, 1);
     assert!(s.take_background_done().is_none(), "no answer yet");
     assert_eq!(answer(&mut s, &wire), 1);
     let (cmd, r) = s.take_background_done().unwrap();
-    assert_eq!((cmd.as_str(), r.unwrap()["plugins"][0]["id"].as_str()), ("plugin.directory.list", Some(ID)));
-    assert!(!s.waiting_for("plugin.directory.list") && s.take_background_done().is_none());
-
-    let install = json!({"id": ID, "confirm": true, "server": SERVER});
-    assert_eq!(s.start_background("plugin.directory.install", install).unwrap(), None);
-    assert!(s.prefs.plugins.is_empty() && !s.plugins.unsaved);
-    answer(&mut s, &wire);
-    let (_, r) = s.take_background_done().unwrap();
-    assert_eq!(r.unwrap()["installed"], ID);
-    assert_eq!(s.prefs.plugins.len(), 1);
-    assert!(s.plugins.unsaved, "the app is told to save the plugin list at once");
+    assert_eq!((cmd.as_str(), r.unwrap()["operator"].as_str()), (INFO, Some(OPERATOR)));
+    assert!(!s.waiting_for(INFO) && s.take_background_done().is_none());
     assert_eq!(wire.lock().unwrap().waited, 1, "the background path never waited");
 }
 
 #[test]
 fn cancelled_commands_drop_their_answer_and_errors_are_the_outcome() {
     let (mut s, wire) = session(true);
-    s.start_background("plugin.directory.list", json!({"server": SERVER})).unwrap();
-    s.cancel_background("plugin.directory.list");
-    assert!(!s.waiting_for("plugin.directory.list"));
+    s.start_background(INFO, json!({"server": SERVER})).unwrap();
+    s.cancel_background(INFO);
+    assert!(!s.waiting_for(INFO));
     answer(&mut s, &wire);
-    assert!(s.take_background_done().is_none() && s.plugins.directory.is_none(), "the late answer is ignored");
+    assert!(s.take_background_done().is_none(), "the late answer is ignored");
 
     // Starting it again replaces the one waiting: only the newer answer counts.
-    s.start_background("plugin.directory.list", json!({"server": SERVER})).unwrap();
-    s.start_background("plugin.directory.list", json!({"server": SERVER})).unwrap();
+    s.start_background(INFO, json!({"server": SERVER})).unwrap();
+    s.start_background(INFO, json!({"server": SERVER})).unwrap();
     assert_eq!(answer(&mut s, &wire), 2);
     assert!(s.take_background_done().is_some() && s.take_background_done().is_none());
 
-    s.start_background("plugin.directory.list", json!({"server": SERVER})).unwrap();
+    s.start_background(INFO, json!({"server": SERVER})).unwrap();
     let (job, _) = wire.lock().unwrap().out.pop().unwrap();
-    wire.lock().unwrap().answers.push(Event::Net { job, reply: Box::new(NetReply::Plugins(Err("the server can't be reached".into()))) });
+    wire.lock().unwrap().answers.push(Event::Net { job, reply: Box::new(NetReply::Hosting(Err("the server can't be reached".into()))) });
     s.live_poll();
     let (_, r) = s.take_background_done().unwrap();
     assert!(r.unwrap_err().to_string().contains("can't be reached"));
     // Bad parameters fail at once, without a request.
-    assert!(s.start_background("plugin.directory.install", json!({"id": ID})).is_err());
+    assert!(s.start_background(INFO, json!({})).is_err());
     assert!(wire.lock().unwrap().out.is_empty());
 }
 
 #[test]
 fn a_link_without_background_requests_is_waited_on() {
     let (mut s, wire) = session(false);
-    let r = s.start_background("plugin.directory.list", json!({"server": SERVER})).unwrap().unwrap();
-    assert_eq!(r["plugins"][0]["id"], ID);
-    assert!(!s.waiting_for("plugin.directory.list"));
+    let r = s.start_background(INFO, json!({"server": SERVER})).unwrap().unwrap();
+    assert_eq!(r["operator"], OPERATOR);
+    assert!(!s.waiting_for(INFO));
     assert_eq!(wire.lock().unwrap().waited, 1);
     // Without any link, the usual error.
     let mut bare = Session::new();
-    assert!(bare.start_background("plugin.directory.list", json!({"server": SERVER})).unwrap_err().to_string().contains("desktop app"));
+    assert!(bare.start_background(INFO, json!({"server": SERVER})).unwrap_err().to_string().contains(crate::live::NO_HOSTING));
 }
 
-/// Confined to automation roots, commands reach no server (#1095): browsing a plugin directory,
-/// hosting, joining and publishing are refused before the link is asked. Unconfined, the same
-/// request reaches the server as before.
+/// Confined to automation roots, commands reach no server (#1095): asking a server about its
+/// hosting, hosting, joining and publishing are refused before the link is asked. Unconfined, the
+/// same request reaches the server as before.
 #[test]
 fn commands_confined_to_automation_roots_reach_no_server() {
     let dir = std::env::temp_dir().join(format!("figcraft-roots-network-{}", std::process::id()));
@@ -214,7 +188,7 @@ fn commands_confined_to_automation_roots_reach_no_server() {
         assert!(e.contains(crate::file_access::NETWORK_REFUSED), "{e}");
     };
     crate::file_access::confined(Some(&roots), || {
-        refused(s.execute("plugin.directory.list", &json!({"server": SERVER})));
+        refused(s.execute(INFO, &json!({"server": SERVER})));
         refused(s.execute("collab.host", &json!({})));
         refused(s.execute("collab.join", &json!({"link": LINK})));
         refused(s.execute("collab.publish", &json!({"server": SERVER})));
@@ -223,11 +197,22 @@ fn commands_confined_to_automation_roots_reach_no_server() {
     assert!(s.live.iter().next().is_none(), "no session was started");
     let _ = std::fs::remove_dir_all(&dir);
 
-    let r = s.execute("plugin.directory.list", &json!({"server": SERVER})).unwrap();
-    assert_eq!(r["plugins"][0]["id"], ID);
+    let r = s.execute(INFO, &json!({"server": SERVER})).unwrap();
+    assert_eq!(r["operator"], OPERATOR);
     assert_eq!(wire.lock().unwrap().waited, 1);
     let e = s.execute("collab.host", &json!({})).unwrap_err().to_string();
     assert!(!e.contains(crate::file_access::NETWORK_REFUSED), "unconfined, the link is asked: {e}");
+}
+
+/// A plugin directory request (still on the wire, martha-board#31) is refused by name on a session
+/// without a link, and a link that doesn't answer it refuses it by the same name.
+#[test]
+fn plugin_directory_requests_are_refused_by_name() {
+    use figcraft_collab::message::PluginReq;
+    let req = NetRequest::Plugins { server: SERVER.into(), req: PluginReq::List { query: String::new() } };
+    let (_, wire) = session(false);
+    let mut link = Link(wire);
+    assert!(matches!(link.request(req), NetReply::Plugins(Err(why)) if why == crate::live::NO_PLUGIN_DIRECTORY));
 }
 
 /// A command that sends two requests (`collab.files {refresh}` asks each of two servers what became

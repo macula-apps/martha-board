@@ -1,10 +1,9 @@
-//! `doc.list` tells the user's own scripts where the open files are, but AI agents and plugins
-//! get their names only (#1117).
+//! `doc.list` tells the user's own scripts where the open files are, but AI agents get their names
+//! only (#1117).
 
 use serde_json::json;
 
 use crate::Session;
-use crate::plugins_tests::{OnRefusal, install, manifest, script};
 use crate::test_helpers::ex;
 
 const SECRET: &str = "/home/someone/private/clients/acme.figcraft";
@@ -34,15 +33,4 @@ fn an_agent_gets_names_and_ids_but_no_paths() {
     // An agent with no name of its own is an agent too.
     let list = s.execute_as(Some(""), "doc.list", &json!({})).unwrap();
     assert!(!list.to_string().contains(SECRET));
-}
-
-#[test]
-fn a_plugin_gets_names_but_no_paths() {
-    let mut s = two_files();
-    // The reply to its last call becomes its output.
-    let tail = "(call $set_output (i32.const 40000) (call $reply_read (i32.const 40000) (i32.const 20000))) (return (i32.const 0))";
-    install(&mut s, manifest("org.test.list", "read", &[]), &script(&[("doc.list", json!({}))], OnRefusal::Fail, tail));
-    let out = ex(&mut s, "plugin.run", json!({"id": "org.test.list"}))["output"].to_string();
-    assert!(out.contains("Front"), "{out}");
-    assert!(!out.contains(SECRET) && !out.contains("path"), "{out}");
 }

@@ -10,7 +10,7 @@ use serde_json::{Value, json};
 
 use crate::{CliError, CliResult};
 
-/// A document's or plugin's text as a terminal should show it: control characters escaped, and
+/// A document's text as a terminal should show it: control characters escaped, and
 /// everything else (quotes, backslashes in paths) left as it is.
 pub(crate) fn plain(text: &str) -> String {
     text.chars().map(|c| if c.is_control() { c.escape_default().to_string() } else { c.to_string() }).collect()
@@ -390,7 +390,7 @@ pub fn run_script(script: &str, input: Option<&str>, out: Option<&str>) -> CliRe
         None => (Session::new(), 0),
     };
     // One undo step and all-or-nothing, the way the same commands behave through `command.batch`
-    // (MCP, the control channel, plugins): `{"$step": n}` and `{"$ref": "name"}` resolve against the
+    // (MCP, the control channel): `{"$step": n}` and `{"$ref": "name"}` resolve against the
     // steps before it, and a step that fails takes the whole script back instead of leaving the
     // earlier steps applied. The result lines are held back until the script is through, so none of
     // them reports work that was rolled back.
@@ -408,7 +408,7 @@ pub fn run_script(script: &str, input: Option<&str>, out: Option<&str>) -> CliRe
         let cmd = steps.get(failed_at).map_or("", |step| step.command.as_str());
         let i = failed_at;
         println!("{}", json!({"step": i, "command": cmd, "ok": false, "error": e.to_string(), "rolledBack": true}));
-        // Plugin-supplied text: escape terminal controls and line breaks.
+        // Document-supplied text: escape terminal controls and line breaks.
         eprintln!("error: step {i} ({}) failed: {}", plain(cmd), plain(&e.to_string()));
         eprintln!("the script's document changes were rolled back");
         return Ok(ExitCode::from(1));

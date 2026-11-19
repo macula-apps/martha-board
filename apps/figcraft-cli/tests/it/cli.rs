@@ -72,6 +72,19 @@ fn bad_arguments_exit_2_without_panicking() {
     assert_eq!(out.status.code(), Some(1));
 }
 
+/// The CLI has no `plugin` subcommand (martha-board#31): `plugin publish` is a usage error that
+/// names the subcommand clap doesn't know, before anything reads the folder or the server.
+#[test]
+fn plugin_publish_is_an_unknown_subcommand() {
+    let dir = tmp("plugin-publish");
+    let out = bin().args(["plugin", "publish"]).arg(&dir).args(["--server", "ws://127.0.0.1:1/"]).output().unwrap();
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(2), "{err}");
+    assert!(err.starts_with("error: unrecognized subcommand 'plugin'\n"), "{err}");
+    assert!(out.stdout.is_empty(), "{}", String::from_utf8_lossy(&out.stdout));
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
 #[test]
 fn post_parse_errors_escape_terminal_controls() {
     let missing = format!("__figcraft_missing_diagnostic_{}_\u{1b}[31m\n.figcraft", std::process::id());
@@ -110,7 +123,6 @@ fn help_after_a_subcommand_prints_the_usage() {
         &["render", "--help"],
         &["run", "--help"],
         &["commands", "--help"],
-        &["plugin", "publish", "--help"],
         &["perf", "--help"],
         &["mcp", "--attach", "notaport", "--help"],
         &["mcp", "--bogus", "--help"],

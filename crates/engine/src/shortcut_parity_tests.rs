@@ -23,9 +23,6 @@ const PLATFORMS: [Platform; 2] = [Platform::Mac, Platform::Other];
 enum Ours {
     /// The keymap binds the documented keys to this command.
     Bound(&'static str),
-    /// Bound to this command on other keys where the documented ones collide with another
-    /// documented shortcut: (command, macOS keys, Windows/Linux keys; empty: the macOS keys).
-    Moved(&'static str, &'static [&'static str], &'static [&'static str]),
     /// A held key, pointer gesture or presentation key; the shortcuts panel lists it under this label.
     Gesture(&'static str),
     /// A tool key in vector edit mode.
@@ -61,7 +58,6 @@ impl Row {
     fn ours(&self, p: Platform) -> Option<(&'static str, &'static [&'static str])> {
         match self.ours {
             Bound(id) => Some((id, self.keys(p))),
-            Moved(id, mac, win) => Some((id, if p == Platform::Other && !win.is_empty() { win } else { mac })),
             _ => None,
         }
     }
@@ -88,8 +84,7 @@ static ROWS: &[Row] = &[
     doc(Essential, "Chat at your cursor in a live session", &["/"], &[], Bound("collab.cursorChat"), ""),
     doc(Essential, "Sample a colour", &["I", "Ctrl+C"], &["I"], Bound("edit.pickColor"), "Control+C on macOS only (Ctrl+C copies elsewhere)"),
     doc(Essential, "Save to version history", &["Alt+Cmd+S"], &["Ctrl+Alt+S"], Bound("file.saveVersion"), ""),
-    doc(Essential, "Run the last plugin", &["Alt+Cmd+P"], &["Ctrl+Alt+P"], Moved("plugins.runLast", &["Alt+Cmd+P"], &["Ctrl+Alt+Shift+P"]),
-        "conflict: the documentation also gives Ctrl+Alt+P to pixel preview on Windows; pixel preview keeps it, the plugin takes Ctrl+Alt+Shift+P"),
+    doc(Essential, "Run the last plugin", &["Alt+Cmd+P"], &["Ctrl+Alt+P"], Missing, "plugins left (#31)"),
     pin(Essential, "view.fullscreen", &["Ctrl+Cmd+F"], &["F11"]),
     pin(Essential, "app.preferences", &["Cmd+,"], &[]),
     pin(Essential, "file.new", &["Cmd+N"], &[]).reserved(BROWSER_TAB),
@@ -362,13 +357,6 @@ fn documented_shortcuts_fire_their_commands_on_both_platforms() {
                 // The panel lists the binding in the row's tab.
                 assert!(KEYS.iter().any(|b| b.id == id && b.group == row.group), "{id} isn't in the {:?} tab", row.group);
             }
-            if let Moved(id, ..) = row.ours {
-                let ours = row.ours(p).map(|o| o.1).unwrap_or_default();
-                for k in row.keys(p).iter().filter(|k| !ours.contains(k)) {
-                    assert!(!fires(p, k).contains(&Some(id)), "{p:?}: `{k}` was moved off {id}");
-                    assert!(fires(p, k).iter().any(Option::is_some), "{p:?}: `{k}` should be the conflicting documented command");
-                }
-            }
         }
         if let Gesture(label) = row.ours {
             assert!(GESTURES.iter().any(|g| g.0 == row.group && g.1 == label), "the panel's {:?} tab doesn't list `{label}`", row.group);
@@ -409,11 +397,10 @@ fn every_default_binding_is_in_the_table() {
 fn counts_match_the_docs() {
     let documented: Vec<&Row> = ROWS.iter().filter(|r| r.documented).collect();
     let bound = documented.iter().filter(|r| matches!(r.ours, Bound(_) | Gesture(_) | VectorTool(_))).count();
-    let moved = documented.iter().filter(|r| matches!(r.ours, Moved(..))).count();
     let missing = documented.iter().filter(|r| matches!(r.ours, Missing)).count();
     let reserved = documented.iter().filter(|r| !r.reserved.is_empty()).count();
     let pinned = ROWS.len() - documented.len();
-    assert_eq!((documented.len(), bound, moved, missing, reserved, pinned), (137, 120, 1, 16, 2, 55));
+    assert_eq!((documented.len(), bound, missing, reserved, pinned), (137, 120, 17, 2, 55));
 }
 
 #[test]

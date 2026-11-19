@@ -453,6 +453,10 @@ pub fn editing_hint(names: &[&str]) -> Option<String> {
 /// Why team libraries aren't available (no network link, or the browser build).
 pub const NO_TEAM_LIBRARIES: &str = "team libraries on a server need the desktop app or the MCP server";
 
+/// Why a plugin directory request is refused: the app has no plugins (martha-board#31). The wire
+/// still carries the request ([`NetRequest::Plugins`]) until the format changes.
+pub const NO_PLUGIN_DIRECTORY: &str = "this app has no plugins, so it has no plugin directory to ask";
+
 /// Why an edit of a server file you joined with a view link is refused.
 pub const VIEW_ONLY: &str = "View only: the link you joined with lets you see this file, not change it";
 /// Why an edit other than to comment threads of a server file you joined with a comment link is

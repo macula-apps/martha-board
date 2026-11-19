@@ -77,12 +77,10 @@ impl Session {
         // A frame's name label picks the frame itself. The background of a top-level frame with
         // layers in it is like the canvas (a press starts a marquee inside it) unless the frame is
         // selected; stepping out from a selected descendant is handled by the marquee below.
-        // An empty frame (or a widget, or a board object such as a sticky) is picked and dragged.
+        // An empty frame (or a board object such as a sticky) is picked and dragged.
         let board_background = |leaf: NodeId| {
             !sel.contains(&leaf)
-                && doc.node(leaf).is_some_and(|n| {
-                    n.parent == Some(page) && n.kind.is_frame_like() && !n.children.is_empty() && !crate::widgets::is_widget(n) && !n.is_board_atom()
-                })
+                && doc.node(leaf).is_some_and(|n| n.parent == Some(page) && n.kind.is_frame_like() && !n.children.is_empty() && !n.is_board_atom())
         };
         let label = label_at(&doc, page, &self.tool.labels, ev.p());
         let hit = label.or_else(|| self.hit(&doc, page, ev.p(), ev.tol() * 2.0));

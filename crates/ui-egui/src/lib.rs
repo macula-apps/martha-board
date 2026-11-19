@@ -200,12 +200,6 @@ mod pen_mode_tests;
 #[cfg(test)]
 mod perf_tests;
 #[cfg(test)]
-mod plugin_panel_tests;
-#[cfg(test)]
-mod plugin_save_ui_tests;
-#[cfg(test)]
-mod plugins_browse_tests;
-#[cfg(test)]
 mod popover_tests;
 #[cfg(test)]
 mod popup_width_tests;
@@ -291,12 +285,10 @@ pub use canvas::live_text;
 pub use canvas::measure_overlay;
 pub use canvas::render_worker;
 use canvas::selection_spacing;
-pub use canvas::widget_bar;
 pub use dialogs::branch_ui;
 pub use dialogs::credits;
 pub use dialogs::import_report;
 pub use dialogs::missing_fonts;
-pub use dialogs::plugins_ui;
 pub use dialogs::sampled_color;
 pub use dialogs::updates_ui;
 pub use home::home_recents;
@@ -565,12 +557,6 @@ pub struct UiState {
     pub auto_saving: Vec<(u64, AutoSaveEncoding)>,
     /// Keyboard navigation: the region with the keyboard, keyboard mode (F6, Tab).
     pub nav: a11y::Nav,
-    /// The Manage plugins window is open.
-    pub plugins_window: bool,
-    /// The Manage plugins window's tab, directory fields and pending install.
-    pub plugins_manage: plugins_ui::PluginsWindow,
-    /// A plugin command's parameters form, when open.
-    pub plugin_form: Option<plugins_ui::PluginForm>,
     /// Live sessions: remote cursors as drawn, the Join dialog.
     pub live: live::LiveUi,
     /// Home ▸ Online.
@@ -688,9 +674,6 @@ impl Default for UiState {
             auto_save_at: None,
             auto_saving: Vec::new(),
             nav: a11y::Nav::default(),
-            plugins_window: false,
-            plugins_manage: plugins_ui::PluginsWindow::default(),
-            plugin_form: None,
             live: live::LiveUi::default(),
             online: online::OnlineUi::default(),
             confirm_close: false,
