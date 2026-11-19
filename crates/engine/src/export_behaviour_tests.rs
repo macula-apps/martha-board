@@ -557,3 +557,41 @@ fn export_rejects_an_invalid_layer_id_instead_of_exporting_the_page() {
     }
     assert!(s.execute("file.export", &json!({"format": "svg"})).is_ok());
 }
+
+/// `file.exportLayers {assets: true}` writes the assets in and under a frame (what the Inspect tab
+/// listed before it left the UI, #11): a layer with export settings as they say, a small vector
+/// layer as an SVG icon, an image-filled layer as a PNG. A plain shape is no asset.
+#[test]
+fn exporting_assets_writes_settings_icons_and_images() {
+    let mut s = Session::new();
+    let f = frame(&mut s, 0.0, 0.0, 400.0, 300.0, false);
+    name(&mut s, f, "Card");
+    let badge = rect(&mut s, 10.0, 10.0, 60.0, 30.0, "#FF0000", Some(f));
+    name(&mut s, badge, "Badge");
+    ex(&mut s, "export.add", json!({"ids": [badge], "setting": {"size": "1x", "format": "jpg"}}));
+    ex(&mut s, "shape.star", json!({"x": 100, "y": 10, "width": 24, "height": 24, "parent": f, "name": "Glyph"}));
+    let photo = rect(&mut s, 10.0, 100.0, 200.0, 100.0, "#00FF00", Some(f));
+    name(&mut s, photo, "Photo");
+    let picture = image::RgbaImage::from_fn(8, 4, |x, y| image::Rgba([x as u8 * 30, y as u8 * 60, 120, 255]));
+    let mut png = std::io::Cursor::new(Vec::new());
+    picture.write_to(&mut png, image::ImageFormat::Png).unwrap();
+    let data = base64::engine::general_purpose::STANDARD.encode(png.into_inner());
+    let imported = id(&ex(&mut s, "file.import", json!({"data": data, "name": "picture.png", "x": 600, "y": 0})));
+    let fills = s.doc().unwrap().node(imported).unwrap().fills.clone();
+    s.doc_mut().unwrap().get_mut(photo).unwrap().fills = fills;
+    let plain = rect(&mut s, 250.0, 10.0, 40.0, 40.0, "#0000FF", Some(f));
+    name(&mut s, plain, "Plain");
+
+    let dir = std::env::temp_dir().join(format!("figcraft-export-assets-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let r = ex(&mut s, "file.exportLayers", json!({"ids": [f], "assets": true, "dir": dir.to_string_lossy()}));
+    let mut names = file_names(&r);
+    names.sort();
+    assert_eq!(names, ["Badge.jpg", "Glyph.svg", "Photo.png"], "one file per asset; the plain shape and the frame are none");
+    let read = |file: &str| std::fs::read(dir.join(file)).unwrap_or_else(|e| panic!("{file}: {e}"));
+    assert!(read("Badge.jpg").starts_with(&[0xFF, 0xD8, 0xFF]), "export settings as they say: a JPG");
+    assert!(text(&read("Glyph.svg")).contains("<svg"), "an icon as SVG");
+    assert_eq!(png_size(&read("Photo.png")), (200, 100), "an image as a PNG of the layer at 1x");
+    let _ = std::fs::remove_dir_all(&dir);
+}

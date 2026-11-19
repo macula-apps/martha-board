@@ -62,7 +62,7 @@ fn several_layers_download_as_one_zip() {
     let r = app.session.execute("shape.rectangle", &json!({"x": 20, "y": 0, "width": 10, "height": 10})).unwrap();
     let b: NodeId = serde_json::from_value(r["id"].clone()).unwrap();
     app.session.execute("export.add", &json!({"ids": [a, b]})).unwrap();
-    crate::export_panel::export_layers(&mut app, &[a, b], false);
+    crate::export_panel::export_layers(&mut app, &[a, b]);
     let got = got.lock().unwrap();
     let [(name, bytes)] = got.as_slice() else { panic!("one download, got {}", got.len()) };
     assert_eq!(name, "Untitled.zip");
