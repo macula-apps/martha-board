@@ -1,5 +1,7 @@
 # FigCraft MCP server
 
+> `server.md` and `plugins.md`, which this page names, are not in MarthaBoard: the collaboration server's guide and the plugin guide left at import (macula-apps/martha-board#1). The names are kept as plain text, not links (#25).
+
 FigCraft ships a [Model Context Protocol](https://modelcontextprotocol.io) server so AI agents can
 design with it: create and edit layers, run any menu command, inspect the result as JSON and look at
 it as a PNG. It speaks newline-delimited JSON-RPC 2.0 over stdio (MCP protocol `2025-06-18`;
@@ -892,7 +894,7 @@ build has no file system, so there the commands that read library files return a
 
 ### Team libraries
 
-A file kept on a `figcraft-server` ([`server.md`](server.md#team-libraries)) can hold a library that
+A file kept on a `figcraft-server` (`server.md`) can hold a library that
 other files use through one of its share links. Each call waits for the server (a few seconds at
 most when it can't be reached).
 
@@ -1343,7 +1345,7 @@ only: a host stops hosting it, a guest leaves it.
   code has expired or its sharing was stopped", "Couldn't reach the server (…)", too many wrong
   codes from your address, a wrong token, a full
   session, a revoked link, an unreachable host, a `wss://` server whose certificate isn't trusted:
-  see `FIGCRAFT_CA_FILE` in [`server.md`](server.md#behind-a-reverse-proxy-tls)). `collab.leave {}`
+  see `FIGCRAFT_CA_FILE` in `server.md`). `collab.leave {}`
   leaves the active document's session (or ends a join started from it that is still on its way
   or failed), and `collab.leave {session}` the session with that id (from `sessions`), whichever
   document is active; the synced document stays open as your copy. `collab.reconnect {}` acts on
@@ -1351,7 +1353,7 @@ only: a host stops hosting it, a guest leaves it.
   joined that couldn't go on is joined again in its tab. A dropped connection keeps reconnecting
   until you leave (see *Reconnect* in [`collab-protocol.md`](collab-protocol.md)).
 - `collab.publish {server, name?, key?}` puts the active document on a `figcraft-server`
-  ([`server.md`](server.md)) and syncs it from there (as that document's session; others go on): `server` is the address
+  (`server.md`) and syncs it from there (as that document's session; others go on): `server` is the address
   `figcraft-server key` prints (`ws://host:47900/?key=…`; or give `key` separately), `name` the
   file's name (default: the document's). It returns at once with `status: "connecting"`; the
   document is read-only until the upload is done, then `collab.peers` has `published: {server,
@@ -1360,7 +1362,7 @@ only: a host stops hosting it, a guest leaves it.
   every edit on the synced document is refused with "View only: …" (the server refuses them too).
   With a comment link (`access: "comment"`) the comment commands work and sync, and every other edit
   is refused with "Can comment: …".
-  On a server open to the public ([`server.md`](server.md#running-a-public-server)) `server` needs no
+  On a server open to the public (`server.md`) `server` needs no
   key (`wss://figcraft.example.com/`): `published` then also has `owner` (the owner token, shown this
   once: keep it) and `expires` (when the server deletes the file unless someone opens it, seconds
   since 1970), and `hosting` says who runs the server. A server that isn't open answers that it
@@ -1480,7 +1482,7 @@ only: a host stops hosting it, a guest leaves it.
 
 ### Plugins
 
-Sandboxed WebAssembly plugins act through the same commands (see [`plugins.md`](plugins.md) for the
+Sandboxed WebAssembly plugins act through the same commands (see `plugins.md` for the
 manifest, the ABI and the Rust SDK). Driven with `run_command`: `plugin.import {path}` (a
 `figcraft-plugin.json` or its folder) or `plugin.import {manifest, wasm}` (the manifest as an
 object or JSON text and the module as base64, for this session only), `plugin.list`,
@@ -1526,7 +1528,7 @@ layer data, so it is saved, undone and synced with the file.
 {"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"run_command","arguments":{"command":"widget.menu","params":{"id":12,"item":"big"}}}}
 ```
 
-Plugins from a `figcraft-server`'s plugin directory ([`plugins.md`](plugins.md#plugin-directories)):
+Plugins from a `figcraft-server`'s plugin directory (`plugins.md`):
 `plugin.directory.list {server?, query?}` lists the latest version of each plugin with the
 permissions it asks for (`access`, `commands`), its size and SHA-256, and `installed` / `update`;
 `plugin.directory.install {id, version?, confirm: true, sha256?}` downloads it, checks the SHA-256 and

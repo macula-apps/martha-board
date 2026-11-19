@@ -1,5 +1,7 @@
 # figcraft-cli
 
+> `server.md` and `plugins.md`, which this page names, are not in MarthaBoard: the collaboration server's guide and the plugin guide left at import (macula-apps/martha-board#1). The names are kept as plain text, not links (#25).
+
 FigCraft without a window: inspect, export, convert and render documents, run command scripts, list
 commands, serve MCP, publish plugins and measure performance. Build it with
 `cargo build --release -p figcraft-cli` (binary `target/release/figcraft-cli`).
@@ -86,7 +88,7 @@ they're active there. Files without an extension are read when they start like a
 The collaboration server is a binary of its own, `figcraft-server` (`cargo build --release -p
 figcraft-server`): it keeps files with share links and serves their live sessions, and its
 `key`, `files`, `links`, `reports`, `block-ip` and `check` subcommands manage them (a server can
-be open to the public: [server.md](server.md#running-a-public-server)). See [server.md](server.md).
+be open to the public: server.md). See server.md.
 
 ## Subcommands
 
@@ -268,7 +270,7 @@ folder) to a `figcraft-server`'s plugin directory as a new version, and prints i
 size and SHA-256. The server's key comes from the address or, better, from the
 `FIGCRAFT_SERVER_KEY` environment variable (it then stays out of the shell history and process
 lists); it is never printed. The bundle is checked before it is sent and again by the server. See
-[plugins.md](plugins.md#plugin-directories).
+plugins.md.
 
 ### `perf [--layers N[,N...]] [--instances N[,N...]]`
 
