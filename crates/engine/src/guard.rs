@@ -1,9 +1,8 @@
 //! The last line of defence: a panic inside a command becomes an [`EngineError::Internal`] and
 //! the caller rolls the document back. It exists for bugs and doesn't replace `Result`.
 //!
-//! The browser build can't catch a panic (wasm32 always aborts, and stable Rust has no unwinding
-//! std for it), so there a panicking command stops the page: its panic hook keeps the files with
-//! unsaved changes for the next page instead (`apps/figcraft-web/src/recovery.rs`).
+//! A wasm32 build can't catch a panic (wasm32 always aborts, and stable Rust has no unwinding std
+//! for it), so there a panicking command stops the program.
 
 use crate::{EngineError, Result};
 

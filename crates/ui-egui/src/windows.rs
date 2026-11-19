@@ -124,8 +124,7 @@ pub fn with_app<R>(f: impl FnOnce(&mut FigApp) -> R) -> Option<R> {
 }
 
 /// Last-resort guard around a frame: a panic becomes a message and recovery copies of unsaved
-/// files, not a lost document. (In the browser a panic can't be caught: the page's panic hook
-/// keeps the copies instead, `apps/figcraft-web/src/recovery.rs`.)
+/// files, not a lost document.
 pub fn guard(app: &mut FigApp, ctx: &Context, f: impl FnOnce(&mut FigApp)) {
     // Started with automation roots, everything the window and the control channel do is confined.
     let roots = app.automation_roots.clone();

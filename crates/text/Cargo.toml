@@ -36,9 +36,9 @@ log = { workspace = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 craft-font-catalog = { workspace = true }
 
-# The browser build finds Thai, Lao, Khmer and Burmese words with ICU4X's LSTM models (~0.3 MB of
-# wasm) instead of its dictionaries (~1.8 MB, which would take the .wasm past the 24 MiB gate in
-# packaging/web/package.sh).
+# A wasm32 build finds Thai, Lao, Khmer and Burmese words with ICU4X's LSTM models (~0.3 MB of
+# wasm) instead of its dictionaries (~1.8 MB), to keep the .wasm small. No wasm32 build is made now:
+# the browser app left at import (macula-apps/martha-board#1).
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 flate2 = { workspace = true }
 icu_segmenter = { workspace = true, features = ["lstm"] }
