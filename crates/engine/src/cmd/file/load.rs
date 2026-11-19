@@ -71,18 +71,14 @@ pub fn load_bytes(bytes: &[u8], name_hint: &str) -> Result<(Document, Vec<String
 
 /// [`load`] with the version history.
 pub fn load_path(path: &str) -> Result<figcraft_format::Loaded> {
-    let mut loaded = load_with(&read(path)?, path)?;
-    crate::library::resolve_links(&mut loaded.doc, path);
-    Ok(loaded)
+    load_with(&read(path)?, path)
 }
 
 /// Load from bytes: the document with its notes (repairs of a native file, or import warnings)
-/// and version history. Components containing each other's instances are broken apart, with a note.
+/// and version history. Instances are drawn from the layers they hold, never expanded from their
+/// main component, so components that hold each other's instances load as they are.
 pub(super) fn load_with(bytes: &[u8], name_hint: &str) -> Result<figcraft_format::Loaded> {
-    let mut loaded = load_any(bytes, name_hint)?;
-    let notes = crate::components::break_component_cycles(&mut loaded.doc);
-    loaded.issues.extend(notes);
-    Ok(loaded)
+    load_any(bytes, name_hint)
 }
 
 fn load_any(bytes: &[u8], name_hint: &str) -> Result<figcraft_format::Loaded> {

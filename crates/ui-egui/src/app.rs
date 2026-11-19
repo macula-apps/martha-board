@@ -1,7 +1,7 @@
 use super::clock::{AUTO_SAVE_RETRY_SECS, AUTO_SAVE_SECS, AUTOSAVE_SECS, CJK_CHANGES, FrameClock, TOAST_SECS, ToastClock, repaint_in};
 use super::open::OPEN_EXTENSIONS;
 use super::services::{DialogFuture, PickFuture, Picked, RepaintWaker, Services};
-use super::state::{LEFT_PANEL, LeftTab, MOBILE_STRIP, MobilePanel, NARROW_WIDTH, PANEL_DEFAULT, RIGHT_PANEL, TitleBar, fit_panels};
+use super::state::{LEFT_PANEL, MOBILE_STRIP, MobilePanel, NARROW_WIDTH, PANEL_DEFAULT, RIGHT_PANEL, TitleBar, fit_panels};
 use super::{
     Arc, Done, FigApp, NodeId, OsStr, Path, PathBuf, PendingAck, PendingDialog, Poll, Session, TaskContext, UiState, Value, Waker, a11y, branch_ui,
     canvas, cjk, comments, cursors, dialogs, frame_stats, home, home_recents, i18n, icons, import_report, json, layers, live, menus, missing_fonts,
@@ -331,11 +331,7 @@ impl FigApp {
                 .exact_size(left_w)
                 .frame(egui::Frame::NONE.fill(t.panel).stroke(egui::Stroke::new(1.0, t.border)))
                 .show(ui, |ui| {
-                    let label = match self.ui.left_tab {
-                        _ if self.ui.versions.open => i18n::tr("Version history"),
-                        LeftTab::File => i18n::tr("Layers"),
-                        LeftTab::Assets => i18n::tr("Assets"),
-                    };
+                    let label = if self.ui.versions.open { i18n::tr("Version history") } else { i18n::tr("Layers") };
                     a11y::region(&mut self.ui.nav, ui, a11y::Region::Layers, egui::accesskit::Role::Pane, label);
                     layers::left_panel(self, ui)
                 });
@@ -417,7 +413,7 @@ impl FigApp {
         // A rename started after the layers panel drew (Cmd/Ctrl+R, a double-click) opens its field
         // next frame; while the panel isn't drawn (the interface hidden or minimized, the panel
         // closed in a narrow window) the rename waits for it without asking for frames.
-        if self.ui.rename.is_some_and(|r| r.start) && left_open && self.ui.left_tab == LeftTab::File {
+        if self.ui.rename.is_some_and(|r| r.start) && left_open {
             ctx.request_repaint();
         }
         a11y::end(self, &ctx);

@@ -150,8 +150,8 @@ static ROWS: &[Row] = &[
     doc(View, "Interface scale: make larger", &["Alt+Shift+Cmd+="], &[], Bound("pref.uiScaleUp"), "Accessibility at Figma, Adjust the scale of the Figma UI"),
     doc(View, "Interface scale: make smaller", &["Alt+Shift+Cmd+-"], &[], Bound("pref.uiScaleDown"), "Accessibility at Figma"),
     doc(View, "Interface scale: reset to default", &["Alt+Shift+Cmd+0"], &[], Bound("pref.uiScaleReset"), "Accessibility at Figma"),
-    doc(View, "Assets panel", &["Alt+2"], &[], Bound("view.assets"), ""),
-    doc(View, "Libraries", &["Alt+3"], &[], Bound("libraries.open"), ""),
+    doc(View, "Assets panel", &["Alt+2"], &[], Missing, "components and libraries left (#28)"),
+    doc(View, "Libraries", &["Alt+3"], &[], Missing, "components and libraries left (#28)"),
     doc(View, "Dev Mode on or off", &["Shift+D"], &[], Missing, "Dev Mode left (#11)"),
     doc(View, "Move the keyboard to the toolbar (then the next region)", &["F6"], &["Ctrl+F6"], Bound("view.nextRegion"),
         "F6 works on Windows and Linux too; F6 and F8 need Fn on many Mac keyboards").reserved("browsers move to the address bar on F6 (web build)"),
@@ -284,10 +284,10 @@ static ROWS: &[Row] = &[
     pin(Arrange, "distribute.vertical", &["Ctrl+Alt+V"], &["Alt+Shift+V"]),
     pin(Arrange, "arrange.tidy", &["Ctrl+Alt+T"], &["Ctrl+Alt+Shift+T"]),
     // Components
-    doc(Components, "Create a component", &["Alt+Cmd+K"], &["Ctrl+Alt+K"], Bound("component.create"), ""),
-    doc(Components, "Detach an instance", &["Alt+Cmd+B"], &["Ctrl+Alt+B"], Bound("component.detach"), ""),
-    doc(Components, "Go to the main component", &["Ctrl+Alt+Cmd+K"], &["Ctrl+Alt+Shift+K"], Bound("component.goToMain"), "was unbound"),
-    doc(Components, "Quick insert", &["Shift+I"], &[], Bound("view.assets"), "opens the Assets panel's search"),
+    doc(Arrange, "Create a component", &["Alt+Cmd+K"], &["Ctrl+Alt+K"], Missing, "components and libraries left (#28)"),
+    doc(Arrange, "Detach an instance", &["Alt+Cmd+B"], &["Ctrl+Alt+B"], Missing, "components and libraries left (#28)"),
+    doc(Arrange, "Go to the main component", &["Ctrl+Alt+Cmd+K"], &["Ctrl+Alt+Shift+K"], Missing, "components and libraries left (#28)"),
+    doc(Arrange, "Quick insert", &["Shift+I"], &[], Missing, "components and libraries left (#28)"),
     // Prototype: its tab left with prototyping (#14), so the rows sit under View.
     doc(View, "Preview in the canvas", &["Shift+Space"], &[], Missing, "prototyping left (#14)"),
     doc(View, "Present", &["Alt+Cmd+Enter"], &["Ctrl+Alt+Enter"], Missing, "prototyping left (#14)"),
@@ -413,7 +413,7 @@ fn counts_match_the_docs() {
     let missing = documented.iter().filter(|r| matches!(r.ours, Missing)).count();
     let reserved = documented.iter().filter(|r| !r.reserved.is_empty()).count();
     let pinned = ROWS.len() - documented.len();
-    assert_eq!((documented.len(), bound, moved, missing, reserved, pinned), (137, 126, 1, 10, 2, 55));
+    assert_eq!((documented.len(), bound, moved, missing, reserved, pinned), (137, 120, 1, 16, 2, 55));
 }
 
 #[test]

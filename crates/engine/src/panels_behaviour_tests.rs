@@ -1,7 +1,6 @@
-//! Layers panel and Assets panel behaviour suite, written from the public documentation of design
-//! tools: what the panels' gestures do to the document (reordering and moving layers, renaming
-//! several at once, showing, hiding and locking, pages and dividers, the Assets panel's listing,
-//! hidden names and drops). Each rule is a table row with a one-line derivation; where the
+//! Layers panel behaviour suite, written from the public documentation of design tools: what the
+//! panel's gestures do to the document (reordering and moving layers, renaming several at once,
+//! showing, hiding and locking, pages and dividers). Each rule is a table row with a one-line derivation; where the
 //! documentation is silent the row says so and pins today's behaviour. The gestures themselves
 //! (clicks, Shift ranges, drags in the panel) are covered in the UI crate's
 //! `layers_behaviour_tests`.
@@ -58,8 +57,7 @@ fn click(s: &mut Session, x: f64, y: f64) {
 }
 
 /// Frame `f` (0,0 400×300) holding `a`, `b`, `c`, `d` bottom to top; the group `g` of `e` on the
-/// page; the auto layout frame `al` (500,0) of `x` and `y`; an instance `inst` (0,400) of a
-/// component; a section `sec` (900,0).
+/// page; the auto layout frame `al` (500,0) of `x` and `y`; a section `sec` (900,0).
 #[allow(dead_code)]
 struct Scene {
     f: NodeId,
@@ -72,7 +70,6 @@ struct Scene {
     al: NodeId,
     x: NodeId,
     y: NodeId,
-    inst: NodeId,
     sec: NodeId,
 }
 
@@ -88,13 +85,9 @@ fn scene(s: &mut Session) -> Scene {
     let x = rect(s, "x", 0.0, 0.0, Some(al));
     let y = rect(s, "y", 50.0, 0.0, Some(al));
     ex(s, "layout.add", json!({"ids": [al], "direction": "horizontal"}));
-    let main = frame(s, "Main", 0.0, 800.0, 100.0, 40.0);
-    rect(s, "Bg", 0.0, 0.0, Some(main));
-    let comp = id(&ex(s, "component.create", json!({"ids": [main]})));
-    let inst = id(&ex(s, "instance.create", json!({"component": comp, "x": 0, "y": 400})));
     let sec = id(&ex(s, "node.create", json!({"type": "section", "x": 900, "y": 0, "width": 300, "height": 300})));
     ex(s, "select.none", json!({}));
-    Scene { f, a, b, c, d, g, e, al, x, y, inst, sec }
+    Scene { f, a, b, c, d, g, e, al, x, y, sec }
 }
 
 #[test]
@@ -152,11 +145,8 @@ fn dragging_into_frames_groups_and_auto_layout() {
     let lx = |i: NodeId| doc.node(i).unwrap().transform.as_coeffs()[4];
     assert!(lx(k.c) < lx(k.x) && lx(k.x) < lx(k.y), "the auto layout frame places it first in its flow");
     // Refused drops.
-    let refused: [(NodeId, NodeId, &str); 3] = [
-        (k.f, k.d, "a layer can't go into its own child"),
-        (k.d, k.inst, "an instance's layers come from its main: nothing can be dropped into it"),
-        (k.sec, k.f, "sections go on the page or in other sections, not in frames"),
-    ];
+    let refused: [(NodeId, NodeId, &str); 2] =
+        [(k.f, k.d, "a layer can't go into its own child"), (k.sec, k.f, "sections go on the page or in other sections, not in frames")];
     for (what, into, why) in refused {
         let before = s.doc().unwrap().clone();
         assert!(s.execute("node.reparent", &json!({"ids": [what], "parent": into})).is_err(), "{why}");
@@ -426,56 +416,6 @@ fn page_move_refuses_negative_or_fractional_indexes() {
     }
     ex(&mut s, "page.move", json!({"id": p3, "index": 0}));
     assert_eq!(pages(&mut s)[0]["id"], json!(p3), "a valid index still moves the page");
-}
-
-#[test]
-fn assets_panel_lists_files_and_drops_by_the_documented_rules() {
-    let mut s = Session::new();
-    let page = s.page().unwrap();
-    ex(&mut s, "page.rename", json!({"name": "Kit"}));
-    let holder = frame(&mut s, "Controls", 0.0, 0.0, 600.0, 200.0);
-    let b = id(&ex(&mut s, "frame.create", json!({"x": 10, "y": 10, "width": 80, "height": 30, "name": "Buttons / Primary", "parent": holder})));
-    let comp = id(&ex(&mut s, "component.create", json!({"ids": [b]})));
-    let loose = frame(&mut s, "Badge", 800.0, 0.0, 40.0, 20.0);
-    let badge = id(&ex(&mut s, "component.create", json!({"ids": [loose]})));
-    // (asset, folders, tile name, derivation)
-    let rows: [(NodeId, &[&str], &str, &str); 2] = [
-        (comp, &["Kit", "Controls", "Buttons"], "Primary", "assets file under their page and frame, then a folder per slash in the name"),
-        (badge, &["Kit"], "Badge", "an asset on the page files under the page alone"),
-    ];
-    let listed = ex(&mut s, "component.list", json!({}));
-    for (asset, folders, label, why) in rows {
-        let want = (folders.iter().map(|f| f.to_string()).collect::<Vec<_>>(), label.to_string());
-        assert_eq!(crate::library::asset_folder(s.doc().unwrap(), asset), want, "{why}");
-        let row = listed.as_array().unwrap().iter().find(|r| r["id"] == json!(asset)).unwrap();
-        assert_eq!((row["folder"].clone(), row["label"].clone()), (json!(folders), json!(label)), "{why} (as listed for agents)");
-    }
-    assert!(crate::library::local_components(s.doc().unwrap()).contains(&comp), "local components are listed");
-    // Hidden from publishing: a leading period (or underscore) in the name, both ways.
-    let rows: [(&str, bool, &str); 4] = [
-        ("Badge", true, "a component is offered for publishing"),
-        (".Badge", false, "a leading period keeps a component out of the library, even one published before"),
-        ("_Badge", false, "silent beyond variable collections: a leading underscore does the same (pinned)"),
-        ("Badge", true, "removing the prefix brings it back"),
-    ];
-    let first = crate::library::publish(s.doc().unwrap(), None, &crate::library::default_selection(s.doc().unwrap(), None), None, 1).unwrap();
-    for (n, offered, why) in rows {
-        ex(&mut s, "object.rename", json!({"ids": [badge], "name": n}));
-        let sel = crate::library::default_selection(s.doc().unwrap(), Some(&first.manifest));
-        assert_eq!(sel.components.contains(&badge), offered, "{why}");
-    }
-    // Dropping an asset: into the frame under the pointer, into an auto layout flow by position.
-    let target = frame(&mut s, "Target", 0.0, 400.0, 300.0, 200.0);
-    let placed = id(&ex(&mut s, "instance.place", json!({"component": comp, "x": 100, "y": 500})));
-    assert_eq!(s.doc().unwrap().node(placed).unwrap().parent, Some(target), "an asset dropped on a frame goes into it");
-    let row = frame(&mut s, "Row", 400.0, 400.0, 400.0, 60.0);
-    rect(&mut s, "one", 0.0, 0.0, Some(row));
-    rect(&mut s, "two", 50.0, 0.0, Some(row));
-    ex(&mut s, "layout.add", json!({"ids": [row], "direction": "horizontal"}));
-    let first_x = s.doc().unwrap().world_transform(kids(&s, row)[0]).as_coeffs()[4];
-    let into = id(&ex(&mut s, "instance.place", json!({"component": comp, "x": first_x + 1.0, "y": 420})));
-    assert_eq!(kids(&s, row).first(), Some(&into), "an asset dropped in an auto layout frame joins the flow where it is dropped");
-    assert_eq!(s.doc().unwrap().page_of(into), Some(page));
 }
 
 #[test]

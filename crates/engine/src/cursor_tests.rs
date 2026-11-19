@@ -1,6 +1,6 @@
 //! The cursor each tool asks for (`tool.overlay.cursor`), by tool, modifier and what the pointer
 //! is over: tables of tool × modifiers × hover target → cursor, the cursors of gestures under way
-//! (panning, duplicating, rotating, an edit an instance refuses) and of vector edit mode.
+//! (panning, duplicating, rotating) and of vector edit mode.
 
 use serde_json::{Value, json};
 
@@ -192,36 +192,6 @@ fn gestures_show_what_they_are_doing() {
     assert_eq!(hover(&mut s, EMPTY, NONE), Cursor::Default);
     ex(&mut s, "text.edit.end", json!({}));
     assert_eq!(hover(&mut s, ON_TEXT, NONE), Cursor::Default, "editing over: the arrow");
-}
-
-#[test]
-fn an_edit_an_instance_refuses_shows_not_allowed_and_is_undone() {
-    let mut s = Session::new();
-    let f = id(&ex(&mut s, "frame.create", json!({"x": 0, "y": 0, "width": 200, "height": 200})));
-    ex(&mut s, "shape.rectangle", json!({"x": 50, "y": 50, "width": 100, "height": 100, "parent": f}));
-    let main = id(&ex(&mut s, "component.create", json!({"ids": [f]})));
-    let inst = id(&ex(&mut s, "instance.create", json!({"component": main, "x": 400, "y": 0})));
-    // The rectangle inside the instance: (450,50)–(550,150).
-    let inner = s.doc().unwrap().node(inst).unwrap().children[0];
-    let before = s.doc().unwrap().world_bounds(inner).unwrap();
-    assert_eq!((before.x0, before.y0, before.x1, before.y1), (450.0, 50.0, 550.0, 150.0));
-    ex(&mut s, "select.set", json!({"ids": [inner]}));
-    // Resizing it by its right edge: a size of its own (an override).
-    assert!(close(resize(hover(&mut s, (550.0, 100.0), NONE)), 0.0), "the handle shows its arrow");
-    s.pointer(&ev(PointerKind::Down, (550.0, 100.0), NONE)).unwrap();
-    s.pointer(&ev(PointerKind::Move, (570.0, 100.0), NONE)).unwrap();
-    s.pointer(&ev(PointerKind::Move, (600.0, 100.0), NONE)).unwrap();
-    assert_ne!(s.tool.overlay.cursor, Cursor::NotAllowed);
-    s.pointer(&ev(PointerKind::Up, (600.0, 100.0), NONE)).unwrap();
-    let before = s.doc().unwrap().world_bounds(inner).unwrap();
-    assert_eq!((before.x0, before.x1), (450.0, 600.0), "the resize stays");
-    // Moving it: only the main component can.
-    s.pointer(&ev(PointerKind::Down, (500.0, 100.0), NONE)).unwrap();
-    s.pointer(&ev(PointerKind::Move, (510.0, 110.0), NONE)).unwrap();
-    s.pointer(&ev(PointerKind::Move, (520.0, 120.0), NONE)).unwrap();
-    assert_eq!(s.tool.overlay.cursor, Cursor::NotAllowed);
-    s.pointer(&ev(PointerKind::Up, (520.0, 120.0), NONE)).unwrap();
-    assert_eq!(s.doc().unwrap().world_bounds(inner).unwrap(), before, "the move was undone");
 }
 
 #[test]

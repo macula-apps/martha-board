@@ -19,11 +19,10 @@ pub(crate) fn base() -> Document {
     }
     s.execute("text.create", &json!({"text": "Hello", "x": 20, "y": 100, "parent": f})).unwrap();
     s.execute("shape.ellipse", &json!({"x": 500, "y": 0, "width": 80, "height": 80})).unwrap();
-    // A component with an instance (instances follow edits of their main) and variables.
-    let card = s.execute("frame.create", &json!({"x": 0, "y": 400, "width": 120, "height": 80})).unwrap()["id"].clone();
-    s.execute("shape.rectangle", &json!({"x": 10, "y": 410, "width": 30, "height": 30, "parent": card})).unwrap();
-    let main = s.execute("component.create", &json!({"ids": [card]})).unwrap()["id"].clone();
-    s.execute("instance.create", &json!({"component": main, "x": 200, "y": 400})).unwrap();
+    // A group and a copy of it, and variables.
+    let r = s.execute("shape.rectangle", &json!({"x": 10, "y": 410, "width": 30, "height": 30})).unwrap()["id"].clone();
+    let card = s.execute("object.group", &json!({"ids": [r]})).unwrap()["id"].clone();
+    s.execute("edit.duplicate", &json!({"ids": [card], "dx": 200})).unwrap();
     tv::collection(&mut s, "Tokens", &["Mode 1"]);
     for v in 0..4 {
         tv::variable(&mut s, "Tokens", &format!("v{v}"), "color", &[json!("#3366FF")]);
@@ -42,9 +41,8 @@ pub(crate) fn random_command(doc: &Document, rng: &mut Rng, with_undo: bool) -> 
     let all: Vec<&figcraft_doc::Node> = doc.nodes().filter(|n| store.is_none_or(|st| doc.page_of(n.id) != Some(st))).collect();
     let ids = |f: &dyn Fn(&figcraft_doc::Node) -> bool| -> Vec<NodeId> { all.iter().filter(|n| f(n)).map(|n| n.id).collect() };
     let layers = ids(&|n| !n.is_page());
-    let containers = ids(&|n| n.kind.is_container() && !matches!(n.kind, NodeKind::Instance { .. }));
+    let containers = ids(&|n| n.kind.is_container());
     let frames = ids(&|n| matches!(n.kind, NodeKind::Frame));
-    let components = ids(&|n| matches!(n.kind, NodeKind::Component { .. }));
     let texts = ids(&|n| matches!(n.kind, NodeKind::Text(_)));
     let one = |v: &[NodeId], rng: &mut Rng| rng.pick(v).copied().map_or(json!(0), |i| json!(i));
     let xy = |rng: &mut Rng| (rng.below(800) as f64 - 100.0, rng.below(600) as f64 - 100.0);
@@ -66,8 +64,8 @@ pub(crate) fn random_command(doc: &Document, rng: &mut Rng, with_undo: bool) -> 
         13 => ("object.ungroup", json!({"ids": [one(&layers, rng)]})),
         14 => ("layout.add", json!({"ids": [one(&frames, rng)]})),
         15 => ("node.set", json!({"id": one(&frames, rng), "props": {"padding": rng.below(30), "itemSpacing": rng.below(20)}})),
-        16 => ("component.create", json!({"ids": [one(&layers, rng)]})),
-        17 => ("instance.create", json!({"component": one(&components, rng), "x": x, "y": y})),
+        16 => ("stroke.add", json!({"ids": [one(&layers, rng)]})),
+        17 => ("effect.add", json!({"ids": [one(&layers, rng)], "type": "layerBlur"})),
         18 => ("fill.set", json!({"ids": [one(&layers, rng)], "color": color(rng)})),
         19 => ("style.create", json!({"type": "paint", "name": format!("Color {}", rng.below(5)), "from": one(&layers, rng)})),
         20 => ("style.apply", json!({"ids": [one(&layers, rng)], "style": format!("Color {}", rng.below(5))})),

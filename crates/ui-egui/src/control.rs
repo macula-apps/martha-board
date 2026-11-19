@@ -15,7 +15,7 @@
 //!   the window (panels, popovers); `hold` keeps modifier keys down for the frames that follow (all
 //!   false: released)
 //! - `ui.menu.invoke {id}` — a menu item exactly like clicking it (may open a dialog)
-//! - `ui.set {leftTab?, theme?, home?, homeSection?, homeSearch?, homeRecentsView?, homeRecentsSort?, homeRecentsOrder?, palette?, focusRegion?, …}`
+//! - `ui.set {theme?, home?, homeSection?, homeSearch?, homeRecentsView?, homeRecentsSort?, homeRecentsOrder?, palette?, focusRegion?, …}`
 //! - `ui.screenshot {path?}` — PNG of the window, written to `path` or returned as base64 `data`;
 //!   a hidden window is asked to paint (`RequestPaintWhileHidden`) and the request expires once at
 //!   its deadline (native; the shared web runner does not implement hidden paint yet)
@@ -1119,9 +1119,6 @@ fn ui_input(app: &mut FigApp, ctx: &Context, p: &Value) -> Result<Value, String>
 }
 
 fn ui_set_view(app: &mut FigApp, ctx: &Context, p: &Value) -> Result<(), String> {
-    if let Some(t) = p.get("leftTab").and_then(Value::as_str) {
-        app.ui.left_tab = if t == "assets" { crate::LeftTab::Assets } else { crate::LeftTab::File };
-    }
     if let Some(t) = p.get("theme").and_then(Value::as_str) {
         app.session.prefs.theme = t.to_string();
     }

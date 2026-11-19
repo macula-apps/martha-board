@@ -199,21 +199,19 @@ fn idv(v: &Value) -> NodeId {
     NodeId(v.get("id").unwrap_or(v).as_u64().unwrap())
 }
 
-/// The issue #2026 file, with a branch of it made and shown: a component `Card` (horizontal auto
-/// layout hugging its contents, padding 12, one 40×20 rectangle) and an instance of it in a
-/// vertical auto layout frame hugging its contents. Returns (session, branch id, card, instance,
-/// frame, rectangle).
-fn card_file() -> (Session, String, NodeId, NodeId, NodeId, NodeId) {
+/// The issue #2026 file, with a branch of it made and shown: a frame `Card` (horizontal auto
+/// layout hugging its contents, padding 12, one 40×20 rectangle) in a vertical auto layout frame
+/// hugging its contents. Returns (session, branch id, card, frame, rectangle).
+fn card_file() -> (Session, String, NodeId, NodeId, NodeId) {
     let mut s = Session::with_document(Document::new("Cards"));
     let props = json!({"layout": "horizontal", "padding": 12, "sizingH": "hug", "sizingV": "hug"});
     let frame = idv(&ok(&mut s, "frame.create", json!({"x": 0, "y": 0, "width": 100, "height": 50, "name": "Card", "props": props})));
     let rect = idv(&ok(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 40, "height": 20, "parent": frame})));
-    let card = idv(&ok(&mut s, "component.create", json!({"ids": [frame]})));
     let props = json!({"layout": "vertical", "padding": 0, "sizingH": "hug", "sizingV": "hug"});
     let stack = idv(&ok(&mut s, "frame.create", json!({"x": 0, "y": 200, "width": 100, "height": 100, "name": "Stack", "props": props})));
-    let inst = idv(&ok(&mut s, "instance.create", json!({"component": card, "parent": stack})));
+    ok(&mut s, "node.reparent", json!({"ids": [frame], "parent": stack}));
     let b = ok(&mut s, "branch.create", json!({"name": "padding 8"}));
-    (s, b["id"].as_str().unwrap().to_string(), card, inst, stack, rect)
+    (s, b["id"].as_str().unwrap().to_string(), frame, stack, rect)
 }
 
 /// Size and place of every layer of `doc` (what auto layout works out).
@@ -232,7 +230,7 @@ fn geometry(doc: &Document) -> Vec<(NodeId, [f64; 8])> {
 #[test]
 fn one_conflicting_auto_layout_edit_is_one_conflict() {
     for (pick, padding) in [("branch", 8.0), ("main", 16.0)] {
-        let (mut s, id, card, inst, _, _) = card_file();
+        let (mut s, id, card, _, _) = card_file();
         ok(&mut s, "node.set", json!({"id": card, "props": {"padding": 8}}));
         ok(&mut s, "doc.switch", json!({"index": 0}));
         ok(&mut s, "node.set", json!({"id": card, "props": {"padding": 16}}));
@@ -252,9 +250,7 @@ fn one_conflicting_auto_layout_edit_is_one_conflict() {
         assert!(err.contains(&key) && !err.contains("width"), "{err}");
         ok(&mut s, "branch.merge", json!({"id": id, "resolutions": {&key: pick}}));
         let doc = s.doc().unwrap();
-        for n in [card, inst] {
-            assert_eq!(doc.node(n).unwrap().layout.as_ref().unwrap().padding, [padding; 4], "{pick} wins");
-        }
+        assert_eq!(doc.node(card).unwrap().layout.as_ref().unwrap().padding, [padding; 4], "{pick} wins");
         assert_eq!(geometry(doc), geometry(direct.doc().unwrap()), "{pick} wins: laid out from the padding picked");
     }
 }
@@ -264,7 +260,7 @@ fn one_conflicting_auto_layout_edit_is_one_conflict() {
 #[test]
 fn auto_layout_fields_changed_one_way_survive_a_conflict() {
     for (cmd, pick, padding) in [("branch.merge", "main", 16.0), ("branch.merge", "branch", 8.0), ("branch.updateFromMain", "main", 16.0)] {
-        let (mut s, id, card, _, _, _) = card_file();
+        let (mut s, id, card, _, _) = card_file();
         ok(&mut s, "node.set", json!({"id": card, "props": {"padding": 8, "gap": 30}}));
         ok(&mut s, "doc.switch", json!({"index": 0}));
         ok(&mut s, "node.set", json!({"id": card, "props": {"padding": 16, "mainAlign": "center"}}));
@@ -284,7 +280,7 @@ fn auto_layout_fields_changed_one_way_survive_a_conflict() {
 /// on each side are no conflict, and merging leaves no stale size behind.
 #[test]
 fn sizes_auto_layout_works_out_never_conflict() {
-    let (mut s, id, card, _, stack, rect) = card_file();
+    let (mut s, id, card, stack, rect) = card_file();
     ok(&mut s, "node.set", json!({"id": rect, "props": {"width": 60}}));
     ok(&mut s, "doc.switch", json!({"index": 0}));
     ok(&mut s, "node.set", json!({"id": card, "props": {"padding": 4}}));

@@ -177,11 +177,9 @@ pub fn grid_cell_at(doc: &Document, parent: NodeId, p: Point) -> Option<(u32, u3
 /// being dragged) and their descendants. Inside auto layout the deepest auto layout frame under the
 /// pointer wins: plain frames there are items of the flow, not destinations (dropping onto a card
 /// in a list inserts next to it). Elsewhere the deepest frame or section under the pointer wins.
-/// Inside an instance only its slots (and what's in them) take drops; a slot always does. Sections
-/// being dragged only go into sections.
+/// Sections being dragged only go into sections.
 pub fn drop_parent(doc: &Document, page: NodeId, p: Point, exclude: &[NodeId]) -> Option<NodeId> {
-    /// `locked`: inside an instance, outside its slots.
-    fn rec(doc: &Document, id: NodeId, p: Point, exclude: &[NodeId], in_al: bool, locked: bool, depth: usize) -> Option<NodeId> {
+    fn rec(doc: &Document, id: NodeId, p: Point, exclude: &[NodeId], in_al: bool, depth: usize) -> Option<NodeId> {
         if depth > 128 || exclude.contains(&id) {
             return None;
         }
@@ -192,20 +190,19 @@ pub fn drop_parent(doc: &Document, page: NodeId, p: Point, exclude: &[NodeId]) -
             return None;
         }
         let container = n.kind.is_frame_like() || matches!(n.kind, NodeKind::Section { .. });
-        let kids_locked = crate::components::locks_children(doc, id, locked);
         if !container {
             // Groups: frames inside them can still take the drop.
-            return n.children.iter().rev().find_map(|c| rec(doc, *c, p, exclude, in_al, kids_locked, depth + 1));
+            return n.children.iter().rev().find_map(|c| rec(doc, *c, p, exclude, in_al, depth + 1));
         }
         let inside = doc.world_bounds(id).is_some_and(|b| b.contains(p)) && n.local_rect().contains(doc.world_transform(id).inverse() * p);
         if !inside {
             return None;
         }
         let auto_layout = n.layout.is_some();
-        let deeper = n.children.iter().rev().find_map(|c| rec(doc, *c, p, exclude, in_al || auto_layout, kids_locked, depth + 1));
-        deeper.or((!kids_locked && (auto_layout || !in_al || crate::components::is_slot(doc, id))).then_some(id))
+        let deeper = n.children.iter().rev().find_map(|c| rec(doc, *c, p, exclude, in_al || auto_layout, depth + 1));
+        deeper.or((auto_layout || !in_al).then_some(id))
     }
-    let hit = doc.node(page)?.children.iter().rev().find_map(|c| rec(doc, *c, p, exclude, false, false, 0));
+    let hit = doc.node(page)?.children.iter().rev().find_map(|c| rec(doc, *c, p, exclude, false, 0));
     // Sections go on the page or in sections: a frame under the pointer gives way to the section
     // it is in.
     if exclude.iter().any(|m| doc.node(*m).is_some_and(|n| matches!(n.kind, NodeKind::Section { .. }))) {
@@ -215,10 +212,9 @@ pub fn drop_parent(doc: &Document, page: NodeId, p: Point, exclude: &[NodeId]) -
 }
 
 /// Whether layers dragged on the canvas inside `parent` stay in it (they only move): those of a
-/// group or a boolean group (which follow their layers) and of an instance outside its slots.
+/// group or a boolean group (which follow their layers).
 pub fn keeps_layers(doc: &Document, parent: NodeId) -> bool {
     matches!(doc.node(parent).map(|n| &n.kind), Some(NodeKind::Group | NodeKind::BooleanOp { .. }))
-        || crate::components::structure_locked(doc, parent)
 }
 
 /// Margin (page units) around the auto layout frame a dragged layer comes from that still keeps it.
@@ -233,7 +229,7 @@ pub fn drag_parent(doc: &Document, page: NodeId, p: Point, moving: &[NodeId]) ->
     let home = moving.first().and_then(|m| doc.node(*m)).and_then(|n| n.parent).filter(|h| *h != page);
     if let Some(home) = home
         && let Some(hn) = doc.node(home)
-        && ((hn.kind.is_frame_like() && !matches!(hn.kind, NodeKind::Instance { .. })) || matches!(hn.kind, NodeKind::Section { .. }))
+        && (hn.kind.is_frame_like() || matches!(hn.kind, NodeKind::Section { .. }))
         && hit.is_none_or(|h| h != home && doc.is_ancestor(h, home))
     {
         let margin = if hn.layout.is_some() { HOME_MARGIN } else { 0.0 };
@@ -251,27 +247,4 @@ pub fn slot(doc: &Document, page: NodeId, p: Point) -> DropSlot {
         Some((index, line)) => DropSlot { parent, index: Some(index), line },
         None => DropSlot { parent, index: None, line: None },
     }
-}
-
-/// The component set a component belongs to, by name (`None` for a lone component): which
-/// instances an Alt-drop of it prefers to swap.
-pub fn swap_family(doc: &Document, component: NodeId) -> Option<String> {
-    crate::components::variant_set(doc, component).and_then(|s| doc.node(s)).map(|s| s.name.clone())
-}
-
-/// The instance that a component dropped at page point `p` with Alt held swaps: of the instances
-/// under the point (innermost first; never one inside the dropped component `exclude`), the first
-/// showing a variant of the same component set (`family`), else the innermost.
-pub fn swap_target(doc: &Document, page: NodeId, p: Point, family: Option<&str>, exclude: Option<NodeId>) -> Option<NodeId> {
-    let hit = doc.hit_test(page, p, 0.0, Some(&crate::booleans::result_outline(doc, &[])))?;
-    let chain: Vec<NodeId> = std::iter::once(hit)
-        .chain(doc.ancestors(hit))
-        .filter(|i| matches!(doc.node(*i).map(|n| &n.kind), Some(NodeKind::Instance { .. })))
-        .filter(|i| exclude.is_none_or(|c| !doc.is_ancestor(c, *i)))
-        .collect();
-    let same_family = |i: &NodeId| match (doc.node(*i).map(|n| &n.kind), family) {
-        (Some(NodeKind::Instance { component, .. }), Some(f)) => swap_family(doc, *component).as_deref() == Some(f),
-        _ => false,
-    };
-    chain.iter().copied().find(same_family).or_else(|| chain.first().copied())
 }

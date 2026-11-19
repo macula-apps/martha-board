@@ -241,12 +241,8 @@ fn delete_deletes_no_page_once_the_pages_list_is_off_screen_or_another_file_is_o
         u.button(row, false);
         assert!(u.app.ui.pages_focus.is_some());
     };
-    // The Assets tab, a collapsed Pages list, a collapsed left panel.
-    let hide: [fn(&mut Ui, bool); 3] = [
-        |u, on| u.app.ui.left_tab = if on { crate::LeftTab::Assets } else { crate::LeftTab::File },
-        |u, on| u.app.ui.pages_open = !on,
-        |u, on| u.app.ui.left_collapsed = on,
-    ];
+    // A collapsed Pages list, a collapsed left panel.
+    let hide: [fn(&mut Ui, bool); 2] = [|u, on| u.app.ui.pages_open = !on, |u, on| u.app.ui.left_collapsed = on];
     for (k, hide) in hide.iter().enumerate() {
         click(&mut u);
         hide(&mut u, true);

@@ -29,15 +29,6 @@ pub struct Tokens {
     pub accent_text: Color32,
     pub selected_row: Color32,
     pub selected_row_child: Color32,
-    /// Component, variant and instance names and icons in the panels: at least 4.5:1 (WCAG AA
-    /// for text) on the panel, on a hovered row and on `component_row`. The canvas keeps
-    /// [`COMPONENT`] for its outlines and labels.
-    pub component: Color32,
-    /// A selected component's row in the Layers panel.
-    pub component_row: Color32,
-    /// The rows inside a selected component: a tone of its row (`selected_row_child` is the plain
-    /// selection's).
-    pub component_row_child: Color32,
     pub danger: Color32,
     pub success: Color32,
     pub warning: Color32,
@@ -128,11 +119,6 @@ impl Tokens {
             accent_text: Color32::from_rgb(0x00, 0x7A, 0x56),
             selected_row: Color32::from_rgb(0xE0, 0xFB, 0xF1),
             selected_row_child: Color32::from_rgb(0xF1, 0xFC, 0xF7),
-            // A shade darker than the canvas purple: 5.5:1 on white, 4.7:1 on the selected
-            // component row and 5.0:1 on a hovered row (the canvas purple reaches 3.8:1 and 4.1:1).
-            component: Color32::from_rgb(0x86, 0x38, 0xF0),
-            component_row: Color32::from_rgb(0xF1, 0xE9, 0xFF),
-            component_row_child: Color32::from_rgb(0xF8, 0xF4, 0xFF),
             danger: Color32::from_rgb(0xF2, 0x48, 0x22),
             success: DEV_READY,
             warning: Color32::from_rgb(0xFF, 0xCD, 0x29),
@@ -173,11 +159,6 @@ impl Tokens {
             accent_text: Color32::from_rgb(0x52, 0xE9, 0xB7),
             selected_row: Color32::from_rgb(0x16, 0x42, 0x36),
             selected_row_child: Color32::from_rgb(0x12, 0x37, 0x2D),
-            // 5.4:1 on the panel, 4.6:1 on the selected component row, 4.5:1 on a hovered row
-            // (the canvas purple reaches 3.1:1 and 2.7:1, #1903).
-            component: Color32::from_rgb(0xD2, 0x7C, 0xFF),
-            component_row: Color32::from_rgb(0x3E, 0x30, 0x52),
-            component_row_child: Color32::from_rgb(0x36, 0x2B, 0x47),
             danger: Color32::from_rgb(0xF2, 0x48, 0x22),
             success: DEV_READY,
             warning: Color32::from_rgb(0xFF, 0xCD, 0x29),
@@ -517,7 +498,7 @@ mod tests {
             let theme = if t.dark { "dark" } else { "light" };
             // Disabled text (a disabled button's label, placeholders) on panels, fields and
             // selected rows, still dimmer than secondary text.
-            for bg in [t.panel, t.field, t.hover, t.selected_row, t.selected_row_child, t.component_row, t.component_row_child] {
+            for bg in [t.panel, t.field, t.hover, t.selected_row, t.selected_row_child] {
                 let ratio = c(t.text_tertiary).contrast(c(bg));
                 assert!(ratio >= 3.0, "{theme}: dim text {:?} on {bg:?} is {ratio:.2}:1", t.text_tertiary);
                 assert!(ratio < c(t.text_secondary).contrast(c(bg)), "{theme}: dim text reads dimmer than secondary text");

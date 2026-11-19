@@ -2,7 +2,7 @@
 //! data.fill sizing each copy's text.
 
 use crate::Session;
-use crate::components::tests::{ex, idv};
+use crate::test_helpers::{ex, idv};
 use figcraft_doc::{NodeId, NodeKind};
 use serde_json::json;
 
@@ -62,30 +62,6 @@ fn a_one_word_last_line_is_avoided() {
     let last = l.lines.last().unwrap();
     let words = tx.characters.chars().skip(last.char_start).take(last.char_end - last.char_start).collect::<String>();
     assert!(l.lines.len() == 1 || words.split_whitespace().count() > 1 || words.contains('\u{a0}'), "{words:?}");
-}
-
-/// Asserts `data.fill` keeps a short copy's font size, shrinks a long copy, and leaves the
-/// source text layer untouched.
-#[test]
-fn data_fill_sizes_each_copys_text() {
-    figcraft_text::scan_system_fonts();
-    let mut s = Session::new();
-    let f = idv(&ex(&mut s, "frame.create", json!({"x": 0, "y": 0, "width": 1080, "height": 1350, "name": "Post"})));
-    let t = idv(&ex(&mut s, "text.create", json!({"text": "Curto", "x": 80, "y": 80, "parent": f, "props": {"name": "Headline", "fontSize": 96}})));
-    ex(&mut s, "node.set", json!({"id": t, "props": {"width": 920, "textAutoResize": "height"}}));
-    let r = ex(
-        &mut s,
-        "data.fill",
-        json!({"id": f, "rows": [
-            {"Headline": {"text": "Curto", "fit": {"maxLines": 2}}},
-            {"Headline": {"text": "Landing page e atendente de WhatsApp com IA, prontos em sete dias úteis", "fit": {"maxLines": 2}}}
-        ]}),
-    );
-    let ids: Vec<NodeId> = r["ids"].as_array().unwrap().iter().map(|v| NodeId(v.as_u64().unwrap())).collect();
-    let head = |s: &Session, frame: NodeId| s.doc().unwrap().node(frame).unwrap().children[0];
-    assert_eq!(size(&s, head(&s, ids[0])), 96.0, "short copy keeps its size");
-    assert!(size(&s, head(&s, ids[1])) < 96.0, "long copy shrinks");
-    assert_eq!(size(&s, t), 96.0, "the source is untouched");
 }
 
 #[test]

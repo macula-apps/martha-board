@@ -63,7 +63,6 @@ pub fn selection_spacing(doc: &Document, ids: &[NodeId]) -> SelectionSpacing {
             || !n.visible
             || doc.ancestors(*id).into_iter().any(|a| doc.node(a).is_some_and(|n| !n.visible))
             || crate::tools::locked_in(doc, *id)
-            || crate::components::inside_instance(doc, *id)
             || matches!(n.kind, NodeKind::Page { .. })
             || n.parent.and_then(|p| doc.node(p)).is_some_and(|p| p.layout.is_some() && !n.child_layout.absolute)
         {

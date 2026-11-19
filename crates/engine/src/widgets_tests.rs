@@ -5,8 +5,8 @@
 
 use serde_json::{Value, json};
 
-use crate::components::tests::{ex, idv, node};
 use crate::plugins_tests::{install, layer_count, lit, rect, undo_len};
+use crate::test_helpers::{ex, idv, node};
 use crate::tools::{Cursor, PointerEvent, PointerKind};
 use crate::{EngineError, Session};
 use figcraft_doc::NodeId;

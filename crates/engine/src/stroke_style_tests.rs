@@ -67,8 +67,4 @@ fn stroke_weights_and_each_side_follow_number_variables() {
     ex(&mut s, "node.set", json!({"ids": [r], "props": {"strokeLeftWeight": 4}}));
     assert_eq!(node(&s, r).stroke.sides.map(|x| x[3]), Some(4.0));
     assert!(s.execute("node.set", &json!({"ids": [r], "props": {"strokeRightWeight": "thick"}})).is_err());
-    // Instances count these fields as stroke overrides.
-    for field in crate::cmd::props::STROKE_SIDES.into_iter().chain(["strokeWeight"]) {
-        assert_eq!(crate::cmd::props::override_group(field), "strokes", "{field}");
-    }
 }

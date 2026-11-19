@@ -88,7 +88,7 @@ pub fn specs() -> Vec<CommandSpec> {
         spec!(
             "layout.removeAll",
             "Remove all auto layout",
-            "{ids?}  takes the auto layout off the frames and every frame nested in them at once (More layout options ▸ Remove all auto layout); instances and the layers inside them keep theirs",
+            "{ids?}  takes the auto layout off the frames and every frame nested in them at once (More layout options ▸ Remove all auto layout)",
             true,
             |s, p| {
                 let ids = req_targets("layout.removeAll", s, p)?;
@@ -96,8 +96,7 @@ pub fn specs() -> Vec<CommandSpec> {
                 let mut removed = Vec::new();
                 for root in ids {
                     for i in doc.subtree(root) {
-                        let strip = doc.node(i).is_some_and(|n| n.layout.is_some() && !matches!(n.kind, figcraft_doc::NodeKind::Instance { .. }))
-                            && !crate::assets::components::inside_instance(doc, i);
+                        let strip = doc.node(i).is_some_and(|n| n.layout.is_some());
                         if !strip {
                             continue;
                         }
@@ -269,11 +268,8 @@ fn convert(s: &mut Session, p: &Value, cmd: &'static str, to_frame: bool) -> Res
                 return refuse("holds sections, which can't go inside a frame: convert those first");
             }
             (NodeKind::Section { .. }, true) => todo.push(i),
-            (NodeKind::Instance { .. }, _) => return refuse("is an instance: its layers come from its main component (detach it first)"),
+            (NodeKind::Instance { .. }, _) => return refuse("is an instance, which stays as it is"),
             (NodeKind::Component { .. }, _) => return refuse("is a main component, which stays a frame"),
-            (NodeKind::Frame | NodeKind::Group, _) if crate::components::owning_instance(doc, i).is_some() => {
-                return refuse("is inside an instance: edit its main component, or detach the instance");
-            }
             (NodeKind::Frame, false) if n.children.is_empty() => return refuse("is empty: a group needs layers"),
             (NodeKind::Frame, false) | (NodeKind::Group, true) => todo.push(i),
             (NodeKind::Frame | NodeKind::Group, _) => {}

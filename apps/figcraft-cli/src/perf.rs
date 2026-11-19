@@ -1,8 +1,9 @@
-//! `figcraft-cli perf`: synthetic large documents and timings of the hot paths.
+//! `figcraft-cli perf`: large boards and timings of the hot paths.
 //!
-//! The documents come from [`figcraft_engine::synthetic`] (screens with an auto layout header, a
-//! card group, button instances and a grid of shapes and text). Every row is the mean of several
-//! runs; use a release build for meaningful numbers (`cargo xtask bench`).
+//! The documents come from [`figcraft_engine::board::large_board`] (sections with an auto layout
+//! header, a card group, sticky notes and a shape joined by connectors, and a grid of shapes and
+//! text). Every row is the mean of several runs; use a release build for meaningful numbers
+//! (`cargo xtask bench`).
 
 use std::process::ExitCode;
 use std::time::Instant;
@@ -93,7 +94,7 @@ impl Table {
 /// Measure one document size into column `col`.
 fn measure(table: &mut Table, col: usize, layers: usize) -> CliResult<()> {
     let t = Instant::now();
-    let (doc, page) = figcraft_engine::synthetic::large_document(layers).map_err(failed)?;
+    let (doc, page) = figcraft_engine::board::large_board(layers).map_err(failed)?;
     table.put(col, "build + normalize (like open)", ms(t));
 
     let t = Instant::now();
@@ -130,11 +131,12 @@ fn measure(table: &mut Table, col: usize, layers: usize) -> CliResult<()> {
         table.put(col, name, mean(pans, |i| _ = retained(&mut r, &doc, page, v, if i % 2 == 0 { 40.0 / v.zoom } else { 0.0 })));
     }
     for (name, v) in [("move one layer, re-render @100% (retained)", &at100), ("move one layer, re-render zoomed out (retained)", &out)] {
-        // A shape in the screen nearest the view's centre.
+        // A shape in the section nearest the view's centre (connectors on the page hold no layers).
         let centre = Point::new(v.cx, v.cy);
-        let screens = doc.node(page).map(|p| p.children.clone()).unwrap_or_default();
+        let mut sections = doc.node(page).map(|p| p.children.clone()).unwrap_or_default();
+        sections.retain(|c| doc.node(*c).is_some_and(|n| !n.children.is_empty()));
         let nearest =
-            screens.into_iter().filter_map(|c| doc.world_bounds(c).map(|b| (c, (b.center() - centre).hypot2()))).min_by(|a, b| a.1.total_cmp(&b.1));
+            sections.into_iter().filter_map(|c| doc.world_bounds(c).map(|b| (c, (b.center() - centre).hypot2()))).min_by(|a, b| a.1.total_cmp(&b.1));
         let target = nearest.and_then(|(c, _)| doc.node(c)?.children.last().copied()).ok_or_else(|| failed("no screen to edit"))?;
         let moved: Vec<std::sync::Arc<Document>> = (0..2)
             .map(|k| {
@@ -168,8 +170,7 @@ fn measure(table: &mut Table, col: usize, layers: usize) -> CliResult<()> {
     let rect =
         find(&doc, page, layers / 2 / 50, |n| matches!(n.kind, NodeKind::Rectangle) && n.name == "Rectangle").ok_or_else(|| failed("no rect"))?;
     let title = find(&doc, page, 0, |n| n.name == "Title").ok_or_else(|| failed("no title"))?;
-    let button = find(&doc, page, 0, |n| matches!(n.kind, NodeKind::Component { .. })).ok_or_else(|| failed("no component"))?;
-    let button_bg = doc.node(button).and_then(|b| b.children.first().copied()).ok_or_else(|| failed("no button layers"))?;
+    let sticky = find(&doc, page, 0, |n| matches!(n.board, Some(figcraft_doc::BoardItem::Sticky { .. })));
 
     // Hover with the Move tool: hit test + select target, as the canvas does per pointer move.
     let zoom = at100.zoom;
@@ -205,11 +206,15 @@ fn measure(table: &mut Table, col: usize, layers: usize) -> CliResult<()> {
         "edit text in an auto layout frame",
         mean(20, |i| exec(&mut s, "node.set", json!({"ids": [title], "characters": format!("Title {i}")}))),
     );
-    table.put(
-        col,
-        "edit main component (all instances follow)",
-        mean(5, |i| exec(&mut s, "node.set", json!({"ids": [button_bg], "fill": colors[i % 2]}))),
-    );
+    match sticky {
+        Some(sticky) => table.put(
+            col,
+            "move a sticky (its connectors follow)",
+            mean(10, |i| exec(&mut s, "transform.move", json!({"ids": [sticky], "dx": if i % 2 == 0 { 4 } else { -4 }, "dy": 0}))),
+        ),
+        // A board too small for sticky notes.
+        None => table.put(col, "move a sticky (its connectors follow)", f64::NAN),
+    }
     table.put(col, "undo", mean(10, |_| _ = s.undo()));
     table.put(col, "redo", mean(10, |_| _ = s.redo()));
 
@@ -290,9 +295,8 @@ fn measure_boolean_drag(table: &mut Table, col: usize) {
     table.put(col, "boolean of 24: drag frame, bottom operand", mean(5, |k| _ = frame(0, 100 + k)));
 }
 
-/// Time the hot paths for each document size in `sizes` (layers) and, with the synthetic design
-/// system, for each instance count in `instances`; print the tables.
-pub fn run(sizes: &[usize], instances: &[usize], system_fonts: bool) -> CliResult<ExitCode> {
+/// Time the hot paths for each document size in `sizes` (layers); print the table.
+pub fn run(sizes: &[usize], system_fonts: bool) -> CliResult<ExitCode> {
     // Text renders with system fonts too, like the desktop app; scanned up front, outside the timings.
     if system_fonts {
         figcraft_text::scan_system_fonts();
@@ -301,11 +305,6 @@ pub fn run(sizes: &[usize], instances: &[usize], system_fonts: bool) -> CliResul
     for (col, n) in sizes.iter().enumerate() {
         eprintln!("measuring {n} layers…");
         measure(&mut table, col, *n)?;
-    }
-    let mut comps = Table { rows: Vec::new() };
-    for (col, n) in instances.iter().enumerate() {
-        eprintln!("measuring components with {n} instances…");
-        measure_components(&mut comps, col, *n)?;
     }
     if FAILED.load(std::sync::atomic::Ordering::Relaxed) {
         return Err(failed("a measured command failed"));
@@ -316,10 +315,6 @@ pub fn run(sizes: &[usize], instances: &[usize], system_fonts: bool) -> CliResul
         if cfg!(debug_assertions) { "debug build" } else { "release build" }
     );
     print_table(&table, &sizes.iter().map(|n| format!("{n} layers")).collect::<Vec<_>>());
-    if !instances.is_empty() {
-        println!();
-        print_table(&comps, &instances.iter().map(|n| format!("{n} inst.")).collect::<Vec<_>>());
-    }
     Ok(ExitCode::SUCCESS)
 }
 
@@ -343,228 +338,8 @@ fn print_table(table: &Table, heads: &[String]) {
     }
 }
 
-/// The first top-level instance in `inst` of component set `set` with a layer at name path
-/// `path`: (instance, layer).
-fn instance_with(doc: &Document, inst: &[NodeId], set: NodeId, path: &[&str]) -> Option<(NodeId, NodeId)> {
-    use figcraft_engine::components::variant_set;
-    inst.iter().copied().find_map(|i| {
-        let NodeKind::Instance { component, .. } = &doc.node(i)?.kind else { return None };
-        if variant_set(doc, *component) != Some(set) {
-            return None;
-        }
-        figcraft_engine::synthetic_ds::find_path(doc, i, path).map(|l| (i, l))
-    })
-}
-
-/// Time one command (ms); undone afterwards when `undo`.
-fn timed(s: &mut Session, id: &str, p: serde_json::Value, undo: bool) -> f64 {
-    let t = Instant::now();
-    exec(s, id, p);
-    let v = ms(t);
-    if undo {
-        let _ = s.undo();
-    }
-    v
-}
-
-/// Components at scale: the synthetic design system (about 300 components, variables, styles,
-/// nesting four deep) used by `instances` instances with overrides at every level, in one file and
-/// as a library in another, into column `col`.
-fn measure_components(table: &mut Table, col: usize, instances: usize) -> CliResult<()> {
-    use figcraft_engine::synthetic_ds::{DsSpec, design_system_document, design_system_with_instances, find_path, place_instances};
-    let spec = DsSpec::FULL;
-    let t = Instant::now();
-    let (doc, ds, inst) = design_system_with_instances(&spec, instances).map_err(failed)?;
-    table.put(col, "build design system + instances (like open)", ms(t));
-    table.put(col, "layers in the file", doc.node_count() as f64);
-    let glyph = doc
-        .node(ds.icons.first().copied().ok_or_else(|| failed("no icons"))?)
-        .and_then(|n| n.children.first().copied())
-        .ok_or_else(|| failed("no glyph"))?;
-    let icon0 = ds.icons.first().copied().ok_or_else(|| failed("no icons"))?;
-    let uses = doc.nodes().filter(|n| matches!(&n.kind, NodeKind::Instance { component, .. } if *component == icon0)).count();
-    table.put(col, "instances of the edited icon main (nested included)", uses as f64);
-    // Layers mirroring the icon's glyph at any depth (copies of copies included).
-    let mirrors = |doc: &Document, of: NodeId| {
-        doc.nodes()
-            .filter(|n| {
-                let mut cur = n.source;
-                for _ in 0..32 {
-                    match cur {
-                        Some(x) if x == of => return true,
-                        Some(x) => cur = doc.node(x).and_then(|m| m.source),
-                        None => return false,
-                    }
-                }
-                false
-            })
-            .count()
-    };
-    table.put(col, "layers following the edited glyph (all depths)", mirrors(&doc, glyph) as f64);
-    let mut s = Session::with_document(doc);
-    let page = s.doc().map_err(failed)?.page_of(inst.first().copied().ok_or_else(|| failed("no instances"))?).ok_or_else(|| failed("no page"))?;
-    if let Ok(d) = s.ds_mut() {
-        d.page = page;
-    }
-    let colors = ["#FF0000", "#00AA00"];
-    // The glyph lets go of its colour variable first (no command unbinds since #16), so the edits
-    // below time the colour alone.
-    if let Ok(d) = s.doc_mut()
-        && let Ok(n) = d.get_mut(glyph)
-    {
-        n.bound.remove("fill");
-    }
-    table.put(
-        col,
-        "edit deep main: icon colour (all copies follow)",
-        mean(5, |i| exec(&mut s, "node.set", json!({"ids": [glyph], "props": {"fill": colors[i % 2]}}))),
-    );
-    table.put(
-        col,
-        "edit deep main: icon glyph size",
-        mean(5, |i| exec(&mut s, "node.set", json!({"ids": [glyph], "props": {"width": 14 + (i % 2) * 2}}))),
-    );
-    table.put(
-        col,
-        "edit deep main: add a layer to the icon",
-        mean(3, |_| {
-            exec(&mut s, "shape.rectangle", json!({"x": 1, "y": 1, "width": 2, "height": 2, "parent": icon0}));
-            let _ = s.undo();
-        }),
-    );
-    // Every button variant's label: used by buttons, cards' footers and navs' items.
-    let doc = s.doc().map_err(failed)?.clone();
-    let labels: Vec<u64> =
-        doc.node(ds.button).map(|set| set.children.iter().filter_map(|v| find_path(&doc, *v, &["Label"])).map(|l| l.0).collect()).unwrap_or_default();
-    let label_uses: usize = labels.iter().map(|l| mirrors(&doc, NodeId(*l))).sum();
-    table.put(col, "layers following the 72 button labels (all depths)", label_uses as f64);
-    table.put(
-        col,
-        "edit 72 button mains: label size (all copies follow)",
-        mean(3, |i| exec(&mut s, "node.set", json!({"ids": labels, "props": {"fontSize": 13 + (i % 2) * 2}}))),
-    );
-    let doc = s.doc().map_err(failed)?.clone();
-    // Small workloads may not contain every instance type; the rows needing a missing one stay empty.
-    if let Some((card, _)) = instance_with(&doc, &inst, ds.card, &["Footer button", "Icon", "Glyph"]) {
-        table.put(
-            col,
-            "switch a card's variant (nested overrides kept)",
-            mean(5, |i| {
-                exec(&mut s, "instance.setProperties", json!({"ids": [card], "properties": {"Size": if i % 2 == 0 { "Large" } else { "Small" }}}))
-            }),
-        );
-    } else {
-        table.put(col, "switch a card's variant (nested overrides kept)", f64::NAN);
-    }
-    let nav = instance_with(&doc, &inst, ds.nav, &["Profile"]).map(|(nav, _)| nav);
-    if let Some(nav) = nav {
-        table.put(col, "reset all changes on a nav", timed(&mut s, "component.resetInstance", json!({"ids": [nav]}), true));
-        table.put(col, "detach a nav", timed(&mut s, "component.detach", json!({"ids": [nav]}), true));
-    } else {
-        table.put(col, "reset all changes on a nav", f64::NAN);
-        table.put(col, "detach a nav", f64::NAN);
-    }
-    if let Some((button, bglyph)) = instance_with(&doc, &inst, ds.button, &["Icon", "Glyph"]) {
-        table.put(col, "push a button's changes to its main", timed(&mut s, "component.pushChanges", json!({"id": button}), true));
-        // A button glyph the drop really lands on: screens can overlap (text sizes differ without
-        // fonts), so ask the hit test the swap uses.
-        let now = s.doc().map_err(failed)?.clone();
-        let page = s.page().map_err(failed)?;
-        let drop_at = std::iter::once(bglyph)
-            .chain(inst.iter().filter_map(|i| {
-                let NodeKind::Instance { component, .. } = &now.node(*i)?.kind else { return None };
-                (figcraft_engine::components::variant_set(&now, *component) == Some(ds.button)).then(|| find_path(&now, *i, &["Icon", "Glyph"]))?
-            }))
-            .filter_map(|g| now.world_bounds(g))
-            .find(|b| figcraft_engine::drop::swap_target(&now, page, b.center(), None, None).is_some());
-        let other = ds.icons.get(5).copied().unwrap_or(icon0);
-        table.put(
-            col,
-            "Alt-drop swap onto an instance",
-            match drop_at {
-                Some(b) => timed(&mut s, "instance.swapAt", json!({"component": other, "x": b.center().x, "y": b.center().y}), true),
-                None => f64::NAN,
-            },
-        );
-    } else {
-        table.put(col, "push a button's changes to its main", f64::NAN);
-        table.put(col, "Alt-drop swap onto an instance", f64::NAN);
-    }
-    if let Some(nav) = nav {
-        exec(&mut s, "edit.copy", json!({"ids": [nav]}));
-        table.put(col, "copy + paste a nav", timed(&mut s, "edit.paste", json!({}), true));
-    } else {
-        table.put(col, "copy + paste a nav", f64::NAN);
-    }
-    table.put(col, "undo (deep main edit)", mean(10, |_| _ = s.undo()));
-    table.put(col, "redo", mean(10, |_| _ = s.redo()));
-
-    // As a library: publish it, use it from another file, publish a change, accept the update.
-    // One directory per run, so concurrent runs in a process don't delete each other's files.
-    static RUNS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-    let run = RUNS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let dir = std::env::temp_dir().join(format!("figcraft-perf-{}-{run}", std::process::id()));
-    // `create_dir`, not `create_dir_all`: a directory or link already at this predictable name is refused.
-    std::fs::create_dir(&dir).map_err(failed)?;
-    let path = dir.join("design-system.figcraft").to_string_lossy().into_owned();
-    let (lib_doc, lib_ds) = design_system_document(&spec).map_err(failed)?;
-    let mut lib_s = Session::with_document(lib_doc);
-    table.put(col, "publish the library", timed(&mut lib_s, "library.publish", json!({}), false));
-    exec(&mut lib_s, "file.saveAs", json!({"path": path}));
-    let lib = figcraft_engine::library::Cache::default().load(&path).map_err(failed)?;
-    let mut doc = Document::new("Consumer");
-    let m = &lib.manifest;
-    doc.libraries_mut().enabled.push(figcraft_doc::LibraryLink {
-        id: m.id.clone(),
-        name: m.name.clone(),
-        path: path.clone(),
-        version: m.version,
-        ..Default::default()
-    });
-    let map = figcraft_engine::library::import(&mut doc, &lib, &lib_ds.assets(), false).map_err(failed)?;
-    let mut local = lib_ds.remap(&map);
-    local.theme = doc.libraries.collections.iter().find(|r| r.key == lib_ds.theme).map(|r| r.local.clone()).unwrap_or_default();
-    figcraft_engine::normalize(&mut doc, &Document::new(""));
-    place_instances(&mut doc, &local, instances).map_err(failed)?;
-    figcraft_engine::normalize(&mut doc, &Document::new(""));
-    let mut consumer = Session::with_document(doc);
-    let lglyph = lib_s.doc().map_err(failed)?.node(icon0).and_then(|n| n.children.first().copied()).ok_or_else(|| failed("no glyph"))?;
-    let label = lib_s
-        .doc()
-        .map_err(failed)?
-        .node(lib_ds.button)
-        .and_then(|n| n.children.first().copied())
-        .and_then(|v| find_path(lib_s.doc().ok()?, v, &["Label"]))
-        .ok_or_else(|| failed("no label"))?;
-    exec(&mut lib_s, "node.set", json!({"ids": [lglyph], "props": {"cornerRadius": 4}}));
-    exec(&mut lib_s, "node.set", json!({"ids": [label], "props": {"fontSize": 16}}));
-    exec(&mut lib_s, "library.publish", json!({}));
-    exec(&mut lib_s, "file.save", json!({}));
-    table.put(col, "check library updates", timed(&mut consumer, "library.updates", json!({}), false));
-    table.put(col, "accept library updates (overrides kept)", timed(&mut consumer, "library.acceptUpdates", json!({}), false));
-    let _ = std::fs::remove_dir_all(&dir);
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn measures_components_at_a_small_scale() {
-        let mut t = super::Table { rows: Vec::new() };
-        super::measure_components(&mut t, 0, 30).unwrap();
-        assert!(!super::FAILED.load(std::sync::atomic::Ordering::Relaxed));
-        assert!(t.rows.len() > 15);
-        assert!(t.rows.iter().all(|r| r.1.len() == 1 && r.1[0].is_finite()), "{:?}", t.rows);
-    }
-
-    #[test]
-    fn measures_components_with_a_single_instance() {
-        let mut t = super::Table { rows: Vec::new() };
-        super::measure_components(&mut t, 0, 1).unwrap();
-        assert!(t.rows.iter().all(|r| r.1.len() == 1), "{:?}", t.rows);
-        assert!(t.rows.iter().any(|r| r.0.starts_with("build design system") && r.1[0].is_finite()), "{:?}", t.rows);
-    }
-
     #[test]
     fn measures_a_small_document() {
         let mut t = super::Table { rows: Vec::new() };

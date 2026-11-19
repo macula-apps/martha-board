@@ -1139,35 +1139,18 @@ pub fn apply(cmd: &str, doc: &mut Document, id: NodeId, props: &Map<String, Valu
     if !unknown.is_empty() {
         return Err(bad(cmd, format!("unknown properties: {} (known: {KEYS})", unknown.join(", "))));
     }
-    // Inside an instance, record which property groups were overridden (an instance's own export
-    // settings are its own, not overrides). Its resizing is recorded like any
-    // layer's: the sync takes the main's Hug / Fixed unless it is overridden, and Reset instance
-    // clears it. Inferred: Figma was measured only with a typed width (kept); a resizing chosen
-    // from the dropdown is taken as an override the same way, as every property set on an
-    // instance in Figma is one.
-    let own_root = matches!(doc.get(id)?.kind, NodeKind::Instance { .. }) && !crate::components::inside_instance(doc, id);
-    let n = doc.get_mut(id)?;
-    if n.source.is_some() {
-        for g in props.keys().map(|k| override_group(k)).filter(|g| *g != "other" && !(own_root && *g == "exports")) {
-            n.overrides.insert(g.to_string());
-        }
-    }
     Ok(())
 }
 
 /// Replace vector `id`'s geometry with SVG path data `v`, as `node.create` reads it: `width`/`height`
 /// in the same call scale it, and the path's own box goes at the layer's origin, which keeps its
 /// place, rotation and everything else. Returns where the path's own box was, which `x`/`y` in the
-/// same call add (so `{path, x: 0, y: 0}` places it as `node.create` does). Layers inside an
-/// instance are refused: their geometry comes from the main component, and a sync would undo it.
+/// same call add (so `{path, x: 0, y: 0}` places it as `node.create` does).
 fn set_path(cmd: &str, doc: &mut Document, id: NodeId, v: &Value, props: &Map<String, Value>) -> Result<(f64, f64)> {
     let d = v.as_str().ok_or_else(|| bad(cmd, "`path` must be SVG path data (a string)"))?;
     let n = doc.get(id)?;
     if !matches!(n.kind, NodeKind::Vector { .. }) {
         return Err(bad(cmd, format!("`path` applies to vector layers, and layer {} “{}” is a {}", n.id, n.name, n.kind.type_name())));
-    }
-    if crate::components::inside_instance(doc, id) {
-        return Err(bad(cmd, format!("`path`: layer {} “{}” is inside an instance: edit its main component, or detach the instance", n.id, n.name)));
     }
     let size = |long: &str, short: &str| -> Result<Option<f64>> {
         props.get(long).or_else(|| props.get(short)).map(|v| f64_of(v).ok_or_else(|| bad(cmd, format!("`{long}` must be a number")))).transpose()
@@ -1180,35 +1163,6 @@ fn set_path(cmd: &str, doc: &mut Document, id: NodeId, v: &Value, props: &Map<St
     n.width = shape.width;
     n.height = shape.height;
     Ok(shape.offset)
-}
-
-/// The override group a property key belongs to.
-pub fn override_group(k: &str) -> &'static str {
-    match k {
-        "fills" | "fill" => "fills",
-        "strokes" | "stroke" | "strokeWeight" | "strokeAlign" | "dashes" | "dashCap" | "strokeCap" | "startCap" | "endCap" | "strokeJoin"
-        | "strokeSides" | "strokeTopWeight" | "strokeRightWeight" | "strokeBottomWeight" | "strokeLeftWeight" | "miterLimit" | "miterAngle"
-        | "widthProfile" | "brush" | "strokeBrush" => "strokes",
-        "effects" => "effects",
-        "opacity" | "blend" | "blendMode" => "opacity",
-        "visible" => "visible",
-        "name" => "name",
-        "characters" | "text" => "characters",
-        "features" | "fontFeatures" | "openTypeFeatures" | "listStyle" | "indentation" | "listSpacing" | "maxLines" | "variationSettings"
-        | "hangingPunctuation" | "hangingList" | "wrapStyle" | "textWrap" | "textDirection" | "direction" => "textStyle",
-        "cornerRadius" | "cornerSmoothing" | "topLeftRadius" | "topRightRadius" | "bottomRightRadius" | "bottomLeftRadius" => "corners",
-        "width" | "height" | "w" | "h" => "size",
-        "sizingH" | "sizingV" | "layoutSizingHorizontal" | "layoutSizingVertical" | "minWidth" | "maxWidth" | "minHeight" | "maxHeight" => "resizing",
-        "gap" | "itemSpacing" | "columnGap" | "crossGap" | "counterAxisSpacing" | "rowGap" => "gap",
-        "padding" | "paddingTop" | "paddingRight" | "paddingBottom" | "paddingLeft" | "paddingHorizontal" | "paddingVertical" => "padding",
-        "mainAlign" | "primaryAxisAlignItems" | "crossAlign" | "counterAxisAlignItems" | "contentAlign" | "counterAxisAlignContent" => "alignment",
-        "grids" | "layoutGrids" | "gridStyle" => "grids",
-        "exports" | "exportSettings" => "exports",
-        k if k.starts_with("font") || k.starts_with("text") || k.starts_with("letter") || k.starts_with("line") || k.starts_with("paragraph") => {
-            "textStyle"
-        }
-        _ => "other",
-    }
 }
 
 fn string_val(v: &Value) -> Option<String> {

@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use super::builder::{builder_overlay, hatched, region_hatch};
-use super::outline::{TextOnScreen, draw_outline, node_quad, outline_colour, outline_shapes, quad, slot_badges, stroke, swap_highlight};
+use super::outline::{TextOnScreen, draw_outline, node_quad, outline_shapes, quad, stroke};
 use super::rulers::{boards, fmt, rulers};
 use super::{
-    Align2, COMPONENT, Color32, CornerRadius, Document, FigApp, NodeId, NodeKind, Point, Pos2, Rect, Shape, Stroke, StrokeKind, Tokens, ToolId,
-    doc_c32, pos2, selection_box, selection_frame, semibold, tr, vec2,
+    Align2, Color32, CornerRadius, Document, FigApp, NodeId, NodeKind, Point, Pos2, Rect, Shape, Stroke, StrokeKind, Tokens, ToolId, doc_c32, pos2,
+    selection_box, selection_frame, semibold, tr, vec2,
 };
 use figcraft_doc::{HConstraint, VConstraint};
 
@@ -48,7 +48,7 @@ pub(super) fn overlays(app: &FigApp, painter: &egui::Painter, t: &Tokens) -> Vec
         && app.session.prefs.highlight_on_hover
         && app.session.tool.overlay.measure_box.is_none()
     {
-        draw_outline(app, painter, &doc, h, stroke(outline_colour(&doc, h, accent(painter)), 1.5));
+        draw_outline(app, painter, &doc, h, stroke(accent(painter), 1.5));
     }
     pick_outline(app, painter, &doc);
     // Inside a boolean group (an operand selected or in vector edit mode): every operand's outline,
@@ -60,7 +60,7 @@ pub(super) fn overlays(app: &FigApp, painter: &egui::Painter, t: &Tokens) -> Vec
         figcraft_engine::booleans::outlined_operands(&unmoved, &sel, editing)
     });
     for id in operands.iter().filter(|o| !sel.contains(o)) {
-        draw_outline(app, painter, &doc, *id, stroke(outline_colour(&doc, *id, accent(painter)).gamma_multiply(0.6), 1.0));
+        draw_outline(app, painter, &doc, *id, stroke(accent(painter).gamma_multiply(0.6), 1.0));
     }
     // Mask outlines (a mask doesn't draw itself), frame outlines and slices, as the View menu shows.
     if view.mask_outlines || view.frame_outlines || view.show_slices {
@@ -71,17 +71,13 @@ pub(super) fn overlays(app: &FigApp, painter: &egui::Painter, t: &Tokens) -> Vec
     if let Some(d) = ov.drop_target
         && let Some(q) = node_quad(app, &doc, d)
     {
-        quad(painter, q, stroke(if figcraft_engine::components::is_slot(&doc, d) { COMPONENT } else { accent(painter) }, 1.0));
+        quad(painter, q, stroke(accent(painter), 1.0));
     }
     // Boards: the object a stamp would stick to, outlined as a hovered layer is.
     if let Some(s) = ov.stamp_target {
-        draw_outline(app, painter, &doc, s, stroke(outline_colour(&doc, s, accent(painter)), 1.5));
+        draw_outline(app, painter, &doc, s, stroke(accent(painter), 1.5));
     }
-    slot_badges(app, painter, &doc, &sel, ov.drop_target);
     attach_points(app, painter, &ov.attach);
-    if let Some(t) = ov.swap_target {
-        swap_highlight(app, painter, &doc, t);
-    }
     if let Some([x0, y0, x1, y1]) = ov.insert_line {
         painter.line_segment([app.to_screen(x0, y0), app.to_screen(x1, y1)], stroke(accent(painter), 2.0));
     }
@@ -318,7 +314,7 @@ pub(super) fn selection_geometry(app: &FigApp, painter: &egui::Painter, doc: &Ar
     let mapping = [app.to_screen(0.0, 0.0), app.to_screen(1.0, 1.0)].map(crate::selection_cache::bits);
     let extra = [mapping[0][0], mapping[0][1], mapping[1][0], mapping[1][1], u64::from(u32::from_le_bytes(green.to_array()))];
     crate::selection_cache::cached(painter.ctx(), "selection overlay", doc, sel, &extra, || {
-        let col = if sel.iter().any(|i| outline_colour(doc, *i, green) == COMPONENT) { COMPONENT } else { green };
+        let col = green;
         let outlines = sel.iter().flat_map(|id| outline_shapes(app, doc, *id, stroke(col, 1.0))).collect();
         SelectionGeometry {
             col,

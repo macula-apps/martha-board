@@ -265,9 +265,8 @@ impl Session {
                         for i in &ids {
                             let parent = doc.get(*i)?.parent.unwrap_or(page);
                             let idx = doc.index_in_parent(*i).map(|x| x + 1);
-                            copies.push(crate::components::copy_in_file(doc, *i, parent, idx)?);
+                            copies.push(doc.duplicate_into(*i, parent, idx)?);
                         }
-                        crate::library::count_inserted(doc, &copies);
                         // Connectors copied with what they join join the copies.
                         let map = crate::board::copy_map(doc, &ids, &copies);
                         crate::board::rejoin(doc, &crate::board::copied_items(doc, &map), &map, false);
@@ -359,13 +358,7 @@ impl Session {
                 self.tool.overlay.drop_cell = drop_cell;
                 self.tool.overlay.drop_target = drop_target;
                 self.tool.overlay.stamp_target = self.dragged_stamp_target(&placed, page);
-                self.tool.overlay.cursor = if self.refused(&placed, true) {
-                    Cursor::NotAllowed
-                } else if dup {
-                    Cursor::Copy
-                } else {
-                    Cursor::Default
-                };
+                self.tool.overlay.cursor = if dup { Cursor::Copy } else { Cursor::Default };
                 self.tool.gesture = g.clone();
                 if let Gesture::Move { moved, .. } = &mut self.tool.gesture {
                     *moved = true;
@@ -375,9 +368,6 @@ impl Session {
             Gesture::Resize { start, r, scale_tool, .. } => {
                 let res = self.resize_drag(ev, *start, r, *scale_tool);
                 self.tool.gesture = Gesture::Resize { start: *start, r: r.clone(), scale_tool: *scale_tool, moved: true };
-                if self.refused(&self.selection(), false) {
-                    self.tool.overlay.cursor = Cursor::NotAllowed;
-                }
                 return res;
             }
             Gesture::Rotate { center, start_angle, base, ids } => {
@@ -394,8 +384,7 @@ impl Session {
                     Ok(())
                 })?;
                 // The cursor turns with the pointer about the centre.
-                self.tool.overlay.cursor =
-                    if self.refused(&ids, false) { Cursor::NotAllowed } else { Cursor::Rotate((ev.p() - c).atan2().to_degrees()) };
+                self.tool.overlay.cursor = Cursor::Rotate((ev.p() - c).atan2().to_degrees());
                 Ok(())
             }
             Gesture::Draw { start, id, parent, targets } => {

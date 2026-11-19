@@ -3,7 +3,7 @@
 //! layer without any reports none.
 
 use crate::Session;
-use crate::components::tests::{ex, idv};
+use crate::test_helpers::{ex, idv};
 use serde_json::json;
 
 #[test]

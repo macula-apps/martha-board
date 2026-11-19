@@ -656,28 +656,28 @@ fn a_continue_batch_reports_runtime_errors_and_runs_later_steps() {
 #[test]
 fn a_refused_step_names_its_step_and_keeps_its_kind() {
     let mut s = Session::new();
-    let comp = id(&s.execute("node.create", &json!({"type": "component", "name": "Button", "width": 100, "height": 40})).unwrap());
-    let inst = id(&s.execute("instance.create", &json!({"component": comp})).unwrap());
     let before = s.doc().unwrap().clone();
     let undo = s.undo_depth();
+    // A paste with nothing copied is refused (disabled), after a step that made a layer.
     let result = s.execute(
         "command.batch",
         &json!({"commands": [
-            {"command": "node.create", "params": {"type": "rectangle", "parent": inst, "width": 10, "height": 10}}
+            {"command": "node.create", "params": {"type": "rectangle", "width": 10, "height": 10}},
+            {"command": "edit.paste", "params": {}}
         ]}),
     );
     match result {
         Err(EngineError::Disabled(cmd, msg)) => {
-            assert_eq!(cmd, "node.create");
-            assert!(msg.starts_with("step 0: "), "{msg}");
-            assert!(msg.contains("can't be added"), "{msg}");
+            assert_eq!(cmd, "edit.paste");
+            assert!(msg.starts_with("step 1: "), "{msg}");
+            assert!(msg.contains("the clipboard is empty"), "{msg}");
         }
         other => panic!("expected Disabled, got {other:?}"),
     }
     assert_eq!(s.doc().unwrap(), &before, "the batch rolled back");
     assert_eq!(s.undo_depth(), undo, "no undo step for the refused batch");
     // Outside a batch the same refusal keeps its kind and says no step.
-    match s.execute("node.create", &json!({"type": "rectangle", "parent": inst, "width": 10, "height": 10})) {
+    match s.execute("edit.paste", &json!({})) {
         Err(EngineError::Disabled(_, msg)) => assert!(!msg.contains("step "), "{msg}"),
         other => panic!("expected Disabled, got {other:?}"),
     }

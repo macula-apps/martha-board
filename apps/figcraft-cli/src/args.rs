@@ -223,15 +223,12 @@ pub struct PublishArgs {
     pub server: String,
 }
 
-/// Measure the hot paths on synthetic documents and print Markdown tables
+/// Measure the hot paths on large boards and print a Markdown table
 #[derive(Args)]
 pub struct PerfArgs {
     /// Document sizes in layers, each clamped to 10..=2,000,000
     #[arg(long, value_name = "N[,N...]", value_parser = whole_number, value_delimiter = ',', action = ArgAction::Set, default_value = "1000,10000")]
     pub layers: Vec<usize>,
-    /// Component instance counts, capped to 100,000; 0 skips the components table
-    #[arg(long, value_name = "N[,N...]", value_parser = whole_number, value_delimiter = ',', action = ArgAction::Set, default_value = "2000")]
-    pub instances: Vec<usize>,
 }
 
 /// Why a value was refused: clap prints it after the flag and its value (exit 2).
@@ -403,9 +400,9 @@ mod tests {
         assert!(a.json);
         assert_eq!(a.filter.as_deref(), Some("--help"));
         let Command::Perf(a) = ok(&["perf"]) else { panic!("perf") };
-        assert_eq!((a.layers, a.instances), (vec![1000, 10_000], vec![2000]));
-        let Command::Perf(a) = ok(&["perf", "--layers", "1000,10_000, 50000", "--instances=0"]) else { panic!("perf") };
-        assert_eq!((a.layers, a.instances), (vec![1000, 10_000, 50_000], vec![0]));
+        assert_eq!(a.layers, vec![1000, 10_000]);
+        let Command::Perf(a) = ok(&["perf", "--layers", "1000,10_000, 50000"]) else { panic!("perf") };
+        assert_eq!(a.layers, vec![1000, 10_000, 50_000]);
     }
 
     #[test]

@@ -93,7 +93,6 @@ fn reads_go_only_into_the_read_and_write_roots() {
         ("open_file", json!({"path": d.p("in/../outside/c.figcraft")})),
         ("run_command", json!({"command": "file.import", "params": {"path": d.p("outside/c.svg")}})),
         ("run_command", json!({"command": "file.placeImage", "params": {"path": d.p("outside/c.svg")}})),
-        ("run_command", json!({"command": "library.add", "params": {"path": d.p("outside/c.figcraft")}})),
     ] {
         let r = call(&mut s, tool, args.clone());
         assert_eq!(r["isError"], true, "{tool} {args}: {r}");

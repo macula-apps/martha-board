@@ -1,6 +1,4 @@
-pub mod assets_panel;
 pub mod compare_view;
-pub mod component_panel;
 pub mod export_panel;
 pub mod frame_presets;
 pub mod layers;
@@ -11,6 +9,7 @@ pub mod scale_panel;
 pub mod section_panel;
 pub mod selection_colors;
 pub mod shortcuts_panel;
+pub mod thumbnails;
 pub mod typography;
 pub mod vector_panel;
 pub mod versions;

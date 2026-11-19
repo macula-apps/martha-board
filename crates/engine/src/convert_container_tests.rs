@@ -250,21 +250,12 @@ fn what_cannot_convert_is_refused_and_nothing_changes() {
     let f = id(ex(&mut s, "frame.create", json!({"x": 0, "y": 0, "width": 100, "height": 100})));
     let inner = id(ex(&mut s, "frame.create", json!({"x": 10, "y": 10, "width": 50, "height": 50, "parent": f})));
     rect(&mut s, inner, 0.0, 0.0);
-    let comp = id(ex(&mut s, "component.create", json!({"ids": [f]})));
-    let inst = id(ex(&mut s, "instance.create", json!({"component": comp, "x": 300, "y": 0})));
-    let inst_inner = s.doc().unwrap().node(inst).unwrap().children[0];
     let empty = id(ex(&mut s, "frame.create", json!({"x": 0, "y": 300, "width": 50, "height": 50})));
     let loose = rect(&mut s, page, 500.0, 0.0);
     let ok_frame = id(ex(&mut s, "frame.create", json!({"x": 0, "y": 500, "width": 50, "height": 50})));
     rect(&mut s, ok_frame, 5.0, 5.0);
     // (layer, what the message says)
-    for (layer, says) in [
-        (comp, "main component"),
-        (inst, "is an instance"),
-        (inst_inner, "inside an instance"),
-        (empty, "is empty"),
-        (loose, "neither a frame nor a group"),
-    ] {
+    for (layer, says) in [(empty, "is empty"), (loose, "neither a frame nor a group")] {
         for cmd in ["object.convertToGroup", "object.convertToFrame"] {
             if layer == empty && cmd == "object.convertToFrame" {
                 continue;
@@ -277,7 +268,7 @@ fn what_cannot_convert_is_refused_and_nothing_changes() {
     }
     // Already what was asked for: left alone, not an error.
     assert_eq!(ex(&mut s, "object.convertToFrame", json!({"ids": [ok_frame]}))["ids"], json!([]));
-    // A frame inside a main component converts (its instances follow their main).
+    // A frame inside a frame converts.
     ex(&mut s, "object.convertToGroup", json!({"ids": [inner]}));
     assert!(matches!(kind(&s, inner), NodeKind::Group));
 }

@@ -101,7 +101,7 @@ resolved as `docs/mcp.md` › Confining file access describes. A root that isn't
 stops the app before its window opens, and so does any option the app doesn't know (a mistyped
 flag such as `--automation-write-roots` exits with `unknown option`, never starts unconfined).
 Confined work reaches no FigCraft or plugin server either: hosting, joining, publishing and
-sharing files, team libraries on a server and plugin directories are refused (`automation roots
+sharing files and plugin directories are refused (`automation roots
 are set: commands don't reach the network …`). A root on a network share (a UNC path such as
 `\\server\share\…`, or a mounted network drive) is the exception: files read and written inside it,
 documents saved there included, go to that file server. Without the flags nothing changes. The flags arrived in FigCraft 0.7.0: 0.6.0 and earlier ignore
@@ -322,8 +322,8 @@ popovers and fields (`ui.pointer` and `ui.key` drive the canvas tools and shortc
 `ArrowLeft`, `Escape`, `A`), `{text}` (typed text), `{scroll: [dx, dy], shift?, alt?, cmd?}` (a
 mouse wheel at the pointer: the content moves by that many points, so a negative `dy` scrolls down)
 `{leave: true}` (the pointer left the window), `{hold: {alt?, shift?, cmd?}}` (keep those modifier
-keys down for the frames that follow, e.g. Alt while dragging a component from the Assets panel onto
-an instance to swap it; all false releases them); positions are window points. Events of one call
+keys down for the frames that follow, e.g. Alt while dragging a layer to duplicate it; all false
+releases them); positions are window points. Events of one call
 arrive in the same frame, so send a press and its release (or a double-click's two clicks) as
 separate calls. Returns `{queued}`.
 
@@ -337,9 +337,9 @@ separate calls. Returns `{queued}`.
 
 Invoke a menu item exactly like clicking it (this may open a dialog). Returns `{ok, lastError}`.
 
-### `ui.set {leftTab?, theme?, home?, homeSection?, homeSearch?, homeRecentsView?, homeRecentsSort?, homeRecentsOrder?, palette?, mainMenu?, focusRegion?, colorPicker?, layerFilter?, collapseLayers?, exportPreview?, colorProfileDialog?, stylePicker?, stylePickerEdit?, stylePickerView?, iconGallery?, contextMenu?, contextSelectLayer?, commentOpen?, commentDraft?, commentFilter?, commentSort?, commentSearch?, commentReply?, commentEdit?, resetFrameStats?, pluginsWindow?, pluginsTab?, pluginConfirm?, pluginForm?}`
+### `ui.set {theme?, home?, homeSection?, homeSearch?, homeRecentsView?, homeRecentsSort?, homeRecentsOrder?, palette?, mainMenu?, focusRegion?, colorPicker?, layerFilter?, collapseLayers?, exportPreview?, colorProfileDialog?, stylePicker?, stylePickerEdit?, stylePickerView?, iconGallery?, contextMenu?, contextSelectLayer?, commentOpen?, commentDraft?, commentFilter?, commentSort?, commentSearch?, commentReply?, commentEdit?, resetFrameStats?, pluginsWindow?, pluginsTab?, pluginConfirm?, pluginForm?}`
 
-Switch panels and modes: `leftTab` `file|assets`, `theme`,
+Switch panels and modes: `theme`,
 `home` (bool), `homeSection` (`recents`, `online` or `templates`: which section the home screen shows, as `ui.inspect` reports it; opening
 `online` asks each server once what became of your online files), `homeRecentsView` (`grid|list`), `homeRecentsSort` (`modified|name|created`) and `homeRecentsOrder` (`desc|asc`): how the home screen shows its recent files (kept in the preferences; `ui.inspect` reports them under `homeRecents` with each file and whether its picture is in), `palette` (bool: the Actions palette), `mainMenu` (bool, or a top-level menu such
 as `"Plugins"` to open the main menu with it open), `homeSearch` (text, at most 256 characters: filters locally known open, recent and online files plus starter templates in Home; an empty string returns to the selected section),

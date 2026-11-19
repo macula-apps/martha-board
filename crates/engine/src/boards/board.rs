@@ -21,6 +21,7 @@ use crate::params::{boolean, color_of, get, id, id_of, num, num_or, opt_id, req_
 use crate::tools::{Gesture, PointerEvent, ToolId};
 use crate::{EngineError, Result, Session, bad, spec, textedit};
 
+mod bench;
 mod connectors;
 mod derived;
 mod edit;
@@ -29,6 +30,7 @@ mod mindmap;
 mod reshape;
 mod tools;
 
+pub use bench::large_board;
 pub(crate) use connectors::end_handle_at;
 pub use connectors::{END_HANDLE_PX, selected_connector_ends};
 use connectors::{connector_cmd, reattach};

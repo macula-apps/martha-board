@@ -23,7 +23,6 @@ use figcraft_geom::Point;
 use figcraft_layout::{GridCell, flow_children, grid_place};
 
 use crate::Result;
-use crate::components::structure_locked;
 use crate::drop::{auto_layout_slot, flip, wrap_rows};
 
 /// One arrow key: an axis and a direction (`forward`: right or down).
@@ -221,8 +220,7 @@ fn move_into_neighbour(doc: &mut Document, parent: NodeId, block: &[NodeId], dir
     let next = if dir.forward { i.checked_add(1) } else { i.checked_sub(1) };
     let Some(dest) = next.and_then(|j| siblings.get(j)).copied() else { return Ok(false) };
     let accepts =
-        doc.node(dest).is_some_and(|n| n.kind.is_frame_like() && !n.locked && n.layout.as_ref().is_some_and(|l| l.mode != LayoutMode::Grid))
-            && !structure_locked(doc, dest);
+        doc.node(dest).is_some_and(|n| n.kind.is_frame_like() && !n.locked && n.layout.as_ref().is_some_and(|l| l.mode != LayoutMode::Grid));
     if !accepts {
         return Ok(false);
     }

@@ -12,7 +12,7 @@ use serde_json::json;
 use crate::FigApp;
 use crate::i18n::{tr, trf, trn};
 use crate::render_worker::{Done, Job, Worker};
-use crate::theme::{COMPONENT, Tokens, doc_c32, regular, semibold};
+use crate::theme::{Tokens, doc_c32, regular, semibold};
 
 mod background;
 mod builder;

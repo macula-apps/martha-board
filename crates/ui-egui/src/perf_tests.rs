@@ -24,7 +24,7 @@ struct Bench {
 
 impl Bench {
     fn new(layers: usize) -> Self {
-        let (doc, _) = figcraft_engine::synthetic::large_document(layers).unwrap();
+        let (doc, _) = figcraft_engine::board::large_board(layers).unwrap();
         Self::with_document(doc)
     }
 
@@ -87,7 +87,7 @@ fn report(layers: usize) {
     let centre = b.app.canvas.rect.center();
     rows.push(("pan (wheel) over the canvas", b.mean(60, |i| vec![Event::PointerMoved(centre), wheel(if i % 20 < 10 { -40.0 } else { 40.0 })])));
     // One layer selected: the design panel shows its properties.
-    let screen = b.app.session.doc().ok().and_then(|d| d.node(b.app.session.page().ok()?)?.children.get(1).copied());
+    let screen = b.app.session.doc().ok().and_then(|d| d.node(b.app.session.page().ok()?)?.children.first().copied());
     let first = screen.and_then(|s| b.app.session.doc().ok()?.node(s)?.children.last().copied());
     b.app.session.set_selection(first.into_iter().collect());
     rows.push(("idle frame, one layer selected", b.mean(30, |_| vec![])));
@@ -140,7 +140,7 @@ fn key(key: Key, modifiers: Modifiers) -> Vec<Event> {
 /// near the bottom of the list.
 fn bottom_layer(s: &Session) -> Option<NodeId> {
     let doc = s.doc().ok()?;
-    let screen = *doc.node(s.page().ok()?)?.children.get(1)?;
+    let screen = *doc.node(s.page().ok()?)?.children.first()?;
     let header = *doc.node(screen)?.children.first()?;
     doc.node(header)?.children.first().copied()
 }
@@ -172,67 +172,6 @@ fn a_layer_revealed_at_the_bottom_of_10k_layers_gets_the_keyboard_on_its_row() {
     assert_eq!(crate::a11y::focused_name(&b.ctx), above);
 }
 
-/// The synthetic design system with `icons` icon components (plus its component sets) and
-/// `instances` instances using it.
-fn design_system(icons: usize, instances: usize) -> (Document, figcraft_engine::synthetic_ds::DesignSystem, Vec<NodeId>) {
-    let spec = figcraft_engine::synthetic_ds::DsSpec { icons, ..figcraft_engine::synthetic_ds::DsSpec::FULL };
-    figcraft_engine::synthetic_ds::design_system_with_instances(&spec, instances).unwrap()
-}
-
-/// Build a test mouse-wheel event for the given vertical delta.
-fn wheel(d: f32) -> Event {
-    Event::MouseWheel {
-        unit: egui::MouseWheelUnit::Point,
-        source: egui::MouseWheelSource::Unknown,
-        delta: vec2(0.0, d),
-        phase: egui::TouchPhase::Move,
-        modifiers: Default::default(),
-    }
-}
-
-/// UI frames with a large design system: the Assets panel listing its components and the Design
-/// panel of an instance with many properties.
-fn report_components(icons: usize, instances: usize) {
-    let (doc, ds, inst) = design_system(icons, instances);
-    let assets = icons + ds.sets().len();
-    let mut b = Bench::with_document(doc);
-    b.app.ui.left_tab = crate::LeftTab::Assets;
-    let mut rows: Vec<(&str, f64)> = Vec::new();
-    rows.push(("Assets panel: first frame (thumbnails in view)", b.frame(vec![])));
-    for _ in 0..20 {
-        b.frame(vec![]);
-    }
-    rows.push(("Assets panel: idle frame", b.mean(30, |_| vec![])));
-    let panel = Pos2::new(150.0, 600.0);
-    rows.push(("Assets panel: scrolling", b.mean(120, |i| vec![Event::PointerMoved(panel), wheel(if i % 60 < 30 { -400.0 } else { 400.0 })])));
-    // Edit one component: only its thumbnail renders again.
-    let glyph = b.app.session.doc().ok().and_then(|d| d.node(*ds.icons.first()?)?.children.first().copied());
-    let _ = b.app.session.execute("node.set", &json!({"ids": [glyph], "props": {"opacity": 0.5}}));
-    rows.push(("Assets panel: frame after editing a component", b.mean(30, |_| vec![])));
-    // An instance with many properties selected (a nav: variants, booleans, exposed instances), the
-    // layers panel showing.
-    b.app.ui.left_tab = crate::LeftTab::File;
-    let nav = inst.iter().copied().find(|i| {
-        b.app.session.doc().ok().and_then(|d| match &d.node(*i)?.kind {
-            figcraft_doc::NodeKind::Instance { component, .. } => figcraft_engine::components::variant_set(d, *component),
-            _ => None,
-        }) == Some(ds.nav)
-    });
-    if let Some(p) = nav.and_then(|n| b.app.session.doc().ok()?.page_of(n)) {
-        let _ = b.app.session.execute("page.select", &json!({"id": p}));
-    }
-    b.app.session.set_selection(nav.into_iter().collect());
-    b.frame(vec![]);
-    rows.push(("Design panel: an instance with many properties", b.mean(30, |_| vec![])));
-    b.app.session.set_selection(vec![ds.button]);
-    b.frame(vec![]);
-    rows.push(("Design panel: a 72-variant component set", b.mean(30, |_| vec![])));
-    println!("UI frame ms — {assets} assets, {instances} instances ({})", if cfg!(debug_assertions) { "debug" } else { "release" });
-    for (name, v) in rows {
-        println!("| {name:<48} | {v:>8.2} |");
-    }
-}
-
 #[test]
 #[ignore = "benchmark: cargo xtask bench"]
 fn perf_ui_frames() {
@@ -243,38 +182,6 @@ fn perf_ui_frames() {
     for n in sizes {
         report(n);
     }
-    report_components(2000, 2000);
-}
-
-#[test]
-fn the_assets_panel_renders_thumbnails_in_view_and_only_changed_ones_again() {
-    let (doc, ds, _) = design_system(300, 20);
-    let mut b = Bench::with_document(doc);
-    b.app.ui.left_tab = crate::LeftTab::Assets;
-    for _ in 0..12 {
-        b.frame(vec![]);
-    }
-    let first = crate::assets_panel::cached_thumbnails(&b.ctx);
-    assert!(!first.is_empty(), "thumbnails in view render");
-    assert!(first.len() < 60, "only the tiles in view (and a row around): {} of {}", first.len(), 300 + ds.sets().len());
-    // Scrolling down renders the newly shown tiles.
-    let panel = Pos2::new(150.0, 600.0);
-    for _ in 0..20 {
-        b.frame(vec![Event::PointerMoved(panel), wheel(-600.0)]);
-    }
-    let scrolled = crate::assets_panel::cached_thumbnails(&b.ctx);
-    assert!(scrolled.iter().any(|id| !first.contains(id)), "tiles further down got thumbnails");
-    // Editing one component drops just its thumbnail (after the refresh interval).
-    // (An icon no component set uses: those show it too.)
-    let icon = *scrolled.iter().find(|id| ds.icons.iter().skip(4).any(|i| i == *id)).unwrap();
-    let glyph = b.app.session.doc().unwrap().node(icon).unwrap().children[0];
-    b.app.session.execute("node.set", &json!({"ids": [glyph], "props": {"opacity": 0.5}})).unwrap();
-    for _ in 0..40 {
-        b.frame(vec![]);
-    }
-    let after = crate::assets_panel::cached_thumbnails(&b.ctx);
-    let kept = scrolled.iter().filter(|id| **id != icon && after.contains(id)).count();
-    assert_eq!(kept, scrolled.len() - 1, "unchanged thumbnails stay cached");
 }
 
 #[test]

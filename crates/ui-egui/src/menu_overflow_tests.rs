@@ -99,7 +99,8 @@ fn a_menu_taller_than_the_window_scrolls_to_its_last_command() {
         }
     }
     let at = hit.expect("Send to back scrolls into view");
-    crate::component_swap_default_tests::click(&mut u, at);
+    u.button(at, true);
+    u.button(at, false);
     let doc = u.app.session.doc().unwrap();
     let page = u.app.session.page().unwrap();
     let kids = &doc.node(page).unwrap().children;

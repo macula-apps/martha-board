@@ -946,9 +946,6 @@ fn search_fields_keep_their_text_in_the_middle() {
         let off = off_centre(&mut u, hint);
         assert!(off < 1.0, "{hint} is {off} points off the middle");
     }
-    u.app.ui.left_tab = crate::LeftTab::Assets;
-    let off = off_centre(&mut u, "Search assets");
-    assert!(off < 1.0, "Search assets is {off} points off the middle");
 }
 
 #[test]

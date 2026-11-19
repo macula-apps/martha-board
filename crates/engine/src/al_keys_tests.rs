@@ -201,20 +201,11 @@ fn arrows_cross_into_neighbouring_nested_frames() {
 }
 
 #[test]
-fn plain_frames_and_instances_keep_their_rules() {
+fn plain_frames_keep_their_rules() {
     let mut s = Session::new();
     let f = id(s.execute("frame.create", &json!({"x": 0, "y": 0, "width": 200, "height": 200})).unwrap());
     let r = id(s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20, "parent": f})).unwrap());
     s.execute("transform.nudge", &json!({"ids": [r], "dx": 1, "dy": -1, "big": true})).unwrap();
     let b = s.doc().unwrap().world_bounds(r).unwrap();
     assert_eq!((b.x0, b.y0), (20.0, 0.0));
-    // An instance's auto layout children can't be reordered (only its main's can).
-    let main = al(&mut s, None, "horizontal", 200.0, 40.0);
-    for _ in 0..2 {
-        rect(&mut s, main, 20.0, 20.0);
-    }
-    let comp = id(s.execute("component.create", &json!({"ids": [main]})).unwrap());
-    let inst = id(s.execute("instance.create", &json!({"component": comp, "x": 0, "y": 300})).unwrap());
-    let first = kids(&s, inst)[0];
-    assert!(s.execute("transform.nudge", &json!({"ids": [first], "dx": 1, "dy": 0})).is_err());
 }

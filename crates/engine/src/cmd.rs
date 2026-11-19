@@ -2,14 +2,12 @@
 
 pub mod arrange;
 pub mod comment;
-pub mod component;
 pub mod create;
 pub mod edit;
 pub mod facilitate;
 pub mod file;
 pub mod image;
 pub mod layout;
-pub mod library;
 pub mod lists;
 pub mod page;
 pub mod props;
@@ -85,12 +83,9 @@ fn registry() -> &'static Registry {
         list.extend(crate::fonts::specs());
         list.extend(styles::specs());
         list.extend(image::specs());
-        list.extend(component::specs());
-        list.extend(library::specs());
         list.extend(comment::specs());
         list.extend(crate::vectoredit::specs());
         list.extend(crate::shapebuilder::specs());
-        list.extend(crate::playground::specs());
         list.extend(crate::distance::specs());
         list.extend(crate::collab::specs());
         list.extend(crate::branches::specs());
@@ -101,7 +96,6 @@ fn registry() -> &'static Registry {
         list.extend(crate::online::specs());
         list.extend(crate::invite_links::specs());
         list.extend(crate::templates::specs());
-        list.extend(crate::datafill::specs());
         list.extend(crate::textfit::specs());
         list.extend(crate::board::specs());
         list.extend(facilitate::specs());

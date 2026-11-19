@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 
 use super::{Wrap, convert, infer_layout, sort_layout_children, wrap};
 use crate::params::{id_of, req_targets, string};
-use crate::{EngineError, Result, Session, bad};
+use crate::{EngineError, Result, Session};
 
 /// How deep nested band frames go before a frame is laid out as a single list.
 const MAX_DEPTH: usize = 16;
@@ -227,17 +227,6 @@ pub(super) fn layout_suggest(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = req_targets("layout.suggest", s, p)?;
     let direction = string(p, "direction");
     let doc = s.doc()?;
-    // An instance's layers come from its main component: nothing is added to them. Checked
-    // before anything changes, with the words Convert to group uses.
-    for i in &ids {
-        let n = doc.get(*i)?;
-        if matches!(n.kind, NodeKind::Instance { .. }) {
-            return Err(bad("layout.suggest", format!("\"{}\" is an instance: its layers come from its main component (detach it first)", n.name)));
-        }
-        if crate::components::owning_instance(doc, *i).is_some() {
-            return Err(bad("layout.suggest", format!("\"{}\" is inside an instance: edit its main component, or detach the instance", n.name)));
-        }
-    }
     let all_frames = ids.iter().all(|i| doc.node(*i).is_some_and(|n| n.kind.is_frame_like() && n.layout.is_none()));
     let single_group = ids.len() == 1 && ids.first().and_then(|i| doc.node(*i)).is_some_and(|n| matches!(n.kind, NodeKind::Group));
     // A frame with auto layout already is wrapped, like a layer, and so are several layers.

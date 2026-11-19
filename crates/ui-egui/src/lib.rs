@@ -77,19 +77,9 @@ mod colorpicker_selection_tests;
 #[cfg(test)]
 mod comments_tests;
 #[cfg(test)]
-mod component_props_reorder_tests;
-#[cfg(test)]
-mod component_set_narrow_tests;
-#[cfg(test)]
-mod component_swap_default_tests;
-#[cfg(test)]
-mod component_swap_search_tests;
-#[cfg(test)]
 mod context_menu_tests;
 #[cfg(test)]
 mod corner_individual_tests;
-#[cfg(test)]
-mod create_multiple_menu_tests;
 #[cfg(test)]
 mod crop_image_tests;
 #[cfg(test)]
@@ -145,8 +135,6 @@ mod inspect_fields_tests;
 #[cfg(test)]
 mod layers_behaviour_tests;
 #[cfg(test)]
-mod layers_component_rows_tests;
-#[cfg(test)]
 mod layers_drag_tests;
 #[cfg(test)]
 mod layers_keyboard_tests;
@@ -156,8 +144,6 @@ mod layers_keys_tests;
 mod layers_rename_tests;
 #[cfg(test)]
 mod layers_wide_names_tests;
-#[cfg(test)]
-mod library_beacon_tests;
 #[cfg(test)]
 mod live_chat_tests;
 #[cfg(test)]
@@ -176,8 +162,6 @@ mod live_tests;
 mod live_text_tests;
 #[cfg(test)]
 mod local_fonts_tests;
-#[cfg(test)]
-mod make_slot_naming_tests;
 #[cfg(test)]
 mod measure_nudge_tests;
 #[cfg(test)]
@@ -271,10 +255,6 @@ mod ui_params_tests;
 #[cfg(test)]
 mod ui_scale_tests;
 #[cfg(test)]
-mod usage_summary_tests;
-#[cfg(test)]
-mod variants_discovery_tests;
-#[cfg(test)]
 mod vector_align_tests;
 #[cfg(test)]
 mod vector_keys_tests;
@@ -321,9 +301,7 @@ pub use dialogs::sampled_color;
 pub use dialogs::updates_ui;
 pub use home::home_recents;
 pub use home::online;
-pub use panels::assets_panel;
 pub use panels::compare_view;
-pub use panels::component_panel;
 pub use panels::export_panel;
 pub use panels::frame_presets;
 pub use panels::layers;
@@ -334,6 +312,7 @@ pub use panels::scale_panel;
 pub use panels::section_panel;
 pub use panels::selection_colors;
 pub use panels::shortcuts_panel;
+pub use panels::thumbnails;
 pub use panels::typography;
 pub use panels::vector_panel;
 pub use panels::versions;
@@ -372,7 +351,7 @@ pub use services::{
     egui_copy_text, unreadable,
 };
 use services::{DialogDone, PickFuture, Picked, RepaintWaker};
-pub use state::{AutoSaveEncoding, CANVAS_MIN, LEFT_PANEL, LeftTab, MobilePanel, NARROW_WIDTH, PANEL_DEFAULT, RIGHT_PANEL, TitleBar, fit_panels};
+pub use state::{AutoSaveEncoding, CANVAS_MIN, LEFT_PANEL, MobilePanel, NARROW_WIDTH, PANEL_DEFAULT, RIGHT_PANEL, TitleBar, fit_panels};
 
 /// A native dialog in flight. The app keeps working while it is open, so its result goes to the
 /// file and window it was opened for, not to whichever is in front when it closes.
@@ -411,7 +390,6 @@ pub struct UiState {
     pub right_width: f32,
     /// The right sidebar as drawn this frame, after fitting the window.
     pub right_panel_rect: Option<egui::Rect>,
-    pub left_tab: LeftTab,
     pub pages_open: bool,
     /// Pages panel search: open, and the case-insensitive name filter.
     pub page_search: bool,
@@ -585,8 +563,6 @@ pub struct UiState {
     pub auto_save_at: Option<(f64, u64)>,
     /// Files being encoded for auto-save on threads of their own (tab `uid`).
     pub auto_saving: Vec<(u64, AutoSaveEncoding)>,
-    /// The Assets panel shows the libraries view (publish this file, enabled libraries).
-    pub libraries: bool,
     /// Keyboard navigation: the region with the keyboard, keyboard mode (F6, Tab).
     pub nav: a11y::Nav,
     /// The Manage plugins window is open.
@@ -620,7 +596,6 @@ impl Default for UiState {
             left_width: PANEL_DEFAULT,
             right_width: PANEL_DEFAULT,
             right_panel_rect: None,
-            left_tab: LeftTab::File,
             pages_open: true,
             page_search: false,
             page_filter: String::new(),
@@ -712,7 +687,6 @@ impl Default for UiState {
             next_autosave: 0.0,
             auto_save_at: None,
             auto_saving: Vec::new(),
-            libraries: false,
             nav: a11y::Nav::default(),
             plugins_window: false,
             plugins_manage: plugins_ui::PluginsWindow::default(),

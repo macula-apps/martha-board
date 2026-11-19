@@ -321,7 +321,7 @@ fn preview(app: &mut FigApp, ui: &mut Ui, doc: &Document, id: NodeId) {
         }
         _ => {
             let px = ui.available_width() * ui.ctx().pixels_per_point();
-            let tex = crate::assets_panel::thumbnail(ui.ctx(), doc, id, px);
+            let tex = crate::thumbnails::thumbnail(ui.ctx(), doc, id, px);
             ui.data_mut(|d| d.insert_temp(cache_id, PreviewTex { id, revision, at: now, tex: tex.clone() }));
             tex
         }

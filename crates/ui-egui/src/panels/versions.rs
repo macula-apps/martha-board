@@ -51,7 +51,6 @@ impl Form {
 pub fn open(app: &mut FigApp) {
     app.ui.versions.open = true;
     app.ui.open_left_panel();
-    app.ui.left_tab = crate::LeftTab::File;
 }
 
 /// Open the panel with the save form (File ▸ Save to version history…).

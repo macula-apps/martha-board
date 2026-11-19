@@ -301,16 +301,4 @@ impl Session {
         };
         if on_point { PenCursor::Close } else { PenCursor::New }
     }
-
-    /// Whether what the gesture did to `ids` so far is an edit only a main component can make
-    /// (`moved`: their place among the layers counts too): it is undone when the gesture ends.
-    pub(super) fn refused(&self, ids: &[NodeId], moved: bool) -> bool {
-        let Ok(ds) = self.ds() else { return false };
-        ds.interaction.as_ref().is_some_and(|it| {
-            ids.iter().any(|m| {
-                (moved && !crate::components::move_allowed(&it.doc, &ds.doc, *m))
-                    || crate::components::refused_override(&it.doc, &ds.doc, *m).is_some()
-            })
-        })
-    }
 }

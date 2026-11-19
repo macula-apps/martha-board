@@ -1,6 +1,6 @@
 use super::{
-    Arc, CommandSpec, Document, ENDS_PREVIEW, EngineError, Node, NodeId, PREVIEW_READ_ONLY, Result, Session, Value, bad, branches, cmd, components,
-    events, find_command, guard, library, normalize, params, textpreview,
+    Arc, CommandSpec, Document, ENDS_PREVIEW, EngineError, Node, NodeId, PREVIEW_READ_ONLY, Result, Session, Value, bad, branches, cmd, events,
+    find_command, guard, normalize, params, textpreview,
 };
 
 /// Whether a command, or a batch wrapping one, imports a file passed as Base64 `data`.
@@ -101,7 +101,6 @@ impl Session {
         let group_depth_before = self.group_depth;
         let pending_events_before = self.pending_events.len();
         let result = guard::run(id, || (spec.run)(self, params))
-            .and_then(|v| self.check_instance_structure(id, &before).map(|()| v))
             .and_then(|v| self.check_preview(id, &before).map(|()| v))
             .and_then(|v| self.check_live_access(id, &before).map(|()| v))
             .and_then(|v| self.check_finite_geometry(id, &before).map(|()| v))
@@ -203,27 +202,6 @@ impl Session {
             }
             _ => Ok(()),
         }
-    }
-
-    /// Instances can't gain, lose or reorder layers, nor move, resize or re-constrain the layers in
-    /// them, library copies are read-only and components can't contain their own instances: refuse
-    /// such an edit (it is rolled back).
-    pub(crate) fn check_instance_structure(&self, id: &str, before: &Option<(Arc<Document>, Vec<NodeId>, NodeId, u64)>) -> Result<()> {
-        let Some((bdoc, _, _, uid)) = before else { return Ok(()) };
-        let Some(ds) = self.docs.iter().find(|d| d.uid == *uid) else { return Ok(()) };
-        if Arc::ptr_eq(&ds.doc, bdoc) {
-            return Ok(());
-        }
-        // "Repeat" runs the repeated command.
-        let effective = match (&self.last_command, id) {
-            (Some((last, _)), "edit.repeat") => last.as_str(),
-            _ => id,
-        };
-        library::check_read_only(effective, bdoc, &ds.doc)
-            .and_then(|()| components::check_structure_edit(bdoc, &ds.doc))
-            .and_then(|()| components::check_override_edit(bdoc, &ds.doc))
-            .and_then(|()| components::check_component_cycles(bdoc, &ds.doc))
-            .map_err(|m| EngineError::Disabled(id.to_string(), m))
     }
 
     /// Normalise what a command changed in the document it ran on (text boxes, groups, instances,

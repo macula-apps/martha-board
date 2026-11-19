@@ -8,12 +8,6 @@ use super::{
     Signal, ToolId, display_name, editing_hint, editing_of, limited_by, sanitize, tool_left,
 };
 
-/// What a live session's document holding components that contain each other's instances shows
-/// (`names`: the loop): those instances stop expanding where they would show themselves again.
-fn loop_notice(names: &str) -> String {
-    format!("Components contain each other's instances ({names}): those instances stop where they would show themselves")
-}
-
 /// A session that starts reconnecting forgets who's here (that comes again with the next welcome;
 /// edits wait for it), and the host's signal support until it says it reads them again (a
 /// spotlight of yours goes out again then).
@@ -80,12 +74,6 @@ impl Session {
     /// Install a document that came from the session (others' edits): the selection, page and view
     /// stay where they can, and the undo history isn't touched.
     pub fn apply_remote(&mut self, uid: u64, doc: Arc<Document>) {
-        let Some(old) = self.docs.iter().find(|d| d.uid == uid).map(|d| d.doc.clone()) else { return };
-        // Edits merged from others can close a loop of components containing each other.
-        let changed = crate::derived::changed_nodes(&doc, &old);
-        if let Some(names) = crate::components::new_cycle(&old, &doc, changed.iter()) {
-            self.message = Some(loop_notice(&names));
-        }
         let Some(ds) = self.docs.iter_mut().find(|d| d.uid == uid) else { return };
         ds.doc = doc;
         if !ds.doc.pages.contains(&ds.page) {
@@ -160,7 +148,8 @@ impl Session {
 
     fn live_event(&mut self, id: SessionId, e: Event) {
         let e = match e {
-            Event::Library { link, reply } => return self.library_answer(&link, reply),
+            // Team libraries left the board: a late answer about one is dropped.
+            Event::Library { .. } => return,
             Event::Net { job, reply } => return self.background_answer(job, *reply),
             e => e,
         };
@@ -418,10 +407,7 @@ impl Session {
             (Some(Role::Guest), None) => {
                 // The session's file gets a tab of its own, in front.
                 let ds = DocState::new(client.document().clone(), None);
-                self.message = Some(match crate::components::cycle_text(&ds.doc) {
-                    Some(names) => format!("Joined {}. {}", ds.doc.name, loop_notice(&names)),
-                    None => format!("Joined {}", ds.doc.name),
-                });
+                self.message = Some(format!("Joined {}", ds.doc.name));
                 let opened = (ds.uid, Some(ds.doc.clone()));
                 self.active = self.docs.len();
                 self.docs.push(ds);

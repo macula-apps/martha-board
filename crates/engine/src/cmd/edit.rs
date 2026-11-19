@@ -585,14 +585,8 @@ fn delete(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = req_targets("edit.delete", s, p)?;
     let doc = s.doc_mut()?;
     let ids = roots(doc, &ids);
-    // A layer inside an instance can't be removed: Delete hides it instead, an override ("Figma
-    // will only toggle the layer's visibility instead of removing it", Guide to auto layout).
-    let (hidden, ids): (Vec<_>, Vec<_>) = ids.into_iter().partition(|i| crate::assets::components::inside_instance(doc, *i));
-    for i in &hidden {
-        doc.get_mut(*i)?.visible = false;
-    }
     if ids.is_empty() {
-        return Ok(json!({"deleted": [], "hidden": hidden}));
+        return Ok(json!({"deleted": []}));
     }
     let mut parents = Vec::new();
     for i in &ids {
@@ -606,7 +600,7 @@ fn delete(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // Select the parent frame like Figma? Figma clears the selection.
     s.set_selection(vec![]);
-    Ok(json!({"deleted": ids, "hidden": hidden}))
+    Ok(json!({"deleted": ids}))
 }
 
 /// Layers duplicated last (Duplicate or Alt-drag) and their copies, in the same order. While the
@@ -750,7 +744,7 @@ fn duplicate(s: &mut Session, p: &Value) -> Result<Value> {
         let top_frame = doc.node(parent).is_some_and(Node::is_page) && n.kind.is_frame_like();
         let idx = doc.index_in_parent(i).map(|x| x + 1);
         let w = n.width;
-        let nid = crate::components::copy_in_file(doc, i, parent, idx)?;
+        let nid = doc.duplicate_into(i, parent, idx)?;
         let (dx, dy) = match (num(p, "dx"), num(p, "dy")) {
             (Some(dx), dy) => (dx, dy.unwrap_or(0.0)),
             (None, Some(dy)) => (0.0, dy),
@@ -780,7 +774,6 @@ fn duplicate(s: &mut Session, p: &Value) -> Result<Value> {
             super::arrange::rotate_world(doc, nid, c, st.angle)?;
         }
     }
-    crate::library::count_inserted(doc, &out);
     // Board connectors copied with what they join join the copies.
     let map = crate::board::copy_map(doc, &ids, &out);
     crate::board::rejoin(doc, &crate::board::copied_items(doc, &map), &map, false);

@@ -10,8 +10,8 @@
 //!   that keeps both sides leaves)
 //! - `version` print the version, or `version set X.Y.Z`
 //! - `icon`    regenerate the app icon PNGs/ICO from assets/app-icon/figcraft.svg (needs resvg)
-//! - `bench`   release-build timings at 1k/10k/50k layers (`bench 1000,10000` for other sizes) and
-//!   with a synthetic design system used by 2,000 instances
+//! - `bench`   release-build timings of large boards at 1k/10k/50k layers (`bench 1000,10000` for
+//!   other sizes)
 
 mod docs_check;
 mod icon;

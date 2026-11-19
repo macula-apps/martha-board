@@ -1,9 +1,3 @@
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
-pub enum LeftTab {
-    File,
-    Assets,
-}
-
 /// The window's title bar.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum TitleBar {

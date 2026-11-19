@@ -101,22 +101,3 @@ fn paste_with_two_layers_selected_is_unchanged() {
     assert!(pasted.iter().all(|p| parent_of(&s, *p) == Some(page)), "on the page, as before");
     assert_eq!(kids(&s, frame), vec![a, b]);
 }
-
-#[test]
-fn paste_with_a_layer_inside_an_instance_selected_is_unchanged() {
-    let mut s = sess();
-    let f = id(&s.execute("frame.create", &json!({"x": 0, "y": 0, "width": 100, "height": 50, "name": "Button"})).unwrap());
-    s.execute("text.create", &json!({"text": "OK", "x": 10, "y": 10, "parent": f})).unwrap();
-    let c = id(&s.execute("component.create", &json!({"ids": [f]})).unwrap());
-    let inst = id(&s.execute("instance.create", &json!({"component": c, "x": 200, "y": 0})).unwrap());
-    let page = parent_of(&s, inst).unwrap();
-    let inner = kids(&s, inst)[0];
-    let inner_kids = kids(&s, inst);
-    let other = rect(&mut s, None, 500.0, 500.0);
-    s.set_selection(vec![other]);
-    s.execute("edit.copy", &json!({})).unwrap();
-    s.set_selection(vec![inner]);
-    let pasted = paste(&mut s);
-    assert_eq!(parent_of(&s, pasted[0]), Some(page), "an instance's children are fixed: the copy goes to the page");
-    assert_eq!(kids(&s, inst), inner_kids);
-}

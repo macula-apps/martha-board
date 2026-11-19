@@ -134,7 +134,7 @@ fn copy_parts(s: &mut Session, cmd: &str, sel: &EditSelection) -> Result<usize> 
     if nodes.is_empty() {
         return Err(EngineError::Disabled(cmd.into(), "the selection has nothing to copy".into()));
     }
-    store_clipboard(s, cmd, nodes, images, bounds)?;
+    store_clipboard(s, nodes, images, bounds)?;
     Ok(segments)
 }
 

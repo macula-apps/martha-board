@@ -534,6 +534,28 @@ pub fn metadata(path: impl AsRef<Path>) -> Result<std::fs::Metadata> {
     std::fs::metadata(allow(path, Access::Read)?).map_err(io(path))
 }
 
+/// When a file was last read or written: its length and modification time (a document's own
+/// file, #1330).
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Stamp {
+    len: u64,
+    modified: Option<std::time::SystemTime>,
+}
+
+/// The [`Stamp`] of the file at `path` (an error for a folder or what may not be read).
+pub(crate) fn stat(path: &str) -> std::result::Result<Stamp, String> {
+    let m = metadata(path).map_err(|e| e.to_string())?;
+    if !m.is_file() {
+        return Err(format!("{path} is not a file"));
+    }
+    Ok(Stamp { len: m.len(), modified: m.modified().ok() })
+}
+
+/// Turn `path` into an absolute path against the working directory (as it is when that fails).
+pub fn absolute_path(path: &str) -> String {
+    std::path::absolute(path).map_or_else(|_| path.to_string(), |p| p.to_string_lossy().into_owned())
+}
+
 /// Whether `path` is a folder (false when it may not be read).
 pub fn is_dir(path: impl AsRef<Path>) -> bool {
     metadata(path).is_ok_and(|m| m.is_dir())

@@ -59,7 +59,7 @@ pub fn specs() -> Vec<CommandSpec> {
         spec!(
             "node.create",
             "Create layer",
-            "{type: rectangle|ellipse|polygon|star|line|arrow|vector|text|frame|section|component|slice, x?, y? (relative to the parent frame; groups don't count), width?, height?, parent? (id; default: the page), index?, name?, text? | characters? (for text), path? | points? (vector: SVG path data | [[x,y],..]; x/y move their own origin, so the layer's left/top is x/y plus their box's unscaled offset), closed? (vector), props? {node.set keys}, select? (default true)}",
+            "{type: rectangle|ellipse|polygon|star|line|arrow|vector|text|frame|section|slice, x?, y? (relative to the parent frame; groups don't count), width?, height?, parent? (id; default: the page), index?, name?, text? | characters? (for text), path? | points? (vector: SVG path data | [[x,y],..]; x/y move their own origin, so the layer's left/top is x/y plus their box's unscaled offset), closed? (vector), props? {node.set keys}, select? (default true)}",
             true,
             create
         ),
@@ -135,8 +135,7 @@ pub fn specs() -> Vec<CommandSpec> {
 /// The top-most frame-like (or section) node on the page containing page point `pt`,
 /// excluding `exclude` and their descendants.
 pub fn frame_at(doc: &Document, page: NodeId, pt: Point, exclude: &[NodeId]) -> Option<NodeId> {
-    /// `locked`: inside an instance, where only slots (and what's in them) take layers.
-    fn rec(doc: &Document, id: NodeId, pt: Point, exclude: &[NodeId], depth: usize, locked: bool) -> Option<NodeId> {
+    fn rec(doc: &Document, id: NodeId, pt: Point, exclude: &[NodeId], depth: usize) -> Option<NodeId> {
         if depth > 128 || exclude.contains(&id) {
             return None;
         }
@@ -153,16 +152,15 @@ pub fn frame_at(doc: &Document, page: NodeId, pt: Point, exclude: &[NodeId]) -> 
         if is_container && !inside {
             return None;
         }
-        let locked = crate::components::locks_children(doc, id, locked);
         for c in n.children.iter().rev() {
-            if let Some(f) = rec(doc, *c, pt, exclude, depth + 1, locked) {
+            if let Some(f) = rec(doc, *c, pt, exclude, depth + 1) {
                 return Some(f);
             }
         }
-        (is_container && inside && !locked).then_some(id)
+        (is_container && inside).then_some(id)
     }
     let p = doc.node(page)?;
-    p.children.iter().rev().find_map(|c| rec(doc, *c, pt, exclude, 0, false))
+    p.children.iter().rev().find_map(|c| rec(doc, *c, pt, exclude, 0))
 }
 
 pub fn kind_for(t: &str) -> Option<(NodeKind, &'static str)> {
@@ -177,7 +175,6 @@ pub fn kind_for(t: &str) -> Option<(NodeKind, &'static str)> {
         "text" => (NodeKind::Text(TextData::default()), "Text"),
         "frame" => (NodeKind::Frame, "Frame"),
         "section" => (NodeKind::Section { contents_hidden: false }, "Section"),
-        "component" => (NodeKind::Component { description: String::new(), props: Default::default(), prop_order: Vec::new() }, "Component"),
         "group" => (NodeKind::Group, "Group"),
         "slice" => (NodeKind::Slice, "Slice"),
         _ => return None,
@@ -287,7 +284,7 @@ pub fn create(s: &mut Session, p: &Value) -> Result<Value> {
     let (mut w, mut h) = match base {
         "Line" | "Arrow" => (num_or(p, "width", 100.0), 0.0),
         "Text" => (num_or(p, "width", 0.0), num_or(p, "height", 0.0)),
-        "Frame" | "Component" => (num_or(p, "width", 100.0), num_or(p, "height", 100.0)),
+        "Frame" => (num_or(p, "width", 100.0), num_or(p, "height", 100.0)),
         "Section" => (num_or(p, "width", 400.0), num_or(p, "height", 300.0)),
         _ => (num_or(p, "width", 100.0), num_or(p, "height", 100.0)),
     };
@@ -340,7 +337,7 @@ pub fn create(s: &mut Session, p: &Value) -> Result<Value> {
                 return first;
             }
         }
-        if matches!(base, "Frame" | "Section" | "Component" | "Group") {
+        if matches!(base, "Frame" | "Section" | "Group") {
             s.doc().map(|d| d.next_name(base)).unwrap_or_else(|_| base.to_string())
         } else {
             base.to_string()

@@ -11,6 +11,10 @@ use super::{CommandSpec, ok};
 use crate::params::{f64_of, get, id, num, paints_of, req_string, req_targets, string, targets};
 use crate::{EngineError, Result, Session, bad, spec};
 
+/// The binding key prefix of an instance's component property value (`componentProperties/<name>`)
+/// a file may hold: kept as it is, never applied to the layer.
+const PROP_BINDING: &str = "componentProperties/";
+
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         spec!(
@@ -67,9 +71,6 @@ pub fn specs() -> Vec<CommandSpec> {
             let id = req_string("style.delete", p, "style")?;
             let doc = s.doc_mut()?;
             let sid = doc.style(&id).map(|st| st.id.clone()).ok_or_else(|| bad("style.delete", "no such style"))?;
-            if crate::library::is_remote_style(doc, &sid) {
-                return Err(EngineError::Disabled("style.delete".into(), crate::library::READ_ONLY.into()));
-            }
             doc.styles.retain(|st| st.id != sid);
             // Nodes (and text chars) keep their values but lose the link.
             for nid in doc.ids().collect::<Vec<_>>() {
@@ -196,10 +197,6 @@ fn paragraph_style_of(n: &Node, range: Option<(usize, usize)>) -> Option<Paragra
 }
 
 fn detach(s: &mut Session, p: &Value) -> Result<Value> {
-    crate::library::counting_links(s, true, |s| detach_style(s, p))
-}
-
-fn detach_style(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "style.detach";
     let which = req_string(cmd, p, "which")?;
     if which == "text" {
@@ -356,10 +353,6 @@ pub fn apply_style_ref(doc: &mut Document, id: NodeId, field: &str, sid: Option<
 }
 
 pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
-    crate::library::counting_links(s, false, |s| apply_style(s, p))
-}
-
-fn apply_style(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "style.apply";
     let st = req_string(cmd, p, "style")?;
     let style = s.doc()?.style(&st).cloned().ok_or_else(|| bad(cmd, format!("no style `{st}`")))?;
@@ -407,9 +400,6 @@ fn update(s: &mut Session, p: &Value) -> Result<Value> {
     let st = req_string(cmd, p, "style")?;
     let doc = s.doc_mut()?;
     let idx = doc.styles.iter().position(|x| x.id == st || x.name == st).ok_or_else(|| bad(cmd, "no such style"))?;
-    if doc.styles.get(idx).is_some_and(|x| crate::library::is_remote_style(doc, &x.id)) {
-        return Err(EngineError::Disabled(cmd.into(), crate::library::READ_ONLY.into()));
-    }
     let from = id(p, "from");
     let new_kind = if let Some(v) = get(p, "value") {
         let cur = doc.styles.get(idx).map(|x| x.kind.type_name()).unwrap_or("paint");
@@ -473,13 +463,9 @@ pub(crate) fn clean_name(name: &str) -> Option<String> {
     (!out.is_empty()).then(|| out.chars().take(500).collect())
 }
 
-/// The index of local style `st` (id or name); library styles are read-only.
+/// The index of style `st` (id or name).
 fn local_style_index(doc: &Document, cmd: &str, st: &str) -> Result<usize> {
-    let idx = doc.styles.iter().position(|x| x.id == st || x.name == st).ok_or_else(|| bad(cmd, format!("no style `{st}`")))?;
-    match doc.styles.get(idx) {
-        Some(x) if crate::library::is_remote_style(doc, &x.id) => Err(EngineError::Disabled(cmd.into(), crate::library::READ_ONLY.into())),
-        _ => Ok(idx),
-    }
+    doc.styles.iter().position(|x| x.id == st || x.name == st).ok_or_else(|| bad(cmd, format!("no style `{st}`")))
 }
 
 fn duplicate(s: &mut Session, p: &Value) -> Result<Value> {
@@ -548,9 +534,7 @@ fn rename_folder(s: &mut Session, p: &Value) -> Result<Value> {
     let to = style_name(cmd, &req_string(cmd, p, "name")?)?;
     let doc = s.doc_mut()?;
     let prefix = format!("{from}/");
-    let inside: Vec<usize> = (0..doc.styles.len())
-        .filter(|i| doc.styles.get(*i).is_some_and(|x| x.name.starts_with(&prefix) && !crate::library::is_remote_style(doc, &x.id)))
-        .collect();
+    let inside: Vec<usize> = (0..doc.styles.len()).filter(|i| doc.styles.get(*i).is_some_and(|x| x.name.starts_with(&prefix))).collect();
     if inside.is_empty() {
         return Err(bad(cmd, format!("no styles in folder `{from}`")));
     }
@@ -771,7 +755,7 @@ pub(crate) fn detach_edited(doc: &mut Document, before: &[std::sync::Arc<Node>])
             .keys()
             // A binding the edit itself changed is the edit's own: it stays.
             .filter(|f| old.bound.get(*f) == n.bound.get(*f))
-            .filter(|f| super::lists::list_binding(f).is_none() && !f.starts_with(crate::components::PROP_BINDING))
+            .filter(|f| super::lists::list_binding(f).is_none() && !f.starts_with(PROP_BINDING))
             .filter(|f| bound_field(old, f) != bound_field(n, f))
             .cloned()
             .collect();
@@ -887,7 +871,6 @@ fn apply_bindings_matching(doc: &mut Document, only: Option<&std::collections::B
         let mut effect_sets: Vec<(usize, String, VariableValue)> = Vec::new();
         let mut paint_sets: Vec<(bool, usize, Option<usize>, Color)> = Vec::new();
         let mut grid_sets: Vec<(usize, String, f64)> = Vec::new();
-        let mut prop_sets: Vec<(String, VariableValue)> = Vec::new();
         for (field, var) in binds {
             if !include(&field) {
                 continue;
@@ -914,9 +897,8 @@ fn apply_bindings_matching(doc: &mut Document, only: Option<&std::collections::B
                 }
                 continue;
             }
-            // `componentProperties/<name>`: an instance's boolean or text property value.
-            if let Some(name) = field.strip_prefix(crate::components::PROP_BINDING) {
-                prop_sets.push((name.to_string(), val));
+            // `componentProperties/<name>`: an instance's property value, which nothing applies.
+            if field.starts_with(PROP_BINDING) {
                 continue;
             }
             let jv = match &val {
@@ -959,9 +941,6 @@ fn apply_bindings_matching(doc: &mut Document, only: Option<&std::collections::B
         }
         if !grid_sets.is_empty() {
             super::lists::apply_grid_bindings(doc, id, &grid_sets);
-        }
-        if !prop_sets.is_empty() {
-            super::component::apply_prop_bindings(doc, id, &prop_sets);
         }
     }
 }

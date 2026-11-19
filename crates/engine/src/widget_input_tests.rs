@@ -6,8 +6,8 @@
 
 use serde_json::{Value, json};
 
-use crate::components::tests::{ex, idv, node};
 use crate::plugins_tests::{install, undo_len};
+use crate::test_helpers::{ex, idv, node};
 use crate::tools::{PointerEvent, PointerKind};
 use crate::widgets_tests::{W, err, state};
 use crate::{Session, textedit};

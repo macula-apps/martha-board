@@ -11,14 +11,10 @@ use figcraft_doc::*;
 use serde_json::json;
 
 use crate::Session;
-use crate::components::tests::{copy_of, ex, idv, node};
+use crate::test_helpers::{ex, idv, node};
 
 fn rect(s: &mut Session, x: f64, parent: NodeId) -> NodeId {
     idv(&ex(s, "shape.rectangle", json!({"x": x, "y": 20, "width": 50, "height": 40, "parent": parent})))
-}
-
-fn annotation(label: &str) -> Annotation {
-    Annotation { label: label.into(), properties: Vec::new(), category: None }
 }
 
 #[test]
@@ -109,7 +105,7 @@ fn damaged_snapshots_are_ignored() {
 }
 
 #[test]
-fn copies_and_component_sync_keep_dev_fields_as_before() {
+fn copies_keep_dev_fields_as_before() {
     let mut s = Session::new();
     let f = idv(&ex(&mut s, "frame.create", json!({"x": 0, "y": 0, "width": 300, "height": 100})));
     let a = rect(&mut s, 20.0, f);
@@ -128,40 +124,4 @@ fn copies_and_component_sync_keep_dev_fields_as_before() {
     let lone = s.selection()[0];
     let m = &node(&s, lone).measurements;
     assert_eq!((m.len(), m[0].to, m[0].side), (1, None, Some(Side::Bottom)));
-
-    // A main's own fields stay on the main; an instance's survive a main edit.
-    let g = idv(&ex(&mut s, "frame.create", json!({"x": 0, "y": 400, "width": 100, "height": 100, "name": "Card"})));
-    let inner = rect(&mut s, 0.0, g);
-    let c = idv(&ex(&mut s, "component.create", json!({"ids": [g]})));
-    {
-        let doc = s.doc_mut().unwrap();
-        doc.get_mut(c).unwrap().annotations.push(annotation("On the main"));
-        doc.get_mut(inner).unwrap().annotations.push(annotation("Inner on the main"));
-        doc.get_mut(inner).unwrap().measurements.push(Measurement { to: None, side: Some(Side::Top) });
-    }
-    let i = idv(&ex(&mut s, "instance.create", json!({"component": c, "x": 200, "y": 400})));
-    let icopy = copy_of(&s, i, inner);
-    assert!(node(&s, i).annotations.is_empty(), "the main's annotations stay on the main");
-    assert!(node(&s, icopy).annotations.is_empty() && node(&s, icopy).measurements.is_empty());
-    {
-        let doc = s.doc_mut().unwrap();
-        let n = doc.get_mut(i).unwrap();
-        n.annotations.push(annotation("On the instance"));
-        n.dev_resources.push(DevResource { url: "https://example.com/i".into(), name: "I".into() });
-        n.measurements.push(Measurement { to: None, side: Some(Side::Left) });
-        let n = doc.get_mut(icopy).unwrap();
-        n.annotations.push(annotation("Inner on the instance"));
-        n.measurements.push(Measurement { to: Some(i), side: None });
-    }
-    // A main edit rebuilds the instance: its own fields stay.
-    ex(&mut s, "node.set", json!({"id": inner, "props": {"fill": "#00ff00"}}));
-    ex(&mut s, "node.set", json!({"id": c, "props": {"width": 120}}));
-    let icopy = copy_of(&s, i, inner);
-    assert_eq!(node(&s, i).annotations[0].label, "On the instance");
-    assert_eq!(node(&s, i).dev_resources.len(), 1);
-    assert_eq!(node(&s, i).measurements.len(), 1);
-    assert_eq!(node(&s, icopy).annotations[0].label, "Inner on the instance");
-    assert_eq!(node(&s, icopy).measurements[0].to, Some(i), "kept across a main edit");
-    assert_eq!(node(&s, c).annotations[0].label, "On the main");
-    assert_eq!(node(&s, inner).measurements.len(), 1);
 }

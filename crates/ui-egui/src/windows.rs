@@ -294,7 +294,6 @@ pub fn open(app: &mut FigApp, ctx: &Context, index: Option<usize>, path: Option<
             // list height.
             ui: UiState {
                 title_bar: app.ui.title_bar,
-                left_tab: app.ui.left_tab,
                 left_width: app.ui.left_width,
                 right_width: app.ui.right_width,
                 pages_height: app.ui.pages_height,

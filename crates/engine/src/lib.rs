@@ -24,11 +24,6 @@ pub mod keymap;
 pub mod measure;
 mod selection;
 mod sharing;
-pub use assets::components;
-pub use assets::library;
-pub use assets::library_server;
-pub use assets::library_swap;
-pub use assets::playground;
 pub use assets::style_vars;
 pub use assets::token_roles;
 pub use assets::variable_data;
@@ -55,9 +50,6 @@ pub use canvas::textedit;
 pub use canvas::textpreview;
 pub use canvas::tools;
 pub use canvas::vectoredit;
-pub use content::datafill;
-pub use content::synthetic;
-pub use content::synthetic_ds;
 pub use content::templates;
 pub use content::textfit;
 pub use extensions::plugin_directory;
@@ -136,8 +128,6 @@ pub struct Session {
     pub last_command: Option<(String, Value)>,
     /// Status / toast message for the UI.
     pub message: Option<String>,
-    /// Library files read for the open documents.
-    pub libraries: library::Cache,
     /// Plugin modules loaded in this session and the last plugin run.
     pub plugins: plugins::Runtime,
     /// The live sessions (collaboration), one per document at most: status, peers, presence.
@@ -251,11 +241,7 @@ mod comments_polish_tests;
 #[cfg(test)]
 mod compare_tests;
 #[cfg(test)]
-mod component_cycle_tests;
-#[cfg(test)]
-mod components_behaviour_tests;
-#[cfg(test)]
-mod components_scale_tests;
+mod components_left_tests;
 #[cfg(test)]
 mod connector_anywhere_tests;
 #[cfg(test)]
@@ -266,8 +252,6 @@ mod cursor_tests;
 mod dark_page_text_tests;
 #[cfg(test)]
 mod dash_cap_tests;
-#[cfg(test)]
-mod datafill_tests;
 #[cfg(test)]
 mod default_props_tests;
 #[cfg(test)]
@@ -294,8 +278,6 @@ mod export_behaviour_tests;
 mod export_depth_tests;
 #[cfg(test)]
 mod export_profile_tests;
-#[cfg(test)]
-mod extended_chain_tests;
 #[cfg(test)]
 mod eyedropper_create_tests;
 #[cfg(test)]
@@ -325,8 +307,6 @@ mod group_panic_tests;
 #[cfg(test)]
 mod guide_snap_tests;
 #[cfg(test)]
-mod hide_publishing_tests;
-#[cfg(test)]
 mod history_behaviour_tests;
 #[cfg(test)]
 mod huge_stroke_tests;
@@ -349,10 +329,6 @@ mod inspect_behaviour_tests;
 #[cfg(test)]
 mod inspect_fields_tests;
 #[cfg(test)]
-mod instance_modes_tests;
-#[cfg(test)]
-mod instance_resizing_tests;
-#[cfg(test)]
 mod interaction_rollback_tests;
 #[cfg(test)]
 mod invite_links_tests;
@@ -362,16 +338,6 @@ mod jpg_export_tests;
 mod keymap_tests;
 #[cfg(test)]
 mod layout_suggest_tests;
-#[cfg(test)]
-mod library_asset_counts_tests;
-#[cfg(test)]
-mod library_beacon_tests;
-#[cfg(test)]
-mod library_path_tests;
-#[cfg(test)]
-mod library_range_styles_tests;
-#[cfg(test)]
-mod library_variables_tests;
 #[cfg(test)]
 mod line_endings_tests;
 #[cfg(test)]
@@ -402,8 +368,6 @@ mod menu_gaps_tests;
 mod move_shortcut_tests;
 #[cfg(test)]
 mod moved_by_tests;
-#[cfg(test)]
-mod nested_override_tests;
 #[cfg(test)]
 mod node_find_tests;
 #[cfg(test)]
@@ -453,8 +417,6 @@ mod place_crosshair_tests;
 #[cfg(test)]
 mod placed_image_size_tests;
 #[cfg(test)]
-mod playground_tests;
-#[cfg(test)]
 mod plugin_data_tests;
 #[cfg(test)]
 mod plugin_directory_tests;
@@ -464,8 +426,6 @@ mod plugin_panels_tests;
 pub(crate) mod plugins_tests;
 #[cfg(test)]
 mod progressive_blur_tests;
-#[cfg(test)]
-mod prop_order_tests;
 #[cfg(test)]
 mod property_copy_tests;
 #[cfg(test)]
@@ -482,8 +442,6 @@ mod save_disk_changes_tests;
 mod save_format_tests;
 #[cfg(test)]
 mod scale_tool_tests;
-#[cfg(test)]
-mod scaled_instance_tests;
 #[cfg(test)]
 mod section_contents_tests;
 #[cfg(test)]
@@ -505,8 +463,6 @@ mod shapes_behaviour_tests;
 #[cfg(test)]
 mod shortcut_parity_tests;
 #[cfg(test)]
-mod slot_tests;
-#[cfg(test)]
 mod stored_ids_tests;
 #[cfg(test)]
 mod stroke_cap_error_tests;
@@ -522,6 +478,8 @@ mod styles_behaviour_tests;
 mod svg_import_tests;
 #[cfg(test)]
 mod templates_tests;
+#[cfg(test)]
+mod test_helpers;
 #[cfg(test)]
 mod test_variables;
 #[cfg(test)]
@@ -558,10 +516,6 @@ mod variable_tests;
 mod variables_behaviour_tests;
 #[cfg(test)]
 mod variables_colour_tests;
-#[cfg(test)]
-mod variant_shared_props_tests;
-#[cfg(test)]
-mod variants_discovery_tests;
 #[cfg(test)]
 mod vector_behaviour_tests;
 #[cfg(test)]

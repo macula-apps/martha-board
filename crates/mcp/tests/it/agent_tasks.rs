@@ -41,40 +41,6 @@ fn task_card_with_auto_layout() {
     assert_eq!(n["cornerRadius"], json!(16.0));
 }
 
-/// Task 2: a component with two instances; override one instance's text, then edit the main.
-#[test]
-fn task_component_instances_and_overrides() {
-    let mut c = Client::new();
-    let frame = c.create(json!({"type": "frame", "name": "Chip", "x": 0, "y": 0, "width": 120, "height": 40, "props": {"fill": "#EEEEEE", "layout": "horizontal", "padding": 8}}));
-    let label = c.create(json!({"type": "text", "parent": frame, "text": "Label"}));
-    let comp = c.run("component.create", json!({"ids": [frame]}))["id"].clone();
-    assert_eq!(c.node(&comp)["type"].as_str().unwrap().to_lowercase(), "component");
-
-    let i1 = c.run("instance.create", json!({"component": comp, "x": 0, "y": 100}))["id"].clone();
-    let i2 = c.run("instance.create", json!({"component": comp, "x": 200, "y": 100}))["id"].clone();
-    for i in [&i1, &i2] {
-        let n = c.node(i);
-        assert_eq!(n["type"].as_str().unwrap().to_lowercase(), "instance");
-        assert_eq!(n["mainComponent"], comp);
-        assert_eq!(n["children"].as_array().unwrap().len(), 1);
-    }
-    // Override the text in the first instance.
-    let inner1 = c.node(&i1)["children"][0]["id"].clone();
-    c.ok("type_text", json!({"id": inner1, "text": "Design"}));
-    let n1 = c.node(&i1);
-    assert_eq!(n1["children"][0]["characters"], "Design");
-    assert!(n1["children"][0]["overrides"].to_string().contains("characters"), "override recorded: {}", n1["children"][0]);
-    // Editing the main component's fill propagates to both instances; the text override survives.
-    c.ok("set_properties", json!({"ids": [comp], "props": {"fill": "#FFD43B"}}));
-    c.ok("set_properties", json!({"ids": [label], "props": {"characters": "Tag"}}));
-    let n1 = c.node(&i1);
-    let n2 = c.node(&i2);
-    assert_eq!(n1["fills"][0]["color"].as_str().unwrap().to_uppercase(), "#FFD43B");
-    assert_eq!(n2["fills"][0]["color"].as_str().unwrap().to_uppercase(), "#FFD43B");
-    assert_eq!(n1["children"][0]["characters"], "Design");
-    assert_eq!(n2["children"][0]["characters"], "Tag");
-}
-
 /// Task 3: a gradient fill and a drop shadow, given in agent-friendly JSON (hex colours).
 #[test]
 fn task_gradient_and_drop_shadow() {

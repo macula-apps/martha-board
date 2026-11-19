@@ -5,8 +5,8 @@
 
 use serde_json::{Value, json};
 
-use crate::components::tests::ex;
 use crate::plugins_tests::{install, layer_count, lit, manifest, rect, undo_len};
+use crate::test_helpers::ex;
 use crate::{EngineError, Session};
 
 /// Lays out a test plugin's strings and builds its module.

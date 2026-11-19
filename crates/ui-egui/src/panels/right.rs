@@ -32,7 +32,7 @@ pub(crate) use menu::menu_row_width;
 #[cfg(test)]
 pub(crate) use menu::preview_blend;
 pub use menu::{blend_menu, context_popup, menu_check, menu_icon_item, menu_item, menu_item_beside_checks, menu_item_with, menu_popup, menu_row};
-pub(crate) use menu::{block, menu_row_lit, menu_style, row, row_rect};
+pub(crate) use menu::{block, menu_style, row};
 use paints::{appearance, paints};
 pub(crate) use stroke::{CAP_ART_W, cap_art, join_label};
 
@@ -242,7 +242,7 @@ fn design(app: &mut FigApp, ui: &mut Ui) {
                 crate::scale_panel::section(app, ui, &shown, &sel);
                 widgets::separator(ui);
             }
-            position(app, ui, &doc, &shown, &sel);
+            position(app, ui, &doc, &sel);
         }
     }
     widgets::separator(ui);
@@ -338,7 +338,7 @@ fn page_section(app: &mut FigApp, ui: &mut Ui, doc: &Document) {
         });
     });
     widgets::separator(ui);
-    widgets::section_header(ui, tr("Local styles"), &[], figcraft_engine::library::local_styles(doc).next().is_none());
+    widgets::section_header(ui, tr("Local styles"), &[], doc.styles.is_empty());
     crate::style_picker::local_styles(app, ui, doc);
     widgets::separator(ui);
     crate::export_panel::page_section(app, ui, doc, page);
@@ -428,17 +428,11 @@ fn header(app: &mut FigApp, ui: &mut Ui, doc: &Document, sel: &[NodeId]) {
     }
     // Quick actions on the right.
     let mut x = r.max.x - 8.0;
-    let actions = [
-        (Icon::Component, tr("Create component"), "component.create"),
-        (Icon::Mask, tr("Use as mask"), "object.mask"),
-        (Icon::Union, tr("Boolean groups"), "bool.union"),
-    ];
+    let actions = [(Icon::Mask, tr("Use as mask"), "object.mask"), (Icon::Union, tr("Boolean groups"), "bool.union")];
     // Layers in boolean groups, or one boolean group: the operation they use (checked in the menu).
     let current = figcraft_engine::booleans::shown_op(doc, sel);
     for (icon, label, cmd) in actions.into_iter().rev() {
-        // With several layers the component button is a dropdown: a small chevron sits beside its icon.
-        let dropdown = cmd == "component.create" && sel.len() > 1;
-        let bw = if dropdown { 34.0 } else { 24.0 };
+        let bw = 24.0;
         let br = Rect::from_min_size(pos2(x - bw, r.center().y - 12.0), vec2(bw, 24.0));
         let tip = if cmd == "bool.union" { label } else { crate::shortcuts::tip(label, cmd) };
         let bresp = ui.interact(br, ui.scope_id().with(("qa", cmd)), Sense::click()).tip(tip);
@@ -451,9 +445,6 @@ fn header(app: &mut FigApp, ui: &mut Ui, doc: &Document, sel: &[NodeId]) {
             _ => icon,
         };
         icons::paint(ui.painter(), crate::widgets::icon_glyph_rect(br), icon, t.icon);
-        if dropdown {
-            icons::paint(ui.painter(), Rect::from_center_size(pos2(br.max.x - 6.0, br.center().y), vec2(8.0, 8.0)), Icon::Chevron, t.icon_secondary);
-        }
         if cmd == "bool.union" {
             menu_popup(&bresp).width(180.0).show(|ui| {
                 for (op, c) in [
@@ -478,69 +469,22 @@ fn header(app: &mut FigApp, ui: &mut Ui, doc: &Document, sel: &[NodeId]) {
                     ui.close();
                 }
             });
-        } else if cmd == "component.create" && sel.len() > 1 {
-            // Several layers: the button opens a menu, as Figma's does (#2088). One layer keeps the plain click.
-            let create = crate::i18n::command("component.create", "Create component");
-            let multiple = crate::i18n::command("component.createMultiple", "Create multiple components");
-            let set = crate::i18n::command("component.createSet", "Create component set");
-            // Like the layers menu, leave out what the selection can't use.
-            let can_set = figcraft_engine::cmd::component::can_create_set(doc, sel);
-            let mut entries = vec![("component.create", &create), ("component.createMultiple", &multiple)];
-            if can_set {
-                entries.push(("component.createSet", &set));
-            }
-            // Wide enough for the longest translated label (the rows grow with it, the menu never clips).
-            let widest = entries
-                .iter()
-                .map(|(_, l)| ui.painter().layout_no_wrap(l.to_string(), regular(11.5), Color32::PLACEHOLDER).size().x)
-                .fold(0.0f32, f32::max);
-            menu_popup(&bresp).width(menu::menu_row_width(widest, 0.0).ceil().max(160.0)).show(|ui| {
-                for (c, label) in &entries {
-                    let key = crate::shortcuts::shortcut(c).unwrap_or("");
-                    if menu_item(ui, label, key) {
-                        app.run(c, json!({}));
-                        ui.close();
-                    }
-                }
-            });
         } else if bresp.clicked() {
             app.run(cmd, json!({}));
         }
         x -= bw + 2.0;
     }
-    crate::component_panel::instance_section(app, ui, doc, sel);
 }
 
-/// Whether a selected layer is an instance or in one, and whether one is inside an instance (not
-/// the instance itself): the Design panel asks every frame, kept while the document and the
-/// selection stay the same ([`crate::selection_cache`]).
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct InInstance {
-    pub any: bool,
-    pub nested: bool,
-}
-
-pub(crate) fn in_instance(ctx: &egui::Context, doc: &Arc<Document>, sel: &[NodeId]) -> InInstance {
-    use figcraft_engine::components::{inside_instance, owning_instance};
-    crate::selection_cache::cached(ctx, "in instance", doc, sel, &[], || InInstance {
-        any: sel.iter().any(|i| owning_instance(doc, *i).is_some()),
-        nested: sel.iter().any(|i| inside_instance(doc, *i)),
-    })
-}
-
-/// The Position section: its values from `doc`, what doesn't change with where the layers are from
-/// `shown` (the panel's document, see `design`).
-fn position(app: &mut FigApp, ui: &mut Ui, doc: &Arc<Document>, shown: &Arc<Document>, sel: &[NodeId]) {
+/// The Position section: its values from `doc`.
+fn position(app: &mut FigApp, ui: &mut Ui, doc: &Arc<Document>, sel: &[NodeId]) {
     widgets::section_header(ui, tr("Position"), &[], false);
-    // Layers inside an instance take their place and constraints from the main component.
-    let nested = in_instance(ui.ctx(), shown, sel).nested;
-    ui.add_enabled_ui(!nested, |ui| position_fields(app, ui, doc, sel))
-        .response
-        .on_disabled_hover_text(tr("Layers in an instance take their position from the main component"));
+    position_fields(app, ui, doc, sel);
     ui.add_space(8.0);
 }
 
-/// What the position fields show of the selection (`None`: mixed), kept like [`in_instance`].
+/// What the position fields show of the selection (`None`: mixed), kept while the document and the
+/// selection stay the same ([`crate::selection_cache`]).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct PositionValues {
     pub can_align: bool,

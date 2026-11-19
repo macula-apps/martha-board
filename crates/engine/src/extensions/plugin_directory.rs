@@ -221,7 +221,7 @@ pub(crate) fn delete_installed(s: &Session, p: &InstalledPlugin) {
 #[cfg(not(target_arch = "wasm32"))]
 fn bundle_from_disk(cmd: &str, path: &str) -> Result<Bundle> {
     use crate::plugins::{module_file, read_file};
-    let mut file = std::path::PathBuf::from(crate::library::absolute_path(path.trim()));
+    let mut file = std::path::PathBuf::from(crate::file_access::absolute_path(path.trim()));
     if crate::file_access::is_dir(&file) {
         file.push(MANIFEST_FILE);
     }

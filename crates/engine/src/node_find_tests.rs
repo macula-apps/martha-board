@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 
 use crate::Session;
-use crate::components::tests::{ex, idv};
+use crate::test_helpers::{ex, idv};
 
 fn add(s: &mut Session, parent: NodeId, kind: NodeKind, name: &str) -> NodeId {
     s.doc_mut().unwrap().create(parent, kind, name, 0.0, 0.0, 100.0, 100.0).unwrap()
@@ -77,28 +77,6 @@ fn node_find_other_page_requires_root_and_does_not_switch_pages() {
     found(&mut s, json!({"root": other_page}), &[root, child]);
     found(&mut s, json!({"root": root}), &[child]);
     assert_eq!(s.page().unwrap(), page);
-}
-
-#[test]
-fn node_find_instances_match_main_name_and_visit_actual_children_only() {
-    let mut s = Session::new();
-    let page = s.page().unwrap();
-    let main =
-        add(&mut s, page, NodeKind::Component { description: String::new(), props: Default::default(), prop_order: Vec::new() }, "CAFÉ [Button]");
-    let original = add(&mut s, main, NodeKind::Text(TextData::new("Original")), "Original");
-    let inst = idv(&ex(&mut s, "instance.create", json!({"component": main})));
-    let child = s.doc().unwrap().get(inst).unwrap().children[0];
-    ex(&mut s, "node.set", json!({"ids": [inst], "props": {"name": "Copy"}}));
-    ex(&mut s, "text.set", json!({"id": child, "text": "Changed"}));
-    let broken = add(&mut s, page, NodeKind::Instance { component: NodeId(u64::MAX), props: Default::default() }, "Missing");
-    found(&mut s, json!({"component": "café [bUt"}), &[inst]);
-    found(&mut s, json!({"component": "", "type": "instance", "name": "copy"}), &[inst]);
-    found(&mut s, json!({"component": "copy"}), &[]);
-    found(&mut s, json!({"component": "button", "text": "Changed"}), &[]);
-    found(&mut s, json!({"root": inst}), &[child]);
-    found(&mut s, json!({"root": inst, "text": "original"}), &[]);
-    found(&mut s, json!({"root": inst, "text": "changed"}), &[child]);
-    found(&mut s, json!({}), &[main, original, inst, child, broken]);
 }
 
 #[test]

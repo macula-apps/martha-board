@@ -63,7 +63,15 @@ pub(crate) fn add_text(doc: &mut Document, parent: NodeId, text: &str, size: f64
 pub const STICKY_TEXT_SIZE: f64 = 16.0;
 
 /// A sticky note's layers: the frame, the note and (when known) its author.
-fn make_sticky(doc: &mut Document, parent: NodeId, at: (f64, f64), text: &str, color: Color, author: &str, size: f64) -> Result<(NodeId, NodeId)> {
+pub(super) fn make_sticky(
+    doc: &mut Document,
+    parent: NodeId,
+    at: (f64, f64),
+    text: &str,
+    color: Color,
+    author: &str,
+    size: f64,
+) -> Result<(NodeId, NodeId)> {
     let id = add(doc, parent, NodeKind::Frame, "Sticky", at, (STICKY, STICKY), |n| {
         n.fills = vec![Paint::solid(color)];
         n.corners.radii = [2.0; 4];
@@ -268,7 +276,7 @@ fn drop_point(cmd: &str, p: &Value) -> Result<Option<(f64, f64)>> {
 }
 
 /// A shape with text's layers: the frame, its outline and its text.
-fn make_shape(
+pub(super) fn make_shape(
     doc: &mut Document,
     parent: NodeId,
     at: (f64, f64),

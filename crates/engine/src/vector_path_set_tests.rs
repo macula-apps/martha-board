@@ -2,7 +2,7 @@
 //! the layer list, paints, effects, styles, bindings and constraints. The path is read as
 //! `node.create` reads it (`width`/`height` scale it), its own box goes at the layer's origin (or at
 //! `x`/`y` plus the box's offset, as create places it), undo brings the old path back, and data that
-//! can't draw, layers that aren't vectors and layers inside an instance are refused.
+//! can't draw and layers that aren't vectors are refused.
 
 use figcraft_doc::{NodeId, NodeKind, VectorNetwork};
 use serde_json::{Value, json};
@@ -179,25 +179,6 @@ fn layers_that_arent_vectors_are_refused_alone_and_skipped_among_vectors() {
     let doc = s.doc().unwrap();
     assert_eq!((doc.node(r).unwrap().width, doc.node(r).unwrap().opacity), (100.0, 0.5), "the rectangle gets the other keys");
     assert_eq!(frame(&s, v).2, 30.0);
-}
-
-#[test]
-fn a_vector_inside_an_instance_is_refused_and_its_main_reaches_it() {
-    let mut s = Session::new();
-    let f = id(&ex(&mut s, "node.create", json!({"type": "frame", "width": 50, "height": 50})));
-    let v = vector(&mut s, json!({"path": "M0 0 L10 10", "parent": f}));
-    let comp = id(&ex(&mut s, "component.create", json!({"ids": [f]})));
-    let inst = id(&ex(&mut s, "instance.create", json!({"component": comp, "x": 200, "y": 0})));
-    let copy = s.doc().unwrap().node(inst).unwrap().children[0];
-    assert!(matches!(s.doc().unwrap().node(copy).unwrap().kind, NodeKind::Vector { .. }));
-    let msg = bad_msg(s.execute("node.set", &json!({"ids": [copy], "props": {"path": "M0 0 L30 0"}})));
-    assert!(msg.contains("inside an instance"), "{msg}");
-    // The main's vector takes it, and the instance follows.
-    let main_vector = s.doc().unwrap().node(comp).unwrap().children[0];
-    assert_eq!(main_vector, v);
-    ex(&mut s, "node.set", json!({"ids": [main_vector], "props": {"path": "M0 0 L30 0 L30 12 Z"}}));
-    assert_eq!(net(&s, copy), net(&s, main_vector));
-    assert_eq!((frame(&s, copy).2, frame(&s, copy).3), (30.0, 12.0));
 }
 
 #[test]

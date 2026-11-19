@@ -7,9 +7,9 @@
 use serde_json::json;
 
 use crate::Session;
-use crate::components::tests::{ex, idv};
 use crate::paint_tests::fill;
 use crate::plugins_tests::rect;
+use crate::test_helpers::{ex, idv};
 use crate::test_variables as tv;
 use figcraft_color::Color;
 use figcraft_doc::{ColorOperand, VariableValue};

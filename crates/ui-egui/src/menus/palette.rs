@@ -154,7 +154,7 @@ pub(super) fn palette(app: &mut FigApp, ctx: &egui::Context) {
 }
 
 /// The rows a palette tab shows for the query, by section: All has Recents, the commands by menu,
-/// then plugins and widgets; Assets this file's components and styles; Plugins & widgets those.
+/// then plugins and widgets; Assets this file's styles; Plugins & widgets those.
 pub(crate) fn palette_sections(app: &FigApp, q: &str, tab: PaletteTab) -> Vec<(String, Vec<ActionRow>)> {
     let mut out = match tab {
         PaletteTab::All => {
@@ -174,8 +174,8 @@ pub(crate) fn palette_sections(app: &FigApp, q: &str, tab: PaletteTab) -> Vec<(S
     out
 }
 
-/// Run a palette row: `command:<id>`, `plugin:<plugin>/<command>`, `widget:<plugin>`,
-/// `component:<node>` or `style:<id>`.
+/// Run a palette row: `command:<id>`, `plugin:<plugin>/<command>`, `widget:<plugin>` or
+/// `style:<id>`.
 pub(crate) fn run_action(app: &mut FigApp, key: &str) {
     if let Some(id) = key.strip_prefix("command:") {
         record_recent(app, key);
@@ -188,11 +188,6 @@ pub(crate) fn run_action(app: &mut FigApp, key: &str) {
     } else if let Some(plugin) = key.strip_prefix("widget:") {
         record_recent(app, key);
         app.run("widget.insert", json!({ "plugin": plugin }));
-    } else if let Some(node) = key.strip_prefix("component:") {
-        if let Ok(n) = node.parse::<u64>() {
-            let (cx, cy) = app.session.ds().map(|d| (d.view.cx, d.view.cy)).unwrap_or((0.0, 0.0));
-            app.run("instance.place", json!({ "component": n, "x": cx, "y": cy }));
-        }
     } else if let Some(style) = key.strip_prefix("style:") {
         if app.session.selection().is_empty() {
             app.toast(tr("Select layers to apply the style to"));
@@ -371,24 +366,17 @@ fn widget_rows(app: &FigApp, q: &str) -> Vec<ActionRow> {
         .collect()
 }
 
-/// This file's components and styles, filtered by the query.
+/// This file's styles, filtered by the query.
 fn asset_sections(app: &FigApp, q: &str) -> Vec<(String, Vec<ActionRow>)> {
     let ql = q.to_lowercase();
     let Ok(doc) = app.session.doc() else { return Vec::new() };
-    let components: Vec<ActionRow> = figcraft_engine::library::local_components(doc)
+    let styles: Vec<ActionRow> = doc
+        .styles
         .iter()
-        .filter_map(|id| doc.node(*id))
-        .filter(|n| matches(&ql, &n.name, ""))
-        .map(|n| ActionRow { key: format!("component:{}", n.id.0), label: n.name.clone(), hint: tr("Component").to_string(), tile: None })
-        .collect();
-    let styles: Vec<ActionRow> = figcraft_engine::library::local_styles(doc)
         .filter(|s| matches(&ql, &s.name, ""))
         .map(|s| ActionRow { key: format!("style:{}", s.id), label: s.name.clone(), hint: tr("Style").to_string(), tile: None })
         .collect();
     let mut out = Vec::new();
-    if !components.is_empty() {
-        out.push((tr("Components").to_string(), components));
-    }
     if !styles.is_empty() {
         out.push((tr("Styles").to_string(), styles));
     }

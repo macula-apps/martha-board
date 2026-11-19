@@ -68,7 +68,7 @@ pub(crate) fn open(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(i) = s.docs.iter().position(|d| d.path.as_deref() == Some(path.as_str())) {
         s.active = i;
         remember(s, &path);
-        let stale = s.ds()?.on_disk.as_ref().is_some_and(|read| crate::library::stat(&path).ok().as_ref() != Some(read));
+        let stale = s.ds()?.on_disk.as_ref().is_some_and(|read| crate::file_access::stat(&path).ok().as_ref() != Some(read));
         if !boolean(p, "reload").unwrap_or(false) {
             return Ok(if stale { json!({"index": i, "stale": true}) } else { json!({"index": i}) });
         }
@@ -85,7 +85,7 @@ pub(crate) fn open(s: &mut Session, p: &Value) -> Result<Value> {
         return Ok(json!({"index": i, "reloaded": true}));
     }
     // Stamped before reading: a change made during the read makes the next save refuse.
-    let on_disk = crate::library::stat(&path).ok();
+    let on_disk = crate::file_access::stat(&path).ok();
     let loaded = load_path(&path)?;
     remember(s, &path);
     let native = matches!(ext(&path).as_str(), "figcraft" | "json");
@@ -115,7 +115,7 @@ pub(crate) fn open(s: &mut Session, p: &Value) -> Result<Value> {
 pub(super) fn revert(s: &mut Session) -> Result<()> {
     let path = s.ds()?.path.clone().ok_or_else(|| EngineError::Disabled("file.revert".into(), "the file was never saved".into()))?;
     // Stamped before reading: a change made during the read makes the next save refuse.
-    let on_disk = crate::library::stat(&path).ok();
+    let on_disk = crate::file_access::stat(&path).ok();
     let loaded = load_path(&path)?;
     let i = s.active;
     let uid = s.ds()?.uid;
@@ -242,14 +242,9 @@ pub(super) fn append_pages(doc: &mut Document, other: &Document) -> Result<Vec<N
             map.insert(id, doc.alloc_id());
         }
     }
-    // Library copies a .fig import keeps (cached definitions) have no library record to follow:
-    // the layers of its store come along into the store of `doc`. Recorded copies are left to
-    // `merge_store`, which shares them with copies `doc` already has.
-    let cached: Vec<NodeId> = other
-        .library_store()
-        .and_then(|s| other.node(s))
-        .map(|s| s.children.iter().copied().filter(|root| other.libraries.import_of(*root).is_none()).collect())
-        .unwrap_or_default();
+    // The library copies `other` keeps (the mains of its instances of library components) come
+    // along into the store of `doc`, so those instances keep pointing at their own mains.
+    let cached: Vec<NodeId> = other.library_store().and_then(|s| other.node(s)).map(|s| s.children.clone()).unwrap_or_default();
     for root in &cached {
         for id in other.subtree(*root) {
             map.insert(id, doc.alloc_id());
@@ -285,6 +280,5 @@ pub(super) fn append_pages(doc: &mut Document, other: &Document) -> Result<Vec<N
             n.source = Some(src);
         }
     }
-    crate::library::merge_store(doc, other, &map)?;
     Ok(new_pages)
 }

@@ -1,6 +1,4 @@
-use super::{
-    Arc, COMPONENT, Color32, CornerRadius, Document, FigApp, NodeId, NodeKind, Point, Pos2, Rect, Shape, Stroke, pos2, regular, semibold, tr, vec2,
-};
+use super::{Arc, Color32, Document, FigApp, NodeId, NodeKind, Point, Pos2, Shape, Stroke, vec2};
 
 pub(super) fn stroke(c: Color32, w: f32) -> Stroke {
     Stroke::new(w, c)
@@ -66,87 +64,6 @@ pub(crate) fn node_quad(app: &FigApp, doc: &Document, id: NodeId) -> Option<[Pos
 
 pub(super) fn quad(painter: &egui::Painter, q: [Pos2; 4], s: Stroke) {
     painter.add(Shape::closed_line(q.to_vec(), s));
-}
-
-/// The slots of the selected components and instances (and a slot being dropped onto): a dashed
-/// outline and the slot's name above its top-left corner, like a frame label (never over the
-/// content).
-pub(super) fn slot_badges(app: &FigApp, painter: &egui::Painter, doc: &Arc<Document>, sel: &[NodeId], drop: Option<NodeId>) {
-    let key = [drop.map_or(0, |d| d.0.wrapping_add(1))];
-    // Which slots show doesn't change while the selection is only moved: the gesture's start keeps it.
-    let base = app.session.ds().ok().and_then(crate::selection_cache::moved).map(|(b, _)| b);
-    let from = base.as_ref().unwrap_or(doc);
-    let slots = crate::selection_cache::cached(painter.ctx(), "slots", from, sel, &key, || slots_shown(from, sel, drop));
-    for (id, name) in slots {
-        let Some(q) = node_quad(app, doc, id) else { continue };
-        if !Rect::from_points(&q).intersects(app.canvas.rect) {
-            continue;
-        }
-        painter.extend(Shape::dashed_line(&[q[0], q[1], q[2], q[3], q[0]], stroke(COMPONENT, 1.0), 4.0, 3.0));
-        // The label, when the slot is wide enough on screen to hold it.
-        let galley = painter.layout_no_wrap(name, regular(10.0), COMPONENT);
-        let (w, h) = (galley.size().x + 14.0, galley.size().y.max(11.0));
-        if (q[1] - q[0]).length() < w {
-            continue;
-        }
-        let at = q[0] - vec2(0.0, h + 2.0);
-        crate::icons::paint(painter, Rect::from_min_size(pos2(at.x, at.y + (h - 11.0) / 2.0), vec2(11.0, 11.0)), crate::icons::Icon::Slot, COMPONENT);
-        painter.galley(pos2(at.x + 14.0, at.y + (h - galley.size().y) / 2.0), galley, COMPONENT);
-    }
-}
-
-/// The slots [`slot_badges`] shows, with their names: those of the selected components and
-/// instances (and of the ones the selected layers are in), and the slot being dropped onto.
-fn slots_shown(doc: &Document, sel: &[NodeId], drop: Option<NodeId>) -> Vec<(NodeId, String)> {
-    use figcraft_engine::components::{owning_component, owning_instance, slot_name, slots_of};
-    let mut roots: Vec<NodeId> = Vec::new();
-    for id in sel {
-        let root = match doc.node(*id).map(|n| &n.kind) {
-            Some(NodeKind::Instance { .. } | NodeKind::Component { .. } | NodeKind::ComponentSet { .. }) => Some(*id),
-            _ => owning_instance(doc, *id).or_else(|| owning_component(doc, *id)),
-        };
-        if let Some(r) = root.filter(|r| !roots.contains(r)) {
-            roots.push(r);
-        }
-    }
-    let mut slots: Vec<(NodeId, String)> = roots.iter().flat_map(|r| slots_of(doc, *r)).collect();
-    if let Some(d) = drop
-        && !slots.iter().any(|(s, _)| *s == d)
-        && let Some(name) = slot_name(doc, d)
-    {
-        slots.push((d, name));
-    }
-    slots
-}
-
-/// The instance an Alt-drop of a component from the Assets panel swaps: tinted and outlined in
-/// the component colour, with a "Swap instance" label above its top-left corner.
-pub(super) fn swap_highlight(app: &FigApp, painter: &egui::Painter, doc: &Document, id: NodeId) {
-    let Some(q) = node_quad(app, doc, id) else { return };
-    // White on the component colour, in both themes (like the canvas's selection labels).
-    let ink = Color32::WHITE;
-    painter.add(Shape::convex_polygon(q.to_vec(), COMPONENT.gamma_multiply(0.12), Stroke::NONE));
-    quad(painter, q, stroke(COMPONENT, 2.0));
-    let galley = painter.layout_no_wrap(tr("Swap instance").to_string(), semibold(10.0), ink);
-    let size = vec2(galley.size().x + 26.0, 18.0);
-    let top = Rect::from_points(&q).min;
-    let pill = Rect::from_min_size(pos2(top.x, top.y - size.y - 4.0), size);
-    painter.rect_filled(pill, CornerRadius::same(4), COMPONENT);
-    crate::icons::paint(
-        painter,
-        Rect::from_center_size(pos2(pill.min.x + 11.0, pill.center().y), vec2(10.0, 10.0)),
-        crate::icons::Icon::Instance,
-        ink,
-    );
-    painter.galley(pos2(pill.min.x + 20.0, pill.center().y - galley.size().y / 2.0), galley, ink);
-}
-
-/// The outline colour for a layer: purple for components, sets and instances and every layer in
-/// them, the page's overlay `green` otherwise.
-pub(super) fn outline_colour(doc: &Document, id: NodeId, green: Color32) -> Color32 {
-    use figcraft_engine::components::{owning_component, owning_instance};
-    let set = matches!(doc.node(id).map(|n| &n.kind), Some(NodeKind::ComponentSet { .. }));
-    if set || owning_component(doc, id).is_some() || owning_instance(doc, id).is_some() { COMPONENT } else { green }
 }
 
 /// The path a layer's hover and selection outline follows, in its own space, when that isn't just

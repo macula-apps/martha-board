@@ -96,7 +96,7 @@ fn rect(s: &mut Session, parent: Option<NodeId>, x: f64, y: f64) -> NodeId {
 }
 
 /// Plain layers (one bound to variables), a layer in a group, one ignoring its frame's auto layout
-/// and one in a main component with an instance, all selected; then pressed at (20, 20) and
+/// and one in a frame with a copy beside it, all selected; then pressed at (20, 20) and
 /// dragged through `to`.
 fn drag_preview(shortcut: bool, to: &[(f64, f64)]) -> (Document, Document) {
     NO_MOVE_SHORTCUT.with(|c| c.set(!shortcut));
@@ -121,8 +121,7 @@ fn drag_preview(shortcut: bool, to: &[(f64, f64)]) -> (Document, Document) {
     sel.push(free);
     let c = id_of(&s.execute("frame.create", &json!({"x": 0, "y": 400, "width": 200, "height": 200})).unwrap()["id"]).unwrap();
     sel.push(rect(&mut s, Some(c), 10.0, 410.0));
-    let main = id_of(&s.execute("component.create", &json!({"ids": [c]})).unwrap()["id"]).unwrap();
-    s.execute("instance.create", &json!({"component": main, "x": 300, "y": 400})).unwrap();
+    s.execute("edit.duplicate", &json!({"ids": [c], "dx": 300})).unwrap();
     s.execute("select.set", &json!({"ids": sel})).unwrap();
     assert_eq!(s.selection().len(), sel.len());
     let ev = |kind, (x, y): (f64, f64)| PointerEvent::at(kind, x, y, 1.0);

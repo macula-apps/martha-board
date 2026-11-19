@@ -123,18 +123,10 @@ const DENIED: &[&str] = &[
     "help.",
     "plugin.",
     "plugins.",
-    "libraries.",
-    "library.add",
-    // Contacts the servers a file names, and remembers them as yours (#1097).
-    "library.check",
-    // Uploads the open document to a server.
-    "library.publishToServer",
     "edit.undo",
     "edit.redo",
     "edit.repeat",
     "command.batch",
-    // Runs other commands inside (duplicate, edit, export), past this policy, like a batch.
-    "data.fill",
     // Network sessions, online files and their recovery copies on disk.
     "collab.",
     // Opens files in new windows.
@@ -168,10 +160,6 @@ fn refusal(m: &Manifest, command: &str, params: &Value) -> Option<String> {
     }
     if command == "text.loadFont" && get(params, "path").is_some() {
         return Some("plugins can't read files: pass the font as `data`".into());
-    }
-    // `path` here is a file on disk (elsewhere it is a vector path or an action's place).
-    if command == "component.playground" && get(params, "path").is_some() {
-        return Some("plugins can't write files: leave out `path` to get the result back".into());
     }
     if !m.permissions.allows(command) {
         return Some(format!("`{command}` isn't in the commands {} asked permission for", m.name));
@@ -261,23 +249,11 @@ impl figcraft_plugin::Host for EngineHost<'_> {
             Ok(v)
         });
         r.map(|mut v| {
-            // A plugin gets the open files' and libraries' names, not where they are on disk or
-            // the share links (with their tokens) that reach them (#1117).
-            if matches!(command, "doc.list" | "library.list" | "library.updates") {
-                // `doc.list` is a list; `library.list` keeps its list under `libraries`, and
-                // `library.updates` its failures under `errors`.
-                let list = match command {
-                    "library.list" => v.get_mut("libraries"),
-                    "library.updates" => v.get_mut("errors"),
-                    _ => Some(&mut v),
-                };
-                for e in list.and_then(Value::as_array_mut).into_iter().flatten().filter_map(Value::as_object_mut) {
+            // A plugin gets the open files' names, not where they are on disk or the share links
+            // (with their tokens) that reach them (#1117).
+            if command == "doc.list" {
+                for e in v.as_array_mut().into_iter().flatten().filter_map(Value::as_object_mut) {
                     e.remove("path");
-                    // A failure's text may quote the path, a token or another form of it: the
-                    // plugin gets a fixed message.
-                    if let Some(err) = e.get_mut("error").filter(|v| v.is_string()) {
-                        *err = json!("the library could not be read");
-                    }
                 }
             }
             v.to_string()
@@ -370,7 +346,7 @@ pub(crate) fn read_file(path: &std::path::Path, max: usize) -> Result<Vec<u8>> {
 /// path and its module.
 #[cfg(not(target_arch = "wasm32"))]
 fn load_from_disk(cmd: &str, path: &str) -> Result<(Manifest, String, Vec<u8>)> {
-    let mut file = std::path::PathBuf::from(crate::library::absolute_path(path.trim()));
+    let mut file = std::path::PathBuf::from(crate::file_access::absolute_path(path.trim()));
     if crate::file_access::is_dir(&file) {
         file.push(MANIFEST_FILE);
     }
@@ -712,13 +688,6 @@ pub fn specs() -> Vec<CommandSpec> {
 #[cfg(test)]
 mod refusal_tests {
     use super::*;
-
-    #[test]
-    fn read_only_plugin_cannot_publish_to_server() {
-        let m = Manifest::parse(r#"{"id":"x.y","name":"X","main":"plugin.wasm"}"#).unwrap();
-        let r = refusal(&m, "library.publishToServer", &json!({}));
-        assert!(r.is_some(), "library.publishToServer uploads the document and must be refused");
-    }
 
     #[test]
     fn read_only_plugin_cannot_change_branches() {

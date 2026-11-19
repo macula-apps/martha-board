@@ -5,7 +5,7 @@
 use base64::Engine as _;
 use serde_json::{Value, json};
 
-use crate::components::tests::{ex, idv, node};
+use crate::test_helpers::{ex, idv, node};
 use crate::{EngineError, Session};
 use figcraft_doc::NodeId;
 
@@ -189,13 +189,10 @@ fn files_dialogs_history_and_plugins_are_off_limits() {
         ("file.open", json!({"path": "C:/Windows/win.ini"})),
         ("image.place", json!({"path": "secret.png"})),
         ("text.loadFont", json!({"path": "/etc/hosts"})),
-        ("library.add", json!({"path": "lib.figcraft"})),
         ("plugin.run", json!({"id": "org.test.deny"})),
         ("plugin.remove", json!({"id": "org.test.deny"})),
         ("edit.undo", json!({})),
         ("command.batch", json!({"commands": [{"command": "file.saveAs", "params": {"path": target}}]})),
-        ("data.fill", json!({"id": a, "rows": [{}], "dir": dir.to_string_lossy()})),
-        ("component.playground", json!({"id": a, "path": target})),
         ("collab.recoverFile", json!({"path": "copy.figcraft", "file": "x", "session": 1, "client": 1, "seq": 0})),
         ("window.new", json!({"path": "C:/Windows/win.ini"})),
         ("doc.switch", json!({"index": 0})),

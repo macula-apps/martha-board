@@ -222,7 +222,7 @@ impl Session {
 
     /// The layer whose path is under `ev` for the Text on a path tool and where along it the press
     /// is (0..1 by length): the front-most shape or vector layer within a few screen pixels of its
-    /// first subpath (the one text follows), not locked and not inside an instance. Layers in front
+    /// first subpath (the one text follows) and not locked. Layers in front
     /// whose path is further away don't hide it.
     pub(crate) fn path_at(&self, doc: &Document, page: NodeId, ev: &PointerEvent) -> Option<(NodeId, f64)> {
         let reach = ev.tol() * PATH_REACH_PX;
@@ -237,7 +237,7 @@ impl Session {
                     | NodeKind::Line
                     | NodeKind::Vector { .. }
             );
-            if !shape || locked_in(doc, id) || crate::components::inside_instance(doc, id) {
+            if !shape || locked_in(doc, id) {
                 return None;
             }
             let geom = figcraft_doc::geometry::stroke_geometry(n)?;

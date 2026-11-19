@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 use crate::cmd::lists::{BoundList, list_binding, rebind_edited_paint};
 use crate::cmd::styles::{rebind_paint_alpha, unbind_slot};
 use crate::params::{get, paint_of, parse, req_string, string, targets};
-use crate::{CommandSpec, EngineError, Result, Session, bad, spec};
+use crate::{CommandSpec, Result, Session, bad, spec};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -127,7 +127,7 @@ pub fn specs() -> Vec<CommandSpec> {
         spec!(
             "selection.applyColorStyle",
             "Apply selection color style",
-            "{targets, style (id or name), library? (an enabled library: id, name or path; the style is then one it publishes, copied in linked and read-only)}; applies the color style to matching fill/stroke lists (text ranges keep typography)",
+            "{targets, style (id or name)}; applies the color style to matching fill/stroke lists (text ranges keep typography)",
             true,
             apply_style
         ),
@@ -205,33 +205,12 @@ fn apply_style(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "selection.applyColorStyle";
     let targets = checked_targets(s, p, CMD)?;
     let name = req_string(CMD, p, "style")?;
-    let name = if get(p, "library").is_some() { import_library_style(s, CMD, p, &name)? } else { name };
     let style = s.doc()?.style(&name).cloned().ok_or_else(|| bad(CMD, "no such color style"))?;
     if !matches!(style.kind, StyleKind::Paint { .. }) {
         return Err(bad(CMD, "a color style is required"));
     }
     link_style(s, &targets, &style)?;
     Ok(json!({"ok": true}))
-}
-
-/// Copy the color style `key` (id, else name) that the enabled library `library` publishes into the
-/// document, linked and read-only, and return the copy's id.
-fn import_library_style(s: &mut Session, cmd: &str, p: &Value, key: &str) -> Result<String> {
-    let (link, lib) = crate::cmd::library::library(s, cmd, p)?;
-    let published = |st: &&Style| lib.manifest.style(&st.id).is_some_and(|x| x.published);
-    let styles = || lib.doc.styles.iter().filter(published);
-    let style = styles()
-        .find(|st| st.id == key)
-        .or_else(|| styles().find(|st| st.name == key))
-        .ok_or_else(|| bad(cmd, format!("\"{}\" publishes no style `{key}`", link.name)))?;
-    if !matches!(style.kind, StyleKind::Paint { .. }) {
-        return Err(bad(cmd, "a color style is required"));
-    }
-    let keys = BTreeSet::from([style.id.clone()]);
-    crate::library::import_styles(s.doc_mut()?, &lib, &keys, false)
-        .into_values()
-        .next()
-        .ok_or_else(|| EngineError::Other("the style didn't import".into()))
 }
 
 fn create_style(s: &mut Session, p: &Value) -> Result<Value> {

@@ -91,41 +91,6 @@ pub(crate) fn set_all(s: &mut Session, variable: &str, value: VariableValue) {
     .unwrap();
 }
 
-/// A collection extending `parent` (an id), named `name` → its id: normalising gives it the
-/// parent's modes and one inheriting variable per variable of the parent.
-pub(crate) fn extend(s: &mut Session, parent: &str, name: &str) -> String {
-    variable_data::edit(s, |doc| {
-        let id = doc.new_collection_id();
-        let c = figcraft_doc::Collection { id: id.clone(), name: name.to_string(), modes: Vec::new(), extends: Some(parent.to_string()) };
-        doc.variables.collections.push(c);
-        Ok(id)
-    })
-    .unwrap()
-}
-
-/// Copy the collection `name` that enabled library `library` (id or name) publishes, with its
-/// variables, into the document as linked, read-only copies (as using a library variable did) →
-/// the copy's id.
-pub(crate) fn import_collection(s: &mut Session, library: &str, name: &str) -> String {
-    let (_, lib) = crate::cmd::library::library(s, "test", &serde_json::json!({"library": library})).unwrap();
-    let coll = crate::library::published_collections(&lib).find(|c| c.name == name).unwrap_or_else(|| panic!("no published `{name}`")).clone();
-    let vars = crate::library::published_variables(&lib).filter(|v| v.collection == coll.id).map(|v| v.id.clone()).collect();
-    let keys = std::collections::BTreeSet::from([coll.id.clone()]);
-    let map = variable_data::edit(s, |doc| Ok(crate::library::import_variables(doc, &lib, &vars, &keys, false))).unwrap();
-    map.collections.get(&coll.id).cloned().unwrap()
-}
-
-/// Copy the variable `name` that enabled library `library` (id or name) publishes, with what it
-/// aliases, into the document as a linked, read-only copy (as using a library variable did) → the
-/// copy's id.
-pub(crate) fn import_variable(s: &mut Session, library: &str, name: &str) -> String {
-    let (_, lib) = crate::cmd::library::library(s, "test", &serde_json::json!({"library": library})).unwrap();
-    let key = crate::library::published_variables(&lib).find(|v| v.name == name).unwrap_or_else(|| panic!("no published `{name}`")).id.clone();
-    let keys = std::collections::BTreeSet::from([key.clone()]);
-    let map = variable_data::edit(s, |doc| Ok(crate::library::import_variables(doc, &lib, &keys, &Default::default(), false))).unwrap();
-    map.variables.get(&key).cloned().unwrap()
-}
-
 /// Bind `field` of the shared style `style` (id or name) to `variable` (name or id): every layer
 /// using the style shows the field resolved in its own modes.
 pub(crate) fn bind_style(s: &mut Session, style: &str, field: &str, variable: &str) {

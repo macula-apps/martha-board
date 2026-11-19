@@ -38,7 +38,7 @@ impl Shot {
     /// Layer `id` of `doc` rendered, the layers `marks` outlined.
     pub(crate) fn new(ctx: &egui::Context, doc: &Document, id: NodeId, marks: impl Iterator<Item = (NodeId, ChangeKind)>) -> Option<Self> {
         let area = figcraft_render::export_bounds(doc, id)?;
-        let tex = crate::assets_panel::thumbnail(ctx, doc, id, TEXTURE_SIDE)?;
+        let tex = crate::thumbnails::thumbnail(ctx, doc, id, TEXTURE_SIDE)?;
         let boxes = marks.filter_map(|(c, kind)| doc.world_bounds(c).map(|b| (c, kind, b))).collect();
         Some(Self { tex, area, boxes })
     }

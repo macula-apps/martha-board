@@ -83,8 +83,7 @@ Each may be given more than once, as `--flag DIR` or `--flag=DIR`:
   every command that names a file: `file.open`, `file.openRecent` (recent files outside the roots
   are never listed, opened, removed or named: `index` counts the files listed), `file.import`,
   `file.placeImage`, `image.place`, `file.save`, `file.saveAs`, `file.revert`, `file.recover`,
-  `file.export`, `file.exportSvg`, `file.exportLayers` (and the folders it makes), `file.exportFramesPdf`, `library.add` and the library files open documents link to,
-  `component.playground {path}`,
+  `file.export`, `file.exportSvg`, `file.exportLayers` (and the folders it makes), `file.exportFramesPdf`,
   `plugin.import {path}`, a development plugin's module read again from disk,
   `plugin.directory.publish {path}` and its assets, `collab.recoverFile {path}`, and the headless
   `ui.render` / `ui.screenshot` with a `path`.
@@ -105,9 +104,7 @@ Each may be given more than once, as `--flag DIR` or `--flag=DIR`:
   path or as a link's target, since Windows trims it where it looks a name up.
 - **The network:** a confined call reaches no FigCraft or plugin server, so it can't send a
   document anywhere through one. Hosting, joining, publishing and sharing a file (`collab.host`,
-  `collab.join`, `collab.publish`, `collab.share` …), team libraries on a server (`library.check`
-  refuses, and `library.updates` / `library.list` report the refusal for each instead of the last
-  version fetched) and plugin directories are refused with `automation roots are set: commands
+  `collab.join`, `collab.publish`, `collab.share` …) and plugin directories are refused with `automation roots are set: commands
   don't reach the network …`. The app started with the flags confines its own window too, so its
   sharing is off as well. One exception: a root on a network share (a UNC path such as
   `\\server\share\…`, or a mounted network drive) is still a root, so reading and writing inside
@@ -189,18 +186,6 @@ Or in a project's `.mcp.json`:
   leaves its contents where they are, and so does resizing a frame with `cmd` held (constraints
   ignored); a layer a mask hides can't be clicked there, and a mask group's box and exports are
   the mask's (plus any layers under the mask).
-- Repeated UI (buttons, inputs, cards, list rows, tab bars, icons) is a component and its copies
-  are instances: make it once with `component.create` (or `create_node` type `component`) and place
-  each other copy with `instance.create {component, parent?, x?, y?}` rather than duplicating the
-  layers, so every copy follows the main. States and sizes are variants of one set: name the mains
-  `Property=value` (`State=Default`, `State=Hover`) and run `component.combineVariants` on them;
-  `component.addVariant {id}` adds one more. What changes per copy is a component property:
-  `component.addProperty {id, name, type: text|boolean|instanceSwap, layer}` on the component, or
-  on the set once its variants are combined, then `component.bindProperty {layer, property}` for
-  each other variant's layer (a property added to one variant before combining stays that
-  variant's, so an instance switched to another variant loses it); `instance.setProperties {ids,
-  properties}` sets it on each copy. The server's `initialize` instructions say this too, since
-  agents otherwise tend to copy layers.
 - Children of an auto-layout frame are positioned by the layout: set `layout`, `gap`, `padding`,
   `mainAlign`, `crossAlign`, `sizingH`/`sizingV` instead of x/y. In one call, `layout` applies
   before the keys that tune it, so `{"layout": {"mode": "vertical"}, "gap": 8}` keeps the gap;
@@ -368,7 +353,7 @@ Or in a project's `.mcp.json`:
   tracking shortcuts, a canvas drag) detaches that field's variable; fields the edit left as they
   were stay bound.
 - **Live previews**: `text.preview {command, params}` shows what `style.apply`,
-  `library.applyStyle`, `text.setVariations` or `text.style` would do on the canvas without an undo
+  `text.setVariations` or `text.style` would do on the canvas without an undo
   step (in place of an earlier preview); `text.endPreview` puts the document back. Any other command
   ends the preview first, so running the command for real commits it as one undo step.
 - Every mutation is one undo step (`batch` makes several one step). A failing command leaves the
@@ -392,9 +377,9 @@ a later step can use `{"$step": 0, "field": "ids/0"}` to target the first match.
 | Tool | What it does |
 |---|---|
 | `list_commands {filter?}` | Every command: id, label, menu, shortcut, undoable, params doc. |
-| `run_command {command, params}` | Run any command (e.g. `align.left`, `layout.add`, `component.create`, `instance.place` (drop an instance at a page point into the frame or auto layout slot under it), `component.exposeInstance` / `instance.exposed` (nested instance properties on instances), `component.makeSlot` / `instance.slotInsert` / `instance.resetSlot` (slots, below), `style.create`). |
+| `run_command {command, params}` | Run any command (e.g. `align.left`, `layout.add`, `board.sticky`, `style.create`). |
 | `batch {commands: [{command, params}], label?}` | Several commands as one undo step (`command.batch`), which keeps one copy of the document however many steps there are (an `edit.undo` step undoes the batch's edits so far together); all-or-nothing for open documents and their document state. Failed inner commands are removed from the journal; preferences, clipboard, tool state and UI requests are not rolled back. A step can use what an earlier step returned: name it with `"as": "card"` and `{"$ref": "card"}` anywhere in a later step's params becomes the `id` in its result (`{"$step": n}` does the same by zero-based position); `"field"` takes another key or a slash path such as `ids/0` (see Step references below). |
-| `create_node {type, x, y, width, height, parent, index, name, text, path, props}` | Create a frame, rectangle, ellipse, polygon, star, line, arrow, text, vector, section, component or slice; returns `{id, node}`. |
+| `create_node {type, x, y, width, height, parent, index, name, text, path, props}` | Create a frame, rectangle, ellipse, polygon, star, line, arrow, text, vector, section or slice; returns `{id, node}`. |
 | `set_properties {ids, props}` | `node.set` on layers (geometry, fills, strokes, effects, corner radius, auto layout, sizing, constraints, masks (`isMask`, `maskType: alpha\|vector\|luminance`), a section's `sectionContentsHidden`, text…); returns the updated layers. |
 | `inspect_document {depth, allPages, fields?, outline?}` | The document as JSON (its `id`, layer tree, styles, selection, history); `fields` selects layer properties, `outline: true` gives a compact tree (below). The tools that act on a document also take `document` (see Naming the document below). |
 | `get_node {id, depth, fields?, outline?}` | One layer as JSON; takes the same `fields` and `outline` options; `pluginData` (`{key: value}`, values as strings) when the layer or page has layer data written with `set_properties {props: {pluginData}}`. |
@@ -403,7 +388,7 @@ a later step can use `{"$step": 0, "field": "ids/0"}` to target the first match.
 | `screenshot {ids?, scale?, maxSize?, window?}` | PNG of the page (with background) or of layers, scaled to fit `maxSize` (default 1600). `window: true` captures the app window in front when attached, a window id (see Windows below) that window. |
 | `open_file {path, reload?}` / `save_file {path?}` | Open `.figcraft`, `.json` (FigCraft JSON), `.svg` (see Importing SVG below) or an image; save as `.figcraft`. `open_file` returns `opened` (for a file opened anew, a `summary` of `name`, `pages`, `layers` and `images`, and `warnings` or `repairs`; a file that was already open gives its `index`, with `stale: true` when the file changed on disk since that tab read or saved it; `reload: true` reads it again into the tab, refused while the tab has unsaved changes) and the document's `document` outline. |
 | `undo` / `redo` | Step through history. |
-| `pointer {kind, x, y, to?, steps?, tool?, shift, alt, cmd, pressure?, pressureTo?}` | Mouse gestures in page coordinates with the current tool: `click`, `double`, `drag`, `down`, `move`, `up`, `hover`. A dragged layer drops into the frame or auto layout slot under the pointer, except one inside a group, a boolean group or an instance (outside its slots), which only moves. `pressure` (0–1) is pen pressure; a drag goes from `pressure` to `pressureTo` (see Brushes and pen pressure). |
+| `pointer {kind, x, y, to?, steps?, tool?, shift, alt, cmd, pressure?, pressureTo?}` | Mouse gestures in page coordinates with the current tool: `click`, `double`, `drag`, `down`, `move`, `up`, `hover`. A dragged layer drops into the frame or auto layout slot under the pointer, except one inside a group or a boolean group, which only moves. `pressure` (0–1) is pen pressure; a drag goes from `pressure` to `pressureTo` (see Brushes and pen pressure). |
 | `key {key, shift, alt, cmd}` | A shortcut or key as if typed on the canvas (every default shortcut, tool keys, Escape, Delete, arrows, number keys for opacity, arrows that pan the view when nothing is selected; while editing text, the text shortcuts and then text editing keys). Keys are names like `A`, `0`, `Enter`, `ArrowLeft`, `=`, `/`, or egui's (`Plus`, `Questionmark`); `cmd` is Cmd on macOS and Ctrl elsewhere. |
 | `type_text {text, id?}` | Type into the text being edited, or replace the contents of text layer `id`. |
 | `inspect_ui {}` | Tool, view and status (and panels, timings and the app's `windows` when attached). |
@@ -439,7 +424,7 @@ returns the starter templates, each `{id, name, description, kind, size}` (`kind
 `social-posts`, `slides` and `icon-set`. `run_command {command: "file.newFromTemplate", params:
 {template, name?}}` builds one as a new, unsaved document, makes it the active one and returns
 `{index, template}`; open documents are left alone. The templates are built in code from the same
-commands an agent uses (frames with auto layout, components and instances, colour and text styles,
+commands an agent uses (frames with auto layout and copies of them, colour and text styles,
 variables with Light and Dark modes), so everything in them is editable; their
 content is synthetic. Building one takes from about 10 ms to about 190 ms. Without `template` the
 command returns `{templates}` (in the app it also shows the home screen's Templates tab).
@@ -449,40 +434,6 @@ tips; headless, it only sets the preference.
 ```json
 {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"run_command","arguments":{"command":"file.newFromTemplate","params":{"template":"dashboard"}}}}
 {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"export","arguments":{"format":"png","path":"dashboard.png"}}}
-```
-
-### Filling copies with data
-
-`data.fill {id, rows, gap?, formats?, dir?, format?, scale?}` repeats a frame once per row (a carousel, a set
-of posts, a card per item) in one undo step: each key of a row names layers in the copy, and a
-string (or number) sets their text, `{text?, fill?, visible?}` sets more; `name` names the copy
-(default "<frame> <n>"). Copies go in a row to the right, `gap` apart (default 100). With `dir`, each
-copy is exported there as `<name>.<format>` (png by default) after the edits land. Returns `{ids,
-missing (keys no layer is named), files?, errors?}`. `errors` lists the exports that failed as
-`[{id, path, error}]`; the copies stay, and the files that were written are in `files`.
-
-Copy that changes length per row can size itself: `{"Headline": {"text": "…", "fit": {"maxLines": 2}}}` runs
-`text.fit` on those layers after the text is set.
-
-`formats: [{name?, width, height}]` makes every row once per size: the copy is resized so its auto layout
-reflows, named `<name>-<format name>` (default `<width>x<height>`), and placed under the row's previous
-format. Text `fit` runs after the resize. Use case: one call turns a 1080×1350 post into feed, story
-(1080×1920) and square (1080×1080) files for each slide of a carousel; the frame must be auto layout (fixed-
-position children keep their place).
-
-`text.fit {ids?, maxLines?, minSize?, orphans?}` gives a text layer with a fixed width (auto height or fixed size)
-the largest font size, down to `minSize` (default 60% of the current), at which it stays within `maxLines` lines
-and its box's height. Every style run scales by the same factor. A one-word last line (an orphan) is avoided by
-shrinking up to 8% more, else by keeping the last two words together with a no-break space. A one-word paragraph after a hard line break is not an orphan. Text never
-grows, text that already fits keeps its exact size, and sizes round to a tenth without going below `minSize`.
-Returns `{fitted: [{id, fontSize, lines, fits, orphan}]}`. Use case: a carousel slide "Lighthouse 100. Loads in under
-1s." at 96px broke into three lines with "1s." alone; with `fit: {maxLines: 3}` it is two balanced lines.
-
-```json
-{"command": "data.fill", "params": {"id": 80, "dir": "out/carousel", "scale": 1, "rows": [
-  {"name": "01-cover", "Headline": "Your website and AI chat assistant in 7 days", "Badge": {"visible": true}},
-  {"name": "02-proof", "Headline": "Lighthouse 100, loads in under a second", "Badge": {"visible": false}}
-]}}
 ```
 
 ### Boards
@@ -634,8 +585,8 @@ frame around flows that way (a list of rows: Down moves an item into the row bel
 ### Keyboard shortcuts
 
 The default shortcuts live in one table (`figcraft_engine::keymap`), grouped like the public shortcut
-reference (Essential, Tools, View, Zoom, Text, Shape, Selection, Edit, Transform, Arrange,
-Components) with the macOS keys and, where they differ, the Windows/Linux keys (for
+reference (Essential, Tools, View, Zoom, Text, Shape, Selection, Edit, Transform, Arrange) with
+the macOS keys and, where they differ, the Windows/Linux keys (for
 example Use as mask is ⌃⌘M on macOS and Ctrl+Alt+M elsewhere; Bring to front ⌥⌘] and
 Ctrl+Shift+]). `list_commands` reports each command's first key for the platform the server runs
 on; `key` resolves keys the way the canvas does. Commands behind keys:
@@ -660,10 +611,6 @@ on; `key` resolves keys the way the canvas does. Commands behind keys:
   be clicked (`pointer`) in outline mode. View settings of the file: no undo step.
 - `view.panelWidths {left?, right?}`: the app's side panel widths in pixels (kept within their
   limits; without either, both go back to the default). A no-op headless.
-- `component.hideWhenPublishing {ids?, on?}`: keep components or sets (those `ids`, or the layers
-  given, are or are in; default the selection) out of the library the file publishes, or let them
-  back in (`on: false`; without `on` it toggles). The sign of it is the name: hiding puts a `.`
-  before it, showing takes the leading `.` and `_` away. Returns `{ids, hidden}`; one undo step.
 - New files and pages: `file.new` gives its page the colour `#F5F5F5`. Only the app with its dark
   theme showing makes it `#1E1E1E`; headless sessions (the CLI, this server) have no theme.
   `page.add` gives the new page the current page's colour, wherever it runs. Text made with `text.create` or `node.create` is black whatever the page here; in the
@@ -702,8 +649,6 @@ on; `key` resolves keys the way the canvas does. Commands behind keys:
   file opens on for everyone who opens or joins it, the current page when none is named, a divider
   refused: a document change, so it syncs in a live session and undoes, #1817; the choice is saved
   with the file and opens it for everyone, whichever page the saver was on).
-- `component.list`: each component's `folder` (the Assets panel's folders: its page, the frames
-  holding it, then its name's slash parts) and `label` (the name on its tile).
 - `view.contextMenu` (`Shift+F10`): the selection's context menu, at its layer row when the layers
   panel has the keyboard (after F6 or a click on a row), else on the canvas below the selection; the
   menu takes the keyboard and gives it back when it closes (no-op headless).
@@ -749,8 +694,7 @@ stay); with `x`/`y` in the same call it goes at `x` + its left edge and `y` + it
 `vector.create` places it. Points' own settings (per-point corner radius, caps, joins) go with the
 old geometry. On several layers, layers that aren't vectors are skipped with a warning; on a
 single one, or when none is a vector, the call is refused (convert shapes with
-`vector.edit.begin` or Flatten first). A layer inside an instance is refused too: its geometry
-comes from its main component, so edit that or detach the instance. Undo brings the old path back.
+`vector.edit.begin` or Flatten first). Undo brings the old path back.
 
 Vector edit mode is driven with `run_command` (or `pointer`/`key` for gestures):
 `vector.edit.begin {id? | ids?}` (default the selection; converts shapes to vectors; several layers
@@ -841,166 +785,6 @@ player. A file that carries prototype interactions, flows and a page's prototype
 opens and saves them unchanged, and `get_node` / `inspect_document` show them (`interactions`,
 `flows`); nothing sets them.
 
-### Local libraries
-
-A `.figcraft` file can be published as a library and used from other files (library files here;
-libraries kept on a `figcraft-server` for a team: [Team libraries](#team-libraries); the browser
-build has no file system, so there the commands that read library files return an error).
-
-- **Publish** (in the library file): `library.publish {description?, include?, exclude?}` publishes
-  the file's components, component sets, styles and variable collections as a new version (by
-  default everything except names starting with `.` or `_`, or what the last publish offered;
-  `include`/`exclude` take component ids and style or collection ids or names). A collection comes
-  with its variables (values per mode, aliases, scopes), except those a file marks hidden from
-  publishing (`hiddenFromPublishing`). Components, styles and variables that
-  published assets use (a component's bound variables, a variable's alias targets) come along,
-  unoffered. Each asset keeps the version it last changed in; publishing with no changes is refused.
-  Save the file (`file.save`) so other files see the new version.
-- **Enable**: `library.add {path}` / `library.remove {id}` (id, name or path) / `library.list
-  {assets?}` (versions, pending updates, errors; with `assets: true` each library's components,
-  styles, variable collections (with their modes) and variables, and what this file can publish). Libraries are read read-only with size limits, and read
-  again when the file changes.
-- **Use**: `library.place {library, component, x?, y?}` (a component, set or variant by id or name;
-  page point, default the view's centre) copies the component, with the components and styles it
-  uses, into the file as a read-only main component and places an instance; `library.import
-  {library, component}` only copies it (then `instance.create`, `instance.swap`…);
-  `library.swapAt {library, component, x, y}` copies it and swaps the instance at that page point to
-  it (as `instance.swapAt`, below).
-  `library.applyStyle {library, style, ids?, target?}` copies a style in (linked, read-only) and
-  applies it. Instances of library components behave like any instance: overrides, properties,
-  variants, swap, reset, detach. Library components keep their variable bindings and explicit modes
-  (bound to copies of the library's variables).
-- **Library variables**: a file holds read-only copies of the library variables and collections
-  its library components and styles (their bound variables, aliases and explicit modes) brought along.
-  The copies render without the library file. Editing the copies (library components, styles,
-  variables or collections) is refused; edit the library file and publish. Binding, aliasing or
-  setting the mode of a library variable by hand left with the variables editor (#16).
-- **Extended collections** a file holds (a collection that extends another, its own or a library
-  copy: the same modes and one inheriting variable per variable of it, with values it overrides
-  per mode in `overrides`) follow what they extend: accepting library updates brings new values
-  (overrides stay), renames and new variables, and a variable the library adds to the extended
-  collection is an update of its own (`library.updates` lists it without an `id`, it has no copy
-  yet). A library collection that is itself an extended collection follows down the chain as each
-  file accepts its library's updates. Making or editing an extension left with the variables
-  editor (#16).
-- **Update**: `library.updates` lists the components, styles, variable collections and variables
-  with a newer published version; `library.acceptUpdates {ids? (library ids)}` pulls them in,
-  keeping instance overrides; bound layers, aliases and explicit modes follow the updated values.
-- **Paste between files**: instances copied from another open file (`edit.copy` there, `edit.paste`
-  here) follow their mains: library components join (or bring along) this file's copies of the
-  same library, components the other file publishes as a library are used from it (and that
-  library is enabled when the other file is saved), and other mains stay behind: the instance shows
-  a missing main (`component.restoreMain` makes it a main here).
-
-### Team libraries
-
-A file kept on a `figcraft-server` (`server.md`) can hold a library that
-other files use through one of its share links. Each call waits for the server (a few seconds at
-most when it can't be reached).
-
-- `library.publishToServer {server?, key?, description?, include?, exclude?}` publishes the active
-  document's library as the next version of the one the server keeps under the file (selection and
-  per-asset versions as `library.publish`, following the server's version): `server` is an edit
-  link of the file, or omit it while the document is in a live session on a server with edit
-  access; with the server's address and key (`ws://host:47900/?key=…`, or `key`) the document is
-  kept there as a new file first and the result has its `file`, `edit` and `view` links. A view
-  link is refused. The document itself doesn't change (nothing to undo).
-- `library.add {path: <share link>}` enables it (a view link is enough); then `library.place`,
-  `library.applyStyle`… work as for library files. `library.list` and
-  `library.updates` ask the server for a newer version first (`"server": true` in the listing);
-  `library.acceptUpdates` takes it, overrides kept. The app's own background checks ask only about
-  team libraries added (`library.add`) or checked (`library.check {library?}`) on this computer,
-  so opening a file that names another one contacts nothing (#1097).
-- `library.usage {library?, days?}` → `{id, name, assetsKnown, assetActionsKnown, styles [{id, name, type, layers, files, insertions, detachments}], variables [{id, name, collection, layers, files, insertions, detachments}], instances, detached, detachesKnown, days,
-  insertions, detachments, actionsKnown, weeks: [{week, insertions, detachments}], files: [{name,
-  updated, instances, detached}], components: [{id, name, instances, files, detached, insertions,
-  detachments}]}`: what the files using it reported (each fetch reports the asking document's name
-  and its instances per component; then its detached and inserted instances per component;
-  `detached` adds up every detach, `detachesKnown` is false from a server that doesn't keep them).
-  `insertions` and `detachments` count the weeks that overlap the last `days` (1–365, default 30;
-  `week` is the week's Monday, seconds since 1970 UTC, and a week is listed only when something
-  happened in it); an insertion is an instance placed, pasted or duplicated, not one nested in
-  another instance. `actionsKnown` is false from a server that doesn't keep weeks. `library` is an
-  enabled team library; omit it for the active document's own library on its server.
-- `library.swap {from, to}` (any two enabled libraries, files or team) re-points every instance,
-  style and variable copied from `from` to the published asset of the same name in `to` (variants
-  by name in their set, styles by name and type, variables by collection, name and type, modes by
-  name), keeping overrides; one undo step → `{components, styles, variables, unmatched: [names
-  still from `from`, including this file's collections that extend one of its collections],
-  removed (nothing of `from` was left, so it was removed)}`.
-
-### Overrides and variants
-
-- **What an instance overrides** (`node.set` / `text.set` on its layers; `get_node` lists
-  `overrides`): fills, strokes, effects, opacity, visibility, layer names, corner radius, text
-  content and text properties (font, size, spacing, resizing, lists…), auto layout padding, gap and
-  alignment, layout grids and export settings; nested instances swap
-  (`component`) and take property values (`props`). Each stays when the main changes that property
-  and goes with `component.resetOverride {id, group}` or `component.resetInstance`.
-- **What it doesn't**: moving, rotating, resizing or re-constraining a layer inside an instance,
-  its resizing (hug / fill / min / max), the auto layout direction and other auto layout settings,
-  and adding, removing or reordering layers (outside slots) are refused (nothing changes); resize
-  the instance itself (its layers follow the main's constraints) or edit the main.
-- **Variants**: `instance.setProperties {ids?, properties}` switching variants keeps an override
-  where the layer's name path matches and both variants had the same value for that property;
-  text layers keep all theirs. The default variant (`instance.create` with a set, the Assets
-  thumbnail) is the one in the set's top-left corner; `component.editProperty {name, default}`
-  moves the chosen variant there, `{name, index}` reorders variant properties (the variants'
-  names follow). `component.properties` on a set reports `conflicts`: variants sharing one
-  combination of values.
-- **Boolean properties**: on the main component, a boolean property's value is the visibility of
-  the layers bound to it. `component.addProperty {type: "boolean", default, layer}`,
-  `component.bindProperty {field: "visible"}` and `component.editProperty {name, default}` show or
-  hide the main's bound layers to match the default (without `default`, `addProperty` takes the
-  bound layer's visibility). Showing or hiding a bound layer on the main sets the default, and the
-  property's other bound layers (in every variant of a set) follow. New instances start from the
-  default; existing instances keep the values they have. Files open as saved: a main whose bound
-  layer disagrees with the default stays that way until one of them is edited.
-- `component.pushChanges {id?}` copies the instance's overrides into its main (from a layer of a
-  nested instance too: always into the outer instance's main).
-
-### Swapping instances
-
-- `instance.swap {ids?, component}` shows another component in the instances (overrides on layers
-  with matching names stay; property values with the same names too). Nested instances can be
-  swapped on their own (an override of the instance they're in); a swapped nested instance keeps
-  what its outer main overrode on matching layers as its own, so later edits of those in the main
-  don't reach it.
-- `instance.swapAt {component, x, y}` swaps the instance at a page point: of the instances under
-  it (innermost first), the first showing a variant of the same component set, else the innermost
-  (never one inside the dropped component); only text layers keep their overrides. The Assets
-  panel does this when a component is dropped onto an instance with Alt (Option) held,
-  highlighting that instance while dragging.
-- Instance swap properties offer **preferred values**: `component.addProperty {type:
-  "instanceSwap", default, preferred? [component or set ids]}` and `component.editProperty {name,
-  preferred}`; `component.properties` lists them, and the Design panel's swap menus show them first.
-
-### Slots
-
-A slot is a frame inside a main component whose instances take any content of their own (add,
-remove and reorder layers there, unlike the rest of an instance). It is a component property of type
-`slot` (`component.properties` lists it: on a main with its `layers`, on an instance with
-`value: {layer, edited, layers}`).
-
-- **Define** (on the main): `component.makeSlot {id (a frame inside a main component), name?,
-  preferred? [component or set ids]}` (the property is named after the frame by default; a new
-  property goes last, as `component.properties` lists them in the order they were made, a rename
-  keeping the place);
-  `component.editProperty {name, preferred}`; `component.removeSlot {id}` (instances lose their own
-  content in it). `component.addProperty {type: "slot", layer}` and `component.bindProperty {field:
-  "slot"}` work too (one frame per component for a slot).
-- **Fill** (on an instance): `instance.slotInsert {id (the slot layer, or the instance with `slot`
-  (property name)), component, index?, replace?}` places an instance of a component in it; any
-  structure command (`shape.*`, `node.reparent`, `edit.paste` with the slot selected, `edit.delete`,
-  `node.reorder`, `instance.place` or a drag onto it) works inside it. The main's default content
-  shows (and follows the main) until the slot is first edited; then the slot's layers are the
-  instance's own (override group `slot`): kept across main updates, variant switches, copy/paste and
-  detach, and instances placed there stand alone (their own overrides, properties and detach).
-- **Reset**: `instance.resetSlot {id}` (or `component.resetOverride {id, group: "slot"}`, or
-  `component.resetInstance`) brings back the main's default content.
-
-`get_node` shows `"slot": "<property>"` on slot layers.
-
 ### Boolean groups
 
 `bool.union` / `bool.subtract` / `bool.intersect` / `bool.exclude {ids?}` wrap layers in a new
@@ -1058,8 +842,8 @@ click or drag across regions with `pointer` to merge, add `alt` to remove; `shap
   `tool.textOnPath`, a `pointer` press within 6 screen pixels of a shape's or vector's first
   subpath puts a new, empty text layer on it, starting at the press, and starts typing: the text
   also takes the path layer's constraints and effects, and its fills when one of them shows. Ending
-  the edit with nothing typed puts the path layer back with no undo step. Locked layers and layers
-  inside instances are skipped.
+  the edit with nothing typed puts the path layer back with no undo step. Locked layers are
+  skipped.
 - **Pattern fills**: `fill.pattern {source (layer id), ids?, index?, tile? (grid|horizontalHex|
   verticalHex), scale?, spacing? [x, y], align? (start|center|end), opacity?}` makes the fill at
   `index` (default the top one) the source layer repeated, at `scale` × its own size with `spacing`
@@ -1103,10 +887,9 @@ keeps the colour). Setting one side's weight with `node.set` (`strokeTopWeight`,
 `strokeRightWeight`, `strokeBottomWeight`, `strokeLeftWeight`) turns on individual strokes, the
 other sides at the weight.
 
-A file's bindings of `strokeWeight` and each side's weight, of gradient stops
-(`fills/<i>/stops/<j>/color`, `strokes/<i>/stops/<j>/color`) and of variant properties of
-instances (`componentProperties/<property>`, a string variable: the instance shows the variant its
-value names; a value naming no variant changes nothing) still apply. A stop's binding follows its
+A file's bindings of `strokeWeight` and each side's weight and of gradient stops
+(`fills/<i>/stops/<j>/color`, `strokes/<i>/stops/<j>/color`) still apply; a binding of an
+instance's component property (`componentProperties/<property>`) is kept and not applied. A stop's binding follows its
 stop when an earlier stop is removed and its paint when the list is reordered.
 
 ### Comments
@@ -1265,7 +1048,7 @@ is per user (`edit.undo` / `edit.redo` take back only your own steps, see
 ### Windows
 
 The attached desktop app can show files in several windows, each with its own tabs; the files,
-preferences, libraries and clipboard are shared. `run_command` with `window.new {path?, index?}`
+preferences and clipboard are shared. `run_command` with `window.new {path?, index?}`
 opens one (a new file, the file at `path`, or open file `index` moved out of its window) and
 `window.focus {id}` brings one to the front; `inspect_ui` lists them as `windows` (`id`, `main`,
 `title`, `files`, `active`, `focused`). Tools act on the window in front (the last one opened, focused or clicked):
@@ -1553,10 +1336,6 @@ app sets it.
 
 ### Effects
 
-`component.playground {id?, properties? {name: value}, path?, scale?}` tries a component with other
-variant, boolean, text (and instance-swap) property values on a copy and returns its properties with
-their values, its size and, with `path`, a PNG of it. The document doesn't change.
-
 A shared style a file binds to variables (its `bound` map in `style.list`: a paint style's
 `fill`, `fills/<i>/color` and `fills/<i>/stops/<j>/color`, an effect style's
 `effects/<i>/<color|radius|spread|offsetX|offsetY|startRadius>`, a grid style's
@@ -1657,10 +1436,6 @@ first, the last one is on top (the Design panel lists them the other way round, 
   `fills/<i>/color` / `strokes/<i>/color`, `effects/<i>/<offsetX|offsetY|radius|startRadius|spread|color>`,
   `layoutGrids/<i>/<size|count|gutter|offset>` (number variables; count is kept to 1–1000, size and
   gutter are never negative). Moving a bound paint rewrites its key (`fill` becomes `fills/2/color`).
-- **Instance properties** a file binds (`componentProperties/<name>`: a boolean property to a
-  boolean variable, a text property to a string variable) follow the variable's modes like any
-  binding; the binding follows renames of the property, and deleting the property, resetting the
-  instance or detaching it drops it.
 
 ```json
 {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"run_command","arguments":{"command":"fill.move","params":{"ids":[2],"from":0,"to":2}}}}
@@ -1801,15 +1576,6 @@ Create a card with auto layout and check it:
 {"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"screenshot","arguments":{"ids":[2]}}}
 ```
 
-A component with an instance whose text is overridden (ids are the ones earlier calls returned; read
-the instance's text layer id with `get_node`):
-
-```json
-{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"run_command","arguments":{"command":"component.create","params":{"ids":[2]}}}}
-{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"run_command","arguments":{"command":"instance.create","params":{"component":2,"x":500,"y":100}}}}
-{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"type_text","arguments":{"id":7,"text":"Grace Hopper"}}}
-```
-
 Smart-selection spacing (movable siblings in rows, columns or aligned grids):
 
 ```json
@@ -1819,7 +1585,7 @@ Smart-selection spacing (movable siblings in rows, columns or aligned grids):
 `horizontal` and `vertical` are optional page-unit gaps (at least one is required, magnitude at
 most 1,000,000). The first column/row stays fixed; subsequent tracks move without changing sizes,
 parents or offsets inside each track. Nonuniform gaps become uniform. Normal auto-layout flow
-children, locked/hidden layers and instance internals are excluded. Interactive callers may pass
+children and locked/hidden layers are excluded. Interactive callers may pass
 `fromGesture: true` inside an interaction to keep using its original tracks during a scrub.
 
 Align and distribute as one undo step:
@@ -1881,9 +1647,8 @@ a paint binding names `fills/0/color`. `edit.duplicate` returns `{"ids": [...]}`
 
 To edit inside a copy, pass `"map": true`: `edit.duplicate` then also returns `map`, each original
 layer's id (as a string, since JSON keys are strings), descendants included, paired with its copy's
-id, e.g. `{"ids": [8], "map": {"5": 8, "6": 9, "7": 10}}`. Nested frames, groups and instances (and
-their sublayers) are in it; a main component's copy is an instance of it, so its sublayers pair with
-the instance's. So `"field": "map/6"` is the copy of layer 6:
+id, e.g. `{"ids": [8], "map": {"5": 8, "6": 9, "7": 10}}`. Nested frames and groups (and their
+sublayers) are in it. So `"field": "map/6"` is the copy of layer 6:
 
 ```json
 {"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"batch","arguments":{"label":"Copy","commands":[
@@ -1912,6 +1677,6 @@ references in its steps are to its own steps and names, not the outer batch's; t
 reach into its result list with a path (`{"$ref": "inner", "field": "1/id"}`).
 
 The end-to-end tests in `crates/mcp/tests/it/agent_tasks.rs` are worked examples of realistic tasks
-(auto layout, a card built in one batch with step references, components and overrides, gradients
+(auto layout, a card built in one batch with step references, gradients
 and shadows, paint styles, Light/Dark variables, align/distribute/group, boolean subtract + flatten,
 export, undo/redo, drawing with tools).

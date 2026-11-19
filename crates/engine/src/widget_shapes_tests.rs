@@ -8,8 +8,8 @@ use std::fmt::Write as _;
 use serde_json::{Value, json};
 
 use crate::Session;
-use crate::components::tests::{ex, idv, node};
 use crate::plugins_tests::{install, undo_len};
+use crate::test_helpers::{ex, idv, node};
 use crate::widgets_tests::{W, err};
 use figcraft_doc::{NodeId, NodeKind};
 use figcraft_geom::rotation_degrees;

@@ -7,11 +7,11 @@ use egui::{Align2, Color32, CornerRadius, Id, Rect, Sense, Stroke, Ui, Vec2, pos
 use figcraft_doc::{Document, NodeId, NodeKind};
 use serde_json::json;
 
+use crate::FigApp;
 use crate::a11y::{self, Region, RowInfo, Tip};
 use crate::i18n::{tr, trf, trn};
 use crate::icons::{self, Icon};
 use crate::theme::{ACCENT, Tokens, regular, semibold};
-use crate::{FigApp, LeftTab};
 
 pub const ROW: f32 = 32.0;
 /// Width of the icon rail left of the side panel; the Home tab above it is as wide.
@@ -38,7 +38,6 @@ pub fn node_icon(doc: &Document, id: NodeId) -> Icon {
     }
     match &n.kind {
         NodeKind::Page { .. } => Icon::Page,
-        NodeKind::Frame if figcraft_engine::components::is_slot(doc, id) => Icon::Slot,
         NodeKind::Frame => {
             if let Some(l) = &n.layout {
                 match l.mode {
@@ -100,12 +99,12 @@ pub fn rail(app: &mut FigApp, ui: &mut Ui) {
     y += 44.0;
     ui.painter().line_segment([pos2(r.min.x + 18.0, y), pos2(r.max.x - 18.0, y)], Stroke::new(1.0, t.border));
     y += 12.0;
-    let items = [(Icon::Page, tr("File"), LeftTab::File), (Icon::Assets, tr("Assets"), LeftTab::Assets)];
-    for (icon, label, tab) in items {
+    let items = [(Icon::Page, tr("File"))];
+    for (icon, label) in items {
         let ir = Rect::from_center_size(pos2(r.center().x, y + 18.0), vec2(40.0, 36.0));
         let hit = Rect::from_min_max(pos2(r.min.x, y), pos2(r.max.x, y + 56.0));
         let resp = ui.interact(hit, ui.scope_id().with(("rail", label)), Sense::click()).tip(label);
-        let active = tab == app.ui.left_tab && !app.ui.left_collapsed && !app.ui.versions.open;
+        let active = !app.ui.left_collapsed && !app.ui.versions.open;
         a11y::tab(&resp, label, active);
         if active {
             ui.painter().rect_filled(ir, CornerRadius::same(6), t.selected_row);
@@ -120,7 +119,6 @@ pub fn rail(app: &mut FigApp, ui: &mut Ui) {
             if active {
                 app.ui.close_left_panel();
             } else {
-                app.ui.left_tab = tab;
                 app.ui.open_left_panel();
             }
             app.ui.versions = Default::default();
@@ -129,8 +127,8 @@ pub fn rail(app: &mut FigApp, ui: &mut Ui) {
     }
 }
 
-/// Draw the left panel: versions when open, otherwise the file/Assets header with in-place
-/// file rename and collapse control, followed by Pages and Layers or the Assets panel.
+/// Draw the left panel: versions when open, otherwise the file header with in-place file rename
+/// and collapse control, followed by Pages and Layers.
 pub fn left_panel(app: &mut FigApp, ui: &mut Ui) {
     if app.ui.versions.open {
         crate::versions::panel(app, ui);
@@ -138,19 +136,15 @@ pub fn left_panel(app: &mut FigApp, ui: &mut Ui) {
     }
     let t = Tokens::get(ui.ctx());
     let full = ui.max_rect();
-    // Header: file name (or "Assets") + drafts + collapse.
+    // Header: file name + drafts + collapse.
     let (head, _) = ui.allocate_exact_size(vec2(full.width(), 64.0), Sense::hover());
-    if app.ui.left_tab == LeftTab::Assets {
-        ui.painter().text(pos2(head.min.x + 16.0, head.min.y + 24.0), Align2::LEFT_CENTER, tr("Assets"), semibold(13.0), t.text);
-    } else {
-        let name = app.session.doc().map(|d| d.name.clone()).unwrap_or_default();
-        let nr = Rect::from_min_max(pos2(head.min.x + 14.0, head.min.y + 14.0), pos2(head.max.x - 48.0, head.min.y + 34.0));
-        let start = std::mem::take(&mut app.ui.rename_file);
-        if let (Some(new), _) = crate::widgets::rename_field(ui, Id::unique("filename"), &name, nr, semibold(13.0), start) {
-            app.run("file.rename", json!({"name": new}));
-        }
-        ui.painter().text(pos2(head.min.x + 16.0, head.min.y + 46.0), Align2::LEFT_CENTER, tr("Drafts"), regular(11.0), t.text_secondary);
+    let name = app.session.doc().map(|d| d.name.clone()).unwrap_or_default();
+    let nr = Rect::from_min_max(pos2(head.min.x + 14.0, head.min.y + 14.0), pos2(head.max.x - 48.0, head.min.y + 34.0));
+    let start = std::mem::take(&mut app.ui.rename_file);
+    if let (Some(new), _) = crate::widgets::rename_field(ui, Id::unique("filename"), &name, nr, semibold(13.0), start) {
+        app.run("file.rename", json!({"name": new}));
     }
+    ui.painter().text(pos2(head.min.x + 16.0, head.min.y + 46.0), Align2::LEFT_CENTER, tr("Drafts"), regular(11.0), t.text_secondary);
     let hr = Rect::from_center_size(pos2(head.max.x - 24.0, head.min.y + 24.0), vec2(24.0, 24.0));
     // Minimize, by the file name: "click Minimize next to the file name to collapse the
     // navigation bar, left sidebar, and right sidebar" (Explore the navigation bar and left sidebar).
@@ -163,13 +157,8 @@ pub fn left_panel(app: &mut FigApp, ui: &mut Ui) {
         app.run("view.minimize", json!({}));
     }
     ui.painter().line_segment([head.left_bottom(), head.right_bottom()], Stroke::new(1.0, t.border));
-    match app.ui.left_tab {
-        LeftTab::File => {
-            pages(app, ui);
-            layers(app, ui);
-        }
-        LeftTab::Assets => crate::assets_panel::show(app, ui),
-    }
+    pages(app, ui);
+    layers(app, ui);
 }
 
 /// Draw the page list with open/search/add controls, filtering, selection, rename,
@@ -365,7 +354,7 @@ fn pages(app: &mut FigApp, ui: &mut Ui) {
 /// clicked last, and the list is still on screen.
 pub(crate) fn pages_have_keyboard(app: &FigApp) -> bool {
     let Ok(ds) = app.session.ds() else { return false };
-    app.ui.pages_focus == Some(ds.uid) && app.ui.pages_open && !app.ui.left_collapsed && !ds.view.ui_hidden && app.ui.left_tab == LeftTab::File
+    app.ui.pages_focus == Some(ds.uid) && app.ui.pages_open && !app.ui.left_collapsed && !ds.view.ui_hidden
 }
 
 /// Delete `page` (no confirmation: Undo brings it back) and say so.
@@ -697,7 +686,6 @@ pub(crate) fn start_rename(app: &mut FigApp, ids: &[NodeId]) {
     }
     let rows = listed_rows(&doc, page, &app.ui.expanded, &app.ui.layer_filter.trim().to_lowercase());
     let Some(id) = rows.iter().map(|r| r.id).find(|r| ids.contains(r)) else { return };
-    app.ui.left_tab = LeftTab::File;
     app.ui.open_left_panel();
     rename_layer(app, id);
 }
@@ -792,23 +780,9 @@ fn drag_autoscroll(ui: &mut Ui, dragging: bool) {
     }
 }
 
-/// Whether a layer is a component, a variant set or an instance: its rows take the component tint.
-fn is_component(kind: &NodeKind) -> bool {
-    matches!(kind, NodeKind::Component { .. } | NodeKind::ComponentSet { .. } | NodeKind::Instance { .. })
-}
-
-/// A row's icon or name colour: the theme's component tint when shown (it reads at AA on the
-/// panel and on the selected row, where the canvas purple doesn't, #1903), else `normal` or, when
-/// hidden, `faded` (halving the tint's alpha would drop it to about 2.2:1, under the 3:1 floor
-/// for dim text).
-fn row_color(t: &Tokens, component: bool, shown: bool, normal: Color32, faded: Color32) -> Color32 {
-    if !shown {
-        faded
-    } else if component {
-        t.component
-    } else {
-        normal
-    }
+/// A row's icon or name colour: `normal`, or `faded` when hidden.
+fn row_color(shown: bool, normal: Color32, faded: Color32) -> Color32 {
+    if shown { normal } else { faded }
 }
 
 /// The pointer `p` over row `rects` = [row, padded row]: the drop zone it shows (-1 above, 0 into,
@@ -1044,15 +1018,12 @@ fn hierarchy_bg(roots: &[Option<NodeId>], i: usize, mut rr: Rect, gap: f32) -> O
     Some((rr, CornerRadius { nw: top, ne: top, sw: bottom, se: bottom }))
 }
 
-/// A row's background: selected, inside a selected layer, or outlined when hovered.
-/// `state` is [selected, in_selected, component]: a selected component's row takes the component
-/// tint, not the plain selection's green; the rows inside it are tinted by the caller (#1903).
-fn paint_row_bg(ui: &Ui, t: &Tokens, rr: Rect, state: [bool; 3], hovered: bool) {
-    let [selected, in_selected, is_comp] = state;
+/// A row's background: selected, inside a selected layer (`in_selected`), or outlined when hovered.
+fn paint_row_bg(ui: &Ui, t: &Tokens, rr: Rect, [selected, in_selected]: [bool; 2], hovered: bool) {
     if selected {
-        ui.painter().rect_filled(rr, CornerRadius::same(5), if is_comp { t.component_row } else { t.selected_row });
+        ui.painter().rect_filled(rr, CornerRadius::same(5), t.selected_row);
     } else if !in_selected && hovered {
-        ui.painter().rect_stroke(rr, CornerRadius::same(5), Stroke::new(1.0, if is_comp { t.component } else { ACCENT }), egui::StrokeKind::Inside);
+        ui.painter().rect_stroke(rr, CornerRadius::same(5), Stroke::new(1.0, ACCENT), egui::StrokeKind::Inside);
     }
 }
 
@@ -1184,19 +1155,16 @@ fn layers(app: &mut FigApp, ui: &mut Ui) {
                 locked: n.locked,
             };
             a11y::tree_item(&resp, if n.name.is_empty() { tr(n.kind.label()) } else { &n.name }, &info);
-            let is_comp = is_component(&n.kind);
             let rr = r.shrink2(vec2(8.0, 0.0));
             let bg = hierarchy_bg(&roots, i - roots_start, rr, pitch - ROW);
             let in_selected = !selected && bg.is_some();
             if let Some((rect, corners)) = bg {
-                // Inside a selected component, variant set or instance the rows take its tint.
-                let in_comp = roots.get(i - roots_start).copied().flatten().and_then(|r| doc.node(r)).is_some_and(|r| is_component(&r.kind));
-                ui.painter().rect_filled(rect, corners, if in_comp { t.component_row_child } else { t.selected_row_child });
+                ui.painter().rect_filled(rect, corners, t.selected_row_child);
             }
             a11y::ring_around(ui, rr, &resp);
             // Over the row, its eye and padlock included (they sit on top of it).
             let over = resp.contains_pointer();
-            paint_row_bg(ui, &t, rr, [selected, in_selected, is_comp], over || hover == Some(row.id));
+            paint_row_bg(ui, &t, rr, [selected, in_selected], over || hover == Some(row.id));
             if over {
                 hovered_row = Some(row.id);
             }
@@ -1218,7 +1186,7 @@ fn layers(app: &mut FigApp, ui: &mut Ui) {
             }
             let icon = node_icon(&doc, row.id);
             let shown = n.visible && !row.dimmed;
-            let icon_col = row_color(&t, is_comp || icon == Icon::Slot, shown, t.icon, t.text_tertiary);
+            let icon_col = row_color(shown, t.icon, t.text_tertiary);
             let icon_rect = Rect::from_center_size(pos2(x0 + 22.0, r.center().y), vec2(14.0, 14.0));
             icons::paint(ui.painter(), icon_rect, icon, icon_col);
             let name_x = x0 + 36.0;
@@ -1227,7 +1195,7 @@ fn layers(app: &mut FigApp, ui: &mut Ui) {
                     rename_done = Some((row.id, new));
                 }
             } else {
-                let col = row_color(&t, is_comp, shown, t.text, t.text_tertiary);
+                let col = row_color(shown, t.text, t.text_tertiary);
                 let font = name_font(&doc, page, n);
                 let name = row_name(n).to_string();
                 // Room left of the lock and eye buttons (the row is wide enough for the whole
@@ -1273,10 +1241,8 @@ fn layers(app: &mut FigApp, ui: &mut Ui) {
             // drag released there lands nowhere.
             let clip = ui.clip_rect();
             let over = dragging.is_some() && ui.input(|i| i.pointer.hover_pos()).is_some_and(|p| r.contains(p) && clip.contains(p));
-            // What is inside the dragged layers, and inside an instance, takes no drop.
-            refused |= over
-                && (doc.ancestors(row.id).iter().any(|a| moving.contains(a))
-                    || n.parent.is_some_and(|p| figcraft_engine::components::structure_locked(&doc, p)));
+            // What is inside the dragged layers takes no drop.
+            refused |= over && doc.ancestors(row.id).iter().any(|a| moving.contains(a));
             if dragging.is_some()
                 && !blocked(row.id)
                 && let Some(p) = ui.input(|i| i.pointer.hover_pos())

@@ -144,13 +144,6 @@ impl Session {
         }
         ds.clean_selection();
         ds.revision += 1;
-        let (uid, doc) = (ds.uid, ds.doc.clone());
-        if self.clipboard.source_doc == uid {
-            self.clipboard.copied_components.retain(|id| {
-                doc.node(*id)
-                    .is_some_and(|n| matches!(n.kind, figcraft_doc::NodeKind::Component { .. } | figcraft_doc::NodeKind::ComponentSet { .. }))
-            });
-        }
         Ok(true)
     }
 

@@ -12,29 +12,20 @@ pub fn copy_to_clipboard(s: &mut Session, cmd: &str, ids: &[NodeId]) -> Result<(
         return Err(EngineError::Disabled(cmd.into(), "pages can't be copied; use page.duplicate".into()));
     }
     let (nodes, images, bounds) = copied(&ds.doc, &layers);
-    store_clipboard(s, cmd, nodes, images, bounds)
+    store_clipboard(s, nodes, images, bounds)
 }
 
 /// Make `nodes` (the copied layers, each root's transform in page space) the clipboard's layers.
 pub(super) fn store_clipboard(
     s: &mut Session,
-    cmd: &str,
     nodes: Vec<(NodeId, Vec<Node>)>,
     images: BTreeMap<String, ImageData>,
     bounds: Option<figcraft_geom::Rect>,
 ) -> Result<()> {
     let ds = s.ds()?;
-    let (source, source_path, uid) = (ds.doc.clone(), ds.path.clone(), ds.uid);
+    let (source, uid) = (ds.doc.clone(), ds.uid);
     s.clipboard.source = Some(source);
-    s.clipboard.source_path = source_path;
     s.clipboard.source_doc = uid;
-    s.clipboard.copied_components = nodes
-        .iter()
-        .filter(|(_, sub)| {
-            cmd == "edit.copy" && sub.first().is_some_and(|n| matches!(n.kind, NodeKind::Component { .. } | NodeKind::ComponentSet { .. }))
-        })
-        .map(|(root, _)| *root)
-        .collect();
     s.clipboard.nodes = nodes;
     s.clipboard.images = images;
     s.clipboard.bounds = bounds;
@@ -116,8 +107,6 @@ pub fn paste_into(s: &mut Session, parent: NodeId, at: Option<(f64, f64)>) -> Re
     if clip.nodes.is_empty() {
         return Err(EngineError::Disabled("edit.paste".into(), "the clipboard is empty".into()));
     }
-    // From another file: its instances follow the mains this file can have.
-    let foreign = clip.source.as_ref().filter(|_| s.ds().is_ok_and(|d| d.uid != clip.source_doc));
     let copy_local = s.ds()?.uid == clip.source_doc;
     let doc = s.doc_mut()?;
     for (k, v) in &clip.images {
@@ -132,16 +121,6 @@ pub fn paste_into(s: &mut Session, parent: NodeId, at: Option<(f64, f64)>) -> Re
     let mut out = Vec::new();
     let mut all = BTreeMap::new();
     for (root, nodes) in &clip.nodes {
-        if copy_local
-            && clip.copied_components.contains(root)
-            && let Some(n) = nodes.first().filter(|n| matches!(n.kind, NodeKind::Component { .. }))
-            && doc.node(*root).is_some_and(|n| matches!(n.kind, NodeKind::Component { .. }))
-        {
-            let instance = crate::components::create_instance(doc, *root, parent, 0.0, 0.0)?;
-            doc.get_mut(instance)?.transform = doc.world_transform(parent).inverse() * shift * n.transform;
-            out.push(instance);
-            continue;
-        }
         let mut map = BTreeMap::new();
         for n in nodes {
             map.insert(n.id, doc.alloc_id());
@@ -159,11 +138,36 @@ pub fn paste_into(s: &mut Session, parent: NodeId, at: Option<(f64, f64)>) -> Re
     let originals: Vec<(NodeId, figcraft_doc::BoardItem)> =
         clip.nodes.iter().flat_map(|(_, nodes)| nodes).filter_map(|n| Some((*all.get(&n.id)?, n.board.clone()?))).collect();
     crate::board::rejoin(doc, &originals, &all, !copy_local);
-    if let Some(src) = foreign {
-        crate::library::adopt_pasted(doc, src, clip.source_path.as_deref(), &all)?;
+    if !copy_local {
+        unlink_left_behind(doc, &all);
     }
-    crate::library::count_inserted(doc, &out);
     Ok(out)
+}
+
+/// Layers pasted from another file (`map`: their ids there → the pasted ids) that name a main
+/// component or a main layer left behind in that file name a fresh id instead: an id of the other
+/// file never points at an unrelated layer of this one. Their own layers draw as before.
+fn unlink_left_behind(doc: &mut Document, map: &BTreeMap<NodeId, NodeId>) {
+    for id in map.values().copied() {
+        let main = match doc.node(id).map(|n| (&n.kind, n.source)) {
+            Some((NodeKind::Instance { component, .. }, source)) => (Some(*component), source),
+            Some((_, source)) => (None, source),
+            None => continue,
+        };
+        let pasted = |i: &NodeId| map.values().any(|m| m == i);
+        let main = (main.0.filter(|c| !pasted(c)), main.1.filter(|s| !pasted(s)));
+        if main == (None, None) {
+            continue;
+        }
+        let fresh = (main.0.map(|_| doc.alloc_id()), main.1.map(|_| doc.alloc_id()));
+        let Some(n) = doc.node_mut(id) else { continue };
+        if let (NodeKind::Instance { component, .. }, Some(f)) = (&mut n.kind, fresh.0) {
+            *component = f;
+        }
+        if fresh.1.is_some() {
+            n.source = fresh.1;
+        }
+    }
 }
 
 pub(super) fn paste(s: &mut Session, p: &Value) -> Result<Value> {
@@ -176,18 +180,10 @@ pub(super) fn paste(s: &mut Session, p: &Value) -> Result<Value> {
     // else in the frame's centre; otherwise in place on the page (or the viewport centre).
     let sel = s.selection();
     let doc = s.doc()?;
-    let copy_local = s.ds()?.uid == s.clipboard.source_doc;
-    let target = id(p, "parent").or_else(|| {
-        sel.first()
-            .copied()
-            .filter(|i| {
-                sel.len() == 1
-                    && doc.node(*i).is_some_and(|n| n.kind.is_frame_like() && !matches!(n.kind, NodeKind::Instance { .. }) && !n.is_board_atom())
-            })
-            .filter(|i| !copy_local || !s.clipboard.copied_components.iter().any(|root| doc.is_ancestor(*root, *i)))
-    });
+    let target = id(p, "parent")
+        .or_else(|| sel.first().copied().filter(|i| sel.len() == 1 && doc.node(*i).is_some_and(|n| n.kind.is_frame_like() && !n.is_board_atom())));
     // One layer selected that isn't a frame target: the copy joins its parent, just above it (#2355).
-    let sibling_of = if target.is_none() && id(p, "parent").is_none() { sibling_anchor(s, &sel, copy_local) } else { None };
+    let sibling_of = if target.is_none() && id(p, "parent").is_none() { sibling_anchor(s, &sel) } else { None };
     let target = target.or_else(|| sibling_of.and_then(|i| doc.node(i).and_then(|n| n.parent)));
     let parent = target.unwrap_or(page);
     let at = match (num(p, "x"), num(p, "y")) {
@@ -223,20 +219,14 @@ pub(super) fn paste(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"ids": ids}))
 }
 
-/// The one selected layer a plain paste goes next to: not a page-level layer, not inside an instance
-/// (its children are fixed), not a board atom, a component set (a variant's parent) or inside a copied
-/// component. Else the page, as before.
-fn sibling_anchor(s: &Session, sel: &[NodeId], copy_local: bool) -> Option<NodeId> {
+/// The one selected layer a plain paste goes next to: not a page-level layer and not in a board
+/// atom. Else the page, as before.
+fn sibling_anchor(s: &Session, sel: &[NodeId]) -> Option<NodeId> {
     let [only] = sel else { return None };
     let doc = s.doc().ok()?;
     let parent = doc.node(*only)?.parent?;
     let pn = doc.node(parent)?;
-    let ok = !pn.is_page()
-        && pn.kind.is_frame_like()
-        && !pn.is_board_atom()
-        && !crate::components::inside_instance(doc, *only)
-        && !matches!(pn.kind, NodeKind::Instance { .. } | NodeKind::ComponentSet { .. })
-        && (!copy_local || !s.clipboard.copied_components.iter().any(|root| doc.is_ancestor(*root, parent)));
+    let ok = !pn.is_page() && pn.kind.is_frame_like() && !pn.is_board_atom();
     ok.then_some(*only)
 }
 

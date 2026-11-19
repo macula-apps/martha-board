@@ -1,4 +1,4 @@
-use super::{Arc, BTreeSet, Document, Node, NodeId, board, cmd, components, measure, style_vars};
+use super::{Arc, BTreeSet, Document, Node, NodeId, board, cmd, measure, style_vars};
 
 /// Nodes whose `Arc` differs from `before` (new or edited).
 pub fn changed_nodes(doc: &Document, before: &Document) -> Vec<NodeId> {
@@ -29,7 +29,7 @@ fn test_panic() {
 fn test_panic() {}
 
 /// Keep derived state consistent after edits: text boxes resize to their content, groups wrap
-/// their children, instances follow their main components, auto layout re-flows.
+/// their children, auto layout re-flows.
 pub fn normalize(doc: &mut Document, before: &Document) {
     test_panic();
     // Only what was touched since the last normalisation (edited, added or removed).
@@ -89,17 +89,6 @@ pub fn normalize(doc: &mut Document, before: &Document) {
                 n.transform *= figcraft_geom::kurbo::Affine::translate((-dw, 0.0));
             }
         }
-    }
-    touched.extend(doc.take_dirty());
-    // 2. Instances follow edited main components (and record overrides inside instances).
-    let changed = live(doc, &touched);
-    components::sync_after_edit(doc, before, &changed, &touched);
-    // Rebuilt copies took their mains' values: their bindings resolve in their own modes.
-    let synced = doc.take_dirty();
-    if !synced.is_empty() {
-        cmd::styles::apply_bindings_to(doc, Some(&synced));
-        style_vars::refresh(doc, Some(before), Some(&synced));
-        touched.extend(synced);
     }
     touched.extend(doc.take_dirty());
     touched.extend(moved);
@@ -280,7 +269,9 @@ fn binding_scope(doc: &Document, before: &Document, touched: &BTreeSet<NodeId>) 
             out.insert(id);
         }
         if modes && matches!(n.kind, figcraft_doc::NodeKind::Component { .. }) {
-            for i in components::instances_of(doc, id) {
+            let shows = |n: &&Node| matches!(n.kind, figcraft_doc::NodeKind::Instance { component, .. } if component == id);
+            let instances: Vec<NodeId> = doc.nodes().filter(shows).map(|n| n.id).collect();
+            for i in instances {
                 out.extend(doc.subtree(i));
             }
         }

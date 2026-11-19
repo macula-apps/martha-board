@@ -4,7 +4,7 @@
 //! own ([`glyphs`]).
 //!
 //! Each template is real, editable content: shared colour and text styles, auto layout,
-//! components with properties and instances of them, variables with modes and constraints.
+//! frames used as components (with copies of them), variables with modes and constraints.
 //! Building one is deterministic: the same document every time.
 
 mod dashboard;

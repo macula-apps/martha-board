@@ -361,9 +361,9 @@ fn a_narrow_window_shows_one_side_panel_at_a_time() {
         assert!((1.0..=60.0).contains(&w), "{side:?}: the open panel leaves {w}");
     }
     // A command that opens the left panel opens it on a phone too, in place of the right one.
-    app.run("view.assets", json!({}));
+    app.run("file.versionHistory", json!({}));
     let w = canvas_width(&mut app, phone);
-    assert!((1.0..=60.0).contains(&w) && app.ui.mobile_panel == Some(MobilePanel::Left), "view.assets leaves {w}");
+    assert!((1.0..=60.0).contains(&w) && app.ui.mobile_panel == Some(MobilePanel::Left), "file.versionHistory leaves {w}");
     app.ui.mobile_panel = Some(MobilePanel::Right);
     let wide = canvas_width(&mut app, vec2(1440.0, 900.0));
     assert!(wide > 600.0 && wide < 1100.0, "a wide window shows both panels beside the canvas ({wide})");

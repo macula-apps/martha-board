@@ -4,7 +4,7 @@
 use crate::Session;
 use crate::compare::props::{Prop, Section, properties};
 use crate::compare::{ChangeKind, Comparison, compare_docs};
-use crate::components::tests::{card, copy_of, ex, idv};
+use crate::test_helpers::{ex, idv};
 use crate::test_variables as tv;
 use figcraft_doc::*;
 use serde_json::{Value, json};
@@ -109,35 +109,19 @@ fn added_removed_moved_and_reordered_layers() {
 }
 
 #[test]
-fn nested_and_instance_changes_are_found() {
+fn nested_changes_are_found() {
     let mut s = Session::new();
-    let (c, bg, title, _dot) = card(&mut s);
     let frame = idv(&ex(&mut s, "frame.create", json!({"x": 500, "y": 0, "width": 400, "height": 300, "name": "Screen"})));
-    let inst = idv(&ex(&mut s, "instance.create", json!({"component": c, "x": 10, "y": 10, "parent": frame})));
     let group_child = idv(&ex(&mut s, "shape.rectangle", json!({"x": 10, "y": 200, "width": 10, "height": 10, "parent": frame})));
     let outer = idv(&ex(&mut s, "object.group", json!({"ids": [group_child], "name": "Outer"})));
     let _inner = idv(&ex(&mut s, "object.group", json!({"ids": [group_child], "name": "Inner"})));
     let before = s.doc().unwrap().clone();
-    // A main component edit reaches the instance in the frame.
-    ex(&mut s, "node.set", json!({"id": bg, "props": {"fill": "#0000FF"}}));
-    let ibg = copy_of(&s, inst, bg);
-    let cmp = since(&before, &s);
-    assert!(texts(&cmp, ibg).contains(&"fill #EEEEEE → #0000FF".to_string()), "{:?}", cmp.changes);
-    // An override inside the instance, and a change deep in nested groups.
-    let ititle = copy_of(&s, inst, title);
-    ex(&mut s, "text.set", json!({"id": ititle, "characters": "Inbox"}));
+    // A change deep in nested groups.
     ex(&mut s, "node.set", json!({"id": group_child, "props": {"fill": "#00FF00"}}));
     let cmp = since(&before, &s);
-    assert!(texts(&cmp, ititle).contains(&"text “Hello” → “Inbox”".to_string()), "{:?}", cmp.changes);
     let deep = cmp.changes.iter().find(|l| l.id == group_child).expect("nested change");
     assert_eq!(deep.depth, 4, "page › frame › Outer › Inner › layer");
     assert!(cmp.changes.iter().all(|l| l.id != outer), "the groups themselves didn't change");
-    // Swapping the instance's component is reported by name.
-    let (c2, ..) = card(&mut s);
-    ex(&mut s, "node.set", json!({"id": c2, "props": {"name": "Card 2"}}));
-    ex(&mut s, "instance.swap", json!({"ids": [inst], "component": c2}));
-    let cmp = since(&before, &s);
-    assert!(texts(&cmp, inst).contains(&"component Card → Card 2".to_string()), "{:?}", texts(&cmp, inst));
 }
 
 // Moved from the Inspect tab's tests when Dev Mode left (#11): the properties the compare formats.

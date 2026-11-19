@@ -192,10 +192,15 @@ fn sel_operand(s: &Session, u: NodeId, x: f64) -> NodeId {
 fn double_click_enters_one_level() {
     let mut s = Session::new();
     let k = scene(&mut s);
-    let comp_child = rect(&mut s, 800.0, 0.0, None);
-    let comp = id(&ex(&mut s, "component.create", json!({"ids": [comp_child]})));
-    let inst = id(&ex(&mut s, "instance.create", json!({"component": comp, "x": 300, "y": 200, "parent": k.f})));
-    let inst_child = s.doc().unwrap().node(inst).unwrap().children[0];
+    // An instance as a file holds one (components have no commands since #28): its layer inside.
+    let main = rect(&mut s, 800.0, 0.0, None);
+    let (inst, inst_child) = crate::variable_data::edit(&mut s, |doc| {
+        let inst =
+            doc.create(k.f, figcraft_doc::NodeKind::Instance { component: main, props: Default::default() }, "Rectangle", 300.0, 200.0, 40.0, 40.0)?;
+        let child = doc.create(inst, figcraft_doc::NodeKind::Rectangle, "Rectangle", 0.0, 0.0, 40.0, 40.0)?;
+        Ok((inst, child))
+    })
+    .unwrap();
     // (point, selection before, selection after, derivation)
     let rows: Vec<((f64, f64), Vec<NodeId>, Vec<NodeId>, &str)> = vec![
         ((30.0, 30.0), vec![k.g], vec![k.a], "double-click on a group selects the layer inside it"),

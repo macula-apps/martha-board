@@ -62,25 +62,25 @@ fn ids_are_unique_and_every_kind_has_templates() {
 
 #[test]
 fn templates_use_the_features_they_show() {
-    let instances = |d: &Document| count(d, |k| matches!(k, NodeKind::Instance { .. }));
-    let components = |d: &Document| count(d, |k| matches!(k, NodeKind::Component { .. }));
-    let sets = |d: &Document| count(d, |k| matches!(k, NodeKind::ComponentSet { .. }));
-    let app = built("mobile-app");
-    assert!(components(&app) >= 4 && sets(&app) == 1 && instances(&app) >= 7);
+    // Components left (#28): no template makes a component, a component set or an instance.
+    for t in TEMPLATES {
+        let made = count(&built(t.id), |k| matches!(k, NodeKind::Component { .. } | NodeKind::ComponentSet { .. } | NodeKind::Instance { .. }));
+        assert_eq!(made, 0, "{}", t.id);
+    }
+    // A copy of a frame a template uses as a component shows the text its properties give.
+    let texts = |d: &Document| d.nodes().filter_map(|n| n.kind.text().map(|t| t.characters.clone())).collect::<Vec<_>>();
+    for (id, text) in [("mobile-app", "Get started"), ("design-system", "Create an account"), ("wireframe-kit", "Type to search"), ("slides", "4")] {
+        assert!(texts(&built(id)).iter().any(|t| t == text), "{id}: {text}");
+    }
     let ds = built("design-system");
     assert_eq!(ds.variables.collections.len(), 2);
     assert!(ds.variables.collections.iter().any(|c| c.modes.iter().map(|m| m.name.as_str()).eq(["Light", "Dark"])));
     assert!(ds.variables.variables.len() >= 16);
-    assert!(sets(&ds) == 2 && components(&ds) >= 13 && instances(&ds) >= 9);
     assert!(ds.ids().filter(|id| ds.node(*id).is_some_and(|n| !n.bound.is_empty())).count() > 50, "layers bound to variables");
     assert_eq!(ds.ids().filter(|id| ds.node(*id).is_some_and(|n| !n.var_modes.is_empty())).count(), 4, "frames in Light and in Dark");
     let grid = built("dashboard");
     assert!(grid.ids().any(|id| grid.node(id).is_some_and(|n| n.layout.as_ref().is_some_and(|l| l.mode == figcraft_doc::LayoutMode::Grid))));
     assert!(count(&grid, |k| matches!(k, NodeKind::Vector { .. })) >= 8, "charts drawn from vectors");
-    let icons = built("icon-set");
-    assert_eq!(components(&icons), 24);
-    assert_eq!(instances(&icons), 4);
-    assert!(components(&built("wireframe-kit")) >= 9);
     assert_eq!(built("social-posts").node(built("social-posts").first_page().unwrap()).unwrap().children.len(), 5);
     assert_eq!(built("slides").node(built("slides").first_page().unwrap()).unwrap().children.len(), 5);
     assert_eq!(built("landing-page").node(built("landing-page").first_page().unwrap()).unwrap().children.len(), 2, "desktop and phone");
@@ -236,24 +236,26 @@ fn without_measured_geometry(doc: &Document) -> String {
     v.to_string()
 }
 
-/// Each template's document, as [`without_measured_geometry`] gives it, fingerprinted on the code
-/// before the variables editor and its commands left (#16): the template kit now writes the
-/// variables, bindings and modes itself and must build the same documents.
-const BUILT_BEFORE_VARIABLES_LEFT: [(&str, &str); 8] = [
-    ("mobile-app", "e870a76945858414 167516"),
+/// Each template's document, as [`without_measured_geometry`] gives it. Fingerprinted on the code
+/// before the variables editor and its commands left (#16), the kit writing the variables, bindings
+/// and modes itself since; the templates that used components (all but the landing page, the
+/// dashboard and the social posts, which keep their fingerprints from then) were fingerprinted
+/// again when components left (#28) and the kit made them plain frames and copies.
+const BUILT_SINCE_COMPONENTS_LEFT: [(&str, &str); 8] = [
+    ("mobile-app", "1d0ea6a40a218e57 165576"),
     ("landing-page", "1380abfcd3c10c7b 147880"),
     ("dashboard", "5caca541c7eb234d 142418"),
-    ("design-system", "ad9b5b2780505ddf 162451"),
-    ("wireframe-kit", "6ba572cd39398556 133680"),
+    ("design-system", "b5cc3a48c258ebd4 158908"),
+    ("wireframe-kit", "a509b2997bc73fa3 129507"),
     ("social-posts", "1a9487e3ad6c76f8 70966"),
-    ("slides", "8528d0a69b687538 73158"),
-    ("icon-set", "7ceb6c4c78375ac7 100378"),
+    ("slides", "b45aa3021214f37a 72728"),
+    ("icon-set", "9f5da3fe48efbd38 99237"),
 ];
 
 #[test]
-fn every_template_builds_what_it_built_before_variables_left() {
-    assert_eq!(TEMPLATES.iter().map(|t| t.id).collect::<Vec<_>>(), BUILT_BEFORE_VARIABLES_LEFT.map(|(id, _)| id));
-    for (id, before) in BUILT_BEFORE_VARIABLES_LEFT {
+fn every_template_builds_what_it_built_when_components_left() {
+    assert_eq!(TEMPLATES.iter().map(|t| t.id).collect::<Vec<_>>(), BUILT_SINCE_COMPONENTS_LEFT.map(|(id, _)| id));
+    for (id, before) in BUILT_SINCE_COMPONENTS_LEFT {
         assert_eq!(fingerprint(without_measured_geometry(&built(id)).as_bytes()), before, "{id}");
     }
 }

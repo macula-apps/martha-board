@@ -7,7 +7,7 @@ use figcraft_doc::{Document, NodeId};
 use figcraft_engine::Session;
 use serde_json::{Value, json};
 
-use crate::assets_panel::thumbnail_pixmap;
+use crate::thumbnails::thumbnail_pixmap;
 
 /// Run `commands`, returning the document and the id each one made.
 fn doc_after(commands: &[(&str, Value)]) -> (Document, Vec<NodeId>) {

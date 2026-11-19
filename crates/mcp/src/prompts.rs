@@ -36,12 +36,12 @@ pub const PROMPTS: &[PromptDef] = &[
     PromptDef {
         name: "design_system",
         title: "Start a design system",
-        description: "Create colour and text styles and a button component with variants.",
+        description: "Create colour and text styles and a button styled with them.",
         args: &[
             PromptArg { name: "name", description: "Design system name (default \"Core\")", required: false },
             PromptArg { name: "primary", description: "Primary colour (default #3B5BDB)", required: false },
         ],
-        template: "Set up the \"{name}\" design system in FigCraft.\n\n1. Paint styles: create a swatch rectangle per colour (background, foreground, and primary {primary}) and run style.create {\"type\": \"paint\", \"name\": \"{name}/Primary\", \"from\": <id>}; text styles likewise from text layers (Heading 32 Bold, Body 16 Regular, Caption 12).\n2. Button component: a frame with auto layout (horizontal, padding [12,20,12,20], cornerRadius 8, mainAlign center) containing a text \"Button\"; style.apply the primary paint style; component.create on it. Make a secondary variant (duplicate, outline style), then component.combineVariants on both.\n3. list_commands with filter \"style\" or \"component\" shows the exact params.{verify}",
+        template: "Set up the \"{name}\" design system in FigCraft.\n\n1. Paint styles: create a swatch rectangle per colour (background, foreground, and primary {primary}) and run style.create {\"type\": \"paint\", \"name\": \"{name}/Primary\", \"from\": <id>}; text styles likewise from text layers (Heading 32 Bold, Body 16 Regular, Caption 12).\n2. Button: a frame with auto layout (horizontal, padding [12,20,12,20], cornerRadius 8, mainAlign center) containing a text \"Button\"; style.apply the primary paint style. Make a secondary one (edit.duplicate, outline style).\n3. list_commands with filter \"style\" shows the exact params.{verify}",
         defaults: &[("name", "Core"), ("primary", "#3B5BDB")],
     },
     PromptDef {
@@ -190,8 +190,5 @@ mod tests {
             }
         }
         assert!(named > 10, "the check found the command ids ({named})");
-        for id in ["component.create", "instance.create", "component.addProperty", "instance.setProperties", "component.combineVariants"] {
-            assert!(crate::INSTRUCTIONS.contains(id), "the instructions name {id}");
-        }
     }
 }

@@ -15,14 +15,14 @@ fn idv(v: &Value) -> NodeId {
     id_of(&v["id"]).unwrap()
 }
 
-/// A "Screen" frame holding an instance of a "Card" component (with a "Label" sublayer), a group
-/// of two rectangles and a nested frame with a text; returns (screen, card).
+/// A "Card" frame (with a "Label" sublayer) on the page, and a "Screen" frame holding a copy of it,
+/// a group of two rectangles and a nested frame with a text; returns (screen, card).
 fn screen(s: &mut Session) -> (NodeId, NodeId) {
     let card = idv(&ex(s, "frame.create", json!({"x": 0, "y": 0, "width": 80, "height": 40, "name": "Card"})));
     ex(s, "text.create", json!({"text": "Hi", "x": 4, "y": 4, "parent": card, "props": {"name": "Label"}}));
-    let card = idv(&ex(s, "component.create", json!({"ids": [card]})));
     let scr = idv(&ex(s, "frame.create", json!({"x": 200, "y": 0, "width": 300, "height": 300, "name": "Screen"})));
-    ex(s, "instance.create", json!({"component": card, "x": 210, "y": 10, "parent": scr}));
+    let inside = idv(&ex(s, "frame.create", json!({"x": 210, "y": 10, "width": 80, "height": 40, "parent": scr, "name": "Card"})));
+    ex(s, "text.create", json!({"text": "Hi", "x": 214, "y": 14, "parent": inside, "props": {"name": "Label"}}));
     let r = |s: &mut Session, y: f64| idv(&ex(s, "shape.rectangle", json!({"x": 210, "y": y, "width": 20, "height": 20, "parent": scr})));
     let (a, b) = (r(s, 100.0), r(s, 130.0));
     ex(s, "object.group", json!({"ids": [a, b]}));
@@ -60,15 +60,12 @@ fn assert_complete(s: &Session, roots: &[(NodeId, NodeId)], out: &Value) {
         assert_eq!(path(doc, root_o, o), path(doc, root_c, c), "{c} sits where {o} does");
         let (a, b) = (doc.node(o).unwrap(), doc.node(c).unwrap());
         assert_eq!(a.name, b.name, "{o} → {c}");
-        // A main component's copy is an instance of it (the tests check the roots' types).
-        if o != root_o {
-            assert_eq!(a.kind.type_name(), b.kind.type_name(), "{o} → {c}");
-        }
+        assert_eq!(a.kind.type_name(), b.kind.type_name(), "{o} → {c}");
     }
 }
 
 #[test]
-fn map_pairs_nested_frames_groups_and_instances_with_their_copies() {
+fn map_pairs_nested_frames_and_groups_with_their_copies() {
     let mut s = Session::new();
     let (scr, _) = screen(&mut s);
     let out = ex(&mut s, "edit.duplicate", json!({"ids": [scr], "map": true}));
@@ -78,7 +75,7 @@ fn map_pairs_nested_frames_groups_and_instances_with_their_copies() {
 }
 
 #[test]
-fn map_covers_several_roots_and_a_main_component_copied_as_an_instance() {
+fn map_covers_several_roots() {
     let mut s = Session::new();
     let (scr, card) = screen(&mut s);
     let out = ex(&mut s, "edit.duplicate", json!({"ids": [card, scr], "map": true}));
@@ -88,7 +85,7 @@ fn map_covers_several_roots_and_a_main_component_copied_as_an_instance() {
     assert!(ids.contains(&id_of(&card_copy).unwrap()) && ids.contains(&id_of(&scr_copy).unwrap()), "{out}");
     let doc = s.doc().unwrap();
     let card_copy = id_of(&card_copy).unwrap();
-    assert_eq!(doc.node(card_copy).unwrap().kind.type_name(), "INSTANCE", "a main component's copy is an instance");
+    assert_eq!(doc.node(card_copy).unwrap().kind.type_name(), "FRAME", "a frame's copy is a frame");
     assert_complete(&s, &[(card, card_copy), (scr, id_of(&scr_copy).unwrap())], &out);
 }
 

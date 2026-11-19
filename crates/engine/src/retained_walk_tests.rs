@@ -1,5 +1,5 @@
 //! A seeded random walk of edits, undo/redo, pans and zooms over a page of nested, rotated and
-//! clipping frames, groups, masks, booleans, auto layout, effects, text, instances, variables and
+//! clipping frames, groups, masks, booleans, auto layout, effects, text, copies, variables and
 //! styles: after every step the retained canvas render must match a full render of the same view.
 
 use std::sync::{Arc, Once};
@@ -65,7 +65,7 @@ fn shadow(offset: (f64, f64), radius: f64, spread: f64) -> Value {
 /// The page: shapes on it, a rotated clipping frame holding a rotated nested frame (not clipping)
 /// with text, a group with a drop shadow, a masked group, a boolean, an auto layout row with a
 /// blurred child, overflowing text, a layer with an inner shadow and an outside stroke, and a
-/// component with two instances, a bound colour variable and a paint style.
+/// card with two copies, a bound colour variable and a paint style.
 fn scene() -> (Session, NodeId) {
     fonts();
     let mut s = Session::new();
@@ -102,13 +102,13 @@ fn scene() -> (Session, NodeId) {
     let inner_shadow = serde_json::to_value(Effect::inner_shadow()).unwrap();
     s.execute("node.set", &json!({"id": inset, "effects": [inner_shadow], "stroke": "#202020", "strokeWeight": 3, "strokeAlign": "outside"}))
         .unwrap();
-    // A component with instances (one in the rotated frame), a bound colour variable and a paint
-    // style: edits to the main, the variable or the style repaint other layers.
+    // A card with copies (one in the rotated frame), a bound colour variable and a paint style:
+    // edits to the variable or the style repaint other layers.
     let main = id(s.execute("frame.create", &json!({"x": 20, "y": 340, "width": 80, "height": 50, "props": {"fill": "#E0F0E0"}})).unwrap());
     let part = shape(&mut s, "shape.ellipse", Some(main), [10.0, 10.0, 30.0, 30.0], "#C02060");
-    let comp = s.execute("component.create", &json!({"ids": [main]})).unwrap()["id"].clone();
-    s.execute("instance.create", &json!({"component": comp, "x": 130, "y": 340})).unwrap();
-    s.execute("instance.create", &json!({"component": comp, "x": 100, "y": 10, "parent": outer})).unwrap();
+    s.execute("edit.duplicate", &json!({"ids": [main], "dx": 110})).unwrap();
+    let copy = s.execute("edit.duplicate", &json!({"ids": [main]})).unwrap()["ids"][0].clone();
+    s.execute("node.reparent", &json!({"ids": [copy], "parent": outer})).unwrap();
     tv::collection(&mut s, "T", &["Mode 1"]);
     tv::variable(&mut s, "T", "brand", "color", &[json!("#FF8000")]);
     tv::bind(&mut s, &[part, g1], "fill", "brand");

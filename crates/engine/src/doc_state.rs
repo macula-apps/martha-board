@@ -1,7 +1,5 @@
 use super::view_state::ViewState;
-use super::{
-    Arc, BTreeMap, BTreeSet, Deserialize, Document, NodeId, Serialize, cmd, components, file_access, guides, library, rotation_origin, vectoredit,
-};
+use super::{Arc, BTreeMap, BTreeSet, Deserialize, Document, NodeId, Serialize, cmd, file_access, guides, rotation_origin, vectoredit};
 
 /// One undo step.
 #[derive(Clone, Debug)]
@@ -113,7 +111,7 @@ pub struct DocState {
     images_left_in_file: Option<(String, usize)>,
     /// The file on disk as this tab last read or wrote it: a save refuses to replace what another
     /// app (figcraft-cli, say) wrote to it since (#1330).
-    pub(crate) on_disk: Option<library::Stamp>,
+    pub(crate) on_disk: Option<file_access::Stamp>,
     /// Where each page's view was left in this session (its centre and zoom; see
     /// [`Self::open_page`]; not saved).
     page_views: BTreeMap<NodeId, (f64, f64, f64)>,
@@ -149,7 +147,6 @@ impl DocState {
         }
         doc.link_layer_text_styles();
         cmd::styles::apply_paint_bindings_on_load(&mut doc);
-        components::mark_layer_modes(&mut doc);
         // Initial import settlement belongs to the saved baseline, not the user's first edit.
         let page = doc.current_page.filter(|p| doc.pages.contains(p)).or_else(|| doc.first_page()).unwrap_or(NodeId(0));
         let doc = Arc::new(doc);
@@ -193,7 +190,7 @@ impl DocState {
 
     /// The tab's file now holds what this tab read or wrote.
     pub(crate) fn note_on_disk(&mut self) {
-        self.on_disk = self.path.as_deref().and_then(|p| library::stat(p).ok());
+        self.on_disk = self.path.as_deref().and_then(|p| file_access::stat(p).ok());
     }
 
     pub fn images_lost_saving_to(&self, path: &str) -> Option<usize> {

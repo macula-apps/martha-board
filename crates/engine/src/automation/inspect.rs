@@ -88,7 +88,6 @@ pub const NODE_KEYS: &[&str] = &[
     "sectionContentsHidden",
     "segments",
     "sizing",
-    "slot",
     "startCap",
     "strokeAlign",
     "strokeJoin",
@@ -406,9 +405,6 @@ fn dev_props(doc: &Document, n: &Node, o: &mut serde_json::Map<String, Value>, o
     }
     if !n.overrides.is_empty() {
         insert_prop(o, options, "overrides", || json!(n.overrides));
-    }
-    if let Some(slot) = options.includes("slot").then(|| crate::components::slot_name(doc, n.id)).flatten() {
-        insert_prop(o, options, "slot", || json!(slot));
     }
     // An operand combining by an operation of its own.
     if let Some(op) = n.bool_op.filter(|_| options.includes("operandOperation") && crate::booleans::group_of(doc, n.id).is_some()) {

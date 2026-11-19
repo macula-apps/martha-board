@@ -1,7 +1,9 @@
 //! The builder the starter templates share: a throwaway session whose document is built by
 //! running commands, the way a user (or a script) would make it. Variables, their bindings and
 //! modes have no commands since the variables editor left (#16): the kit writes them into the
-//! document itself.
+//! document itself. Components left too (#28): what a template calls a component is a plain frame
+//! the kit remembers, its variants sit in a frame, and each use of it is a copy with its text
+//! properties filled in.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -33,15 +35,27 @@ pub(super) fn merged(mut base: Value, over: Value) -> Value {
     base
 }
 
+/// What the kit remembers of a frame a template uses as a component (or of a frame of variants).
+#[derive(Default)]
+struct Part {
+    /// For a frame of variants: the variants, each named "Property=Value, …" (the first is the one
+    /// a use shows unless its properties pick another).
+    variants: Vec<NodeId>,
+    /// Text properties: the name and the text layers that show it (one per variant).
+    texts: Vec<(String, Vec<NodeId>)>,
+}
+
 pub(super) struct Kit {
     s: Session,
     /// Style ids by name ("Brand/Primary").
     styles: BTreeMap<String, String>,
+    /// The frames used as components, by id.
+    parts: BTreeMap<NodeId, Part>,
 }
 
 impl Kit {
     pub fn new(name: &str) -> Self {
-        Self { s: Session::with_document(Document::new(name)), styles: BTreeMap::new() }
+        Self { s: Session::with_document(Document::new(name)), styles: BTreeMap::new(), parts: BTreeMap::new() }
     }
 
     /// The document, with every page on `background` and the first page shown.
@@ -107,6 +121,8 @@ impl Kit {
     }
 
     fn create(&mut self, kind: &str, parent: NodeId, extra: Value, props: Value) -> Result<NodeId> {
+        // What a template calls a component is a frame.
+        let kind = if kind == "component" { "frame" } else { kind };
         let base = json!({"type": kind, "parent": parent.0, "select": false, "props": self.resolved(props)});
         self.made("node.create", merged(base, extra))
     }
@@ -260,36 +276,68 @@ impl Kit {
         })
     }
 
-    /// Combine components (named "Property=Value, …") into a component set called `name`.
+    /// Put the variants `ids` (frames named "Property=Value, …") in a frame called `name`.
     pub fn variants(&mut self, name: &str, ids: &[NodeId], props: Value) -> Result<NodeId> {
-        let set = self.made("component.combineVariants", json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()}))?;
-        self.set(set, merged(json!({"name": name}), props))?;
+        let set = self.made("object.frameSelection", json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "name": name}))?;
+        self.set(set, merged(json!({"name": name, "fills": []}), props))?;
+        self.parts.entry(set).or_default().variants = ids.to_vec();
         Ok(set)
     }
 
-    /// A text property of `component` (or of a set) shown by `layers` (one per variant).
-    pub fn text_prop(&mut self, component: NodeId, name: &str, default: &str, layers: &[NodeId]) -> Result<()> {
-        for (i, layer) in layers.iter().enumerate() {
-            if i == 0 {
-                self.run("component.addProperty", json!({"id": component.0, "name": name, "type": "text", "default": default, "layer": layer.0}))?;
-            } else {
-                self.run("component.bindProperty", json!({"layer": layer.0, "property": name, "field": "characters"}))?;
-            }
-        }
+    /// A text property `name` of `component` (or of a frame of variants) shown by `layers` (one per
+    /// variant). They keep their own text, the default.
+    pub fn text_prop(&mut self, component: NodeId, name: &str, _default: &str, layers: &[NodeId]) -> Result<()> {
+        self.parts.entry(component).or_default().texts.push((name.to_string(), layers.to_vec()));
         Ok(())
     }
 
-    /// An instance of `component` in `parent` with component `properties` and layer `props`.
+    /// A copy of `component` in `parent` (of the variant `properties` pick, for a frame of
+    /// variants) at its top left, with the text `properties` give and layer `props`.
     pub fn instance(&mut self, component: NodeId, parent: NodeId, properties: Value, props: Value) -> Result<NodeId> {
-        let id = self.made("instance.create", json!({"component": component.0, "parent": parent.0, "x": 0, "y": 0}))?;
-        if properties.as_object().is_some_and(|o| !o.is_empty()) {
-            self.run("instance.setProperties", json!({"ids": [id.0], "properties": properties}))?;
+        let part = self.parts.get(&component);
+        let source = part.map_or(component, |p| picked_variant(&self.s, &p.variants, &properties).unwrap_or(component));
+        let texts: Vec<(NodeId, String)> = part
+            .into_iter()
+            .flat_map(|p| &p.texts)
+            .filter_map(|(name, layers)| {
+                let text = properties.get(name)?.as_str()?.to_string();
+                let doc = self.s.doc().ok()?;
+                layers.iter().find(|l| doc.is_ancestor(source, **l)).map(|l| (*l, text))
+            })
+            .collect();
+        let (id, map) = variable_data::edit(&mut self.s, |doc| {
+            let id = doc.duplicate_into(source, parent, None)?;
+            doc.get_mut(id)?.transform = figcraft_geom::kurbo::Affine::IDENTITY;
+            let map: BTreeMap<NodeId, NodeId> = doc.subtree(source).into_iter().zip(doc.subtree(id)).collect();
+            Ok((id, map))
+        })?;
+        for (layer, text) in texts {
+            if let Some(copy) = map.get(&layer) {
+                self.run("text.set", json!({"id": copy.0, "characters": text}))?;
+            }
         }
         if props.as_object().is_some_and(|o| !o.is_empty()) {
             self.set(id, props)?;
         }
         Ok(id)
     }
+}
+
+/// The variant of `variants` (named "Property=Value, …") whose values are the first variant's with
+/// those `properties` names set: `None` when there are no variants or none matches.
+fn picked_variant(s: &Session, variants: &[NodeId], properties: &Value) -> Option<NodeId> {
+    let doc = s.doc().ok()?;
+    let values = |id: &NodeId| -> Option<BTreeMap<String, String>> {
+        let name = &doc.node(*id)?.name;
+        Some(name.split(',').filter_map(|pair| pair.split_once('=')).map(|(k, v)| (k.trim().to_string(), v.trim().to_string())).collect())
+    };
+    let mut wanted = values(variants.first()?)?;
+    for (k, v) in wanted.iter_mut() {
+        if let Some(x) = properties.get(k).and_then(Value::as_str) {
+            *v = x.to_string();
+        }
+    }
+    variants.iter().copied().find(|v| values(v).as_ref() == Some(&wanted))
 }
 
 /// The colours every template starts from, as paint styles.

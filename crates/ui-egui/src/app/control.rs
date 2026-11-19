@@ -39,7 +39,6 @@ impl FigApp {
     /// UI state as JSON (control channel `ui.inspect`).
     pub fn inspect(&self) -> Value {
         let mut state = json!({
-            "leftTab": self.ui.left_tab,
             "home": self.ui.home,
             "online": online::inspect(self),
             "tabs": self.session.docs.iter().map(|d| json!({"name": d.doc.name, "live": tabs::live_mark(self, d.uid).map(|shared| if shared { "shared" } else { "private" })})).collect::<Vec<_>>(),

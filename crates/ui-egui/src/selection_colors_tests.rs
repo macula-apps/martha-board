@@ -64,13 +64,11 @@ fn a_group_of_two_red_layers_shows_one_row() {
 }
 
 #[test]
-fn an_instance_whose_child_has_one_fill_shows_selection_colors() {
+fn a_frame_whose_child_has_one_fill_shows_selection_colors() {
     let mut s = Session::new();
     let f = frame(&mut s, None);
     rect(&mut s, 10, "#FF0000", Some(f));
-    let c = id(s.execute("component.create", &json!({"ids": [f]})).unwrap());
-    let i = id(s.execute("instance.create", &json!({"component": c, "x": 400, "y": 0})).unwrap());
-    assert_eq!(rows(s, &[i]), 1);
+    assert_eq!(rows(s, &[f]), 1);
 }
 
 #[test]

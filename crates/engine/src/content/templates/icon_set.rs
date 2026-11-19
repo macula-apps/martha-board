@@ -58,7 +58,7 @@ fn anatomy(k: &mut Kit, page: NodeId) -> Result<()> {
 
 /// Every icon as a component with its name under it. Returns the first one.
 fn icons(k: &mut Kit, parent: NodeId) -> Result<NodeId> {
-    let board = board(k, parent, "Icons", "Components: drag one from the Assets panel, or copy one and redraw it on the grid", LIBRARY)?;
+    let board = board(k, parent, "Icons", "Copy one and redraw it on the grid", LIBRARY)?;
     let grid = k.stack(board, "Set", H, 16.0, json!(0), json!({"sizingH": "fill", "wrap": true, "crossGap": 24}))?;
     let mut first = None;
     for glyph in glyphs::ALL {

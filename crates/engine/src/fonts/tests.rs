@@ -205,20 +205,6 @@ fn refit_measures_stale_text_boxes_again() {
     assert!(Session::empty().execute("text.refit", &json!({})).is_err());
 }
 
-/// Text inside an instance is refitted too.
-#[test]
-fn refit_reaches_text_in_instances() {
-    let mut s = Session::new();
-    let t = text(&mut s, "FigCraft Refit C");
-    let comp = id_of(&s.execute("component.create", &json!({"ids": [t]})).unwrap()["id"]).unwrap();
-    let inst = id_of(&s.execute("instance.create", &json!({"component": comp, "x": 300, "y": 0})).unwrap()["id"]).unwrap();
-    let copy = s.doc().unwrap().node(inst).unwrap().children[0];
-    let want = stale(&mut s, copy, -20.0);
-    let r = s.execute("text.refit", &json!({"ids": [inst]})).unwrap();
-    assert_eq!(refitted(&r), vec![copy.0]);
-    assert_eq!(width(&s, copy), want);
-}
-
 /// `text.loadFont` refuses what isn't a font file; `text.rescanFonts` reports what it added.
 #[test]
 fn fonts_load_from_files_and_rescans_report_new_families() {

@@ -37,11 +37,10 @@ pub enum Group {
     Edit,
     Transform,
     Arrange,
-    Components,
 }
 
 impl Group {
-    pub const ALL: [Group; 11] = [
+    pub const ALL: [Group; 10] = [
         Group::Essential,
         Group::Tools,
         Group::View,
@@ -52,7 +51,6 @@ impl Group {
         Group::Edit,
         Group::Transform,
         Group::Arrange,
-        Group::Components,
     ];
 
     pub fn label(self) -> &'static str {
@@ -67,7 +65,6 @@ impl Group {
             Group::Edit => "Edit",
             Group::Transform => "Transform",
             Group::Arrange => "Arrange",
-            Group::Components => "Components",
         }
     }
 }
@@ -216,8 +213,6 @@ pub static KEYS: &[Binding] = &[
     k(View, "pref.uiScaleUp", &["Alt+Shift+Cmd+="]).both(),
     k(View, "pref.uiScaleDown", &["Alt+Shift+Cmd+-"]).both(),
     k(View, "pref.uiScaleReset", &["Alt+Shift+Cmd+0"]).both(),
-    k(View, "view.assets", &["Alt+2"]).label("Assets panel"),
-    k(View, "libraries.open", &["Alt+3"]),
     k(View, "view.design", &["Alt+8"]).label("Design panel"),
     k(View, "view.minimize", &["Shift+Cmd+\\"]),
     k(View, "view.nextRegion", &["F6"]).win(&["F6", "Ctrl+F6"]).label("Focus the next region (toolbar, layers, canvas, properties)").both(),
@@ -331,11 +326,6 @@ pub static KEYS: &[Binding] = &[
     k(Arrange, "layout.add", &["Shift+A"]),
     k(Arrange, "layout.remove", &["Alt+Shift+A"]),
     k(Arrange, "layout.suggest", &["Ctrl+Shift+A"]).win(&["Ctrl+Alt+Shift+A"]),
-    // Components
-    k(Components, "component.create", &["Alt+Cmd+K"]),
-    k(Components, "component.detach", &["Alt+Cmd+B"]),
-    k(Components, "component.goToMain", &["Ctrl+Alt+Cmd+K"]).win(&["Ctrl+Alt+Shift+K"]),
-    k(Components, "view.assets", &["Shift+I"]).label("Insert a component (Assets)"),
 ];
 
 /// Pointer gestures and held keys the panel lists next to the bindings (handled by the canvas, not

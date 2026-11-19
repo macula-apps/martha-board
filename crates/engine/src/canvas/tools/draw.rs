@@ -150,7 +150,7 @@ impl Session {
                         for m in &moving {
                             // Group, boolean group and instance layers stay put: they only move.
                             let from = d.node(*m).and_then(|n| n.parent);
-                            if from.is_some_and(|f| crate::drop::keeps_layers(d, f)) || crate::components::structure_locked(d, target) {
+                            if from.is_some_and(|f| crate::drop::keeps_layers(d, f)) {
                                 continue;
                             }
                             // A layer can't go into itself; it stays where it is.
@@ -158,17 +158,10 @@ impl Session {
                         }
                         crate::normalize(ds.doc_mut(), &before);
                     }
-                    // Reordering or dragging layers out of an instance (outside its slots), or
-                    // moving layers inside one, are edits only its main can make: the gesture is
-                    // undone.
-                    if self.refused(&moving, true) {
-                        self.cancel_interaction()?;
-                    } else {
-                        self.commit_interaction()?;
-                        // Duplicate repeats a free Alt-drag's step (an auto layout places its own).
-                        if duplicate && !in_al && moving.len() == sources.len() {
-                            self.ds_mut()?.last_duplicate = Some(crate::cmd::edit::Duplicated { sources, copies: moving });
-                        }
+                    self.commit_interaction()?;
+                    // Duplicate repeats a free Alt-drag's step (an auto layout places its own).
+                    if duplicate && !in_al && moving.len() == sources.len() {
+                        self.ds_mut()?.last_duplicate = Some(crate::cmd::edit::Duplicated { sources, copies: moving });
                     }
                 } else {
                     self.cancel_interaction()?;
@@ -190,12 +183,7 @@ impl Session {
                 }
             }
             Gesture::Resize { .. } | Gesture::Rotate { .. } | Gesture::Arc { .. } | Gesture::Shape { .. } => {
-                // Layers inside an instance keep their main's size and rotation.
-                if self.refused(&self.selection(), false) {
-                    self.cancel_interaction()?;
-                } else {
-                    self.commit_interaction()?;
-                }
+                self.commit_interaction()?;
             }
             Gesture::Draw { start, id, parent, .. } => {
                 let tiny = (ev.p() - start).hypot() * ev.zoom < 3.0;

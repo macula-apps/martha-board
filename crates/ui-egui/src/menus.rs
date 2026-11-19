@@ -139,7 +139,6 @@ pub fn invoke(app: &mut FigApp, id: &str) {
         }
         // The file name in the left panel's header turns into its editor, the name selected.
         "file.rename" => {
-            app.ui.left_tab = crate::LeftTab::File;
             app.ui.open_left_panel();
             app.ui.rename_file = true;
         }
@@ -154,7 +153,6 @@ pub fn invoke(app: &mut FigApp, id: &str) {
         }
         "tool.set" => app.ui.tool_flyout = Some("move"),
         "page.select" => {
-            app.ui.left_tab = crate::LeftTab::File;
             app.ui.open_left_panel();
             app.ui.pages_open = true;
         }
@@ -344,7 +342,6 @@ const TOP_MENUS: &[&str] = &[
     tr_noop("Vector"),
     tr_noop("Plugins"),
     tr_noop("Preferences"),
-    tr_noop("Libraries"),
     tr_noop("Help"),
 ];
 
@@ -462,15 +459,8 @@ pub fn popups(app: &mut FigApp, ctx: &egui::Context) {
                         None
                     }
                 });
-                // Two or more main components combine into a component set. Judged on the selection
-                // the command acts on: a layer row right-clicked in a multi-selection passes only itself.
-                let combine = app
-                    .session
-                    .doc()
-                    .ok()
-                    .filter(|doc| figcraft_engine::cmd::component::can_combine_variants(doc, &app.session.selection()))
-                    .map(|_| i18n::command("component.combineVariants", "Combine as variants"));
-                // One layer with an image fill can be cropped (judged on the selection, as above).
+                // One layer with an image fill can be cropped. Judged on the selection the command
+                // acts on: a layer row right-clicked in a multi-selection passes only itself.
                 let crop = app.session.doc().ok().is_some_and(|doc| {
                     matches!(app.session.selection().as_slice(), [id] if doc.node(*id).and_then(figcraft_engine::cmd::image::top_image_fill).is_some())
                 });
@@ -497,8 +487,6 @@ pub fn popups(app: &mut FigApp, ctx: &egui::Context) {
                         ("-", ""),
                         (tr("Add auto layout"), "layout.add"),
                         (tr("Remove all auto layout"), "layout.removeAll"),
-                        (tr("Create component"), "component.create"),
-                        (tr("Detach instance"), "component.detach"),
                         ("-", ""),
                         (tr("Show/Hide"), "object.toggleVisible"),
                         (tr("Lock/Unlock"), "object.toggleLock"),
@@ -530,24 +518,8 @@ pub fn popups(app: &mut FigApp, ctx: &egui::Context) {
                 {
                     entries.insert(at + 1, entry);
                 }
-                if let Some(label) = &combine
-                    && let Some(at) = entries.iter().position(|e| e.1 == "component.create")
-                {
-                    entries.insert(at + 1, (label, "component.combineVariants"));
-                }
                 if crop && let Some(at) = entries.iter().position(|e| e.1 == "object.mask") {
                     entries.insert(at + 1, (tr("Crop image"), "image.crop"));
-                }
-                // An instance's actions reach its main component: replace "Create component" with
-                // "Go to main component" (as in Figma's context menu).
-                if app
-                    .session
-                    .doc()
-                    .ok()
-                    .is_some_and(|doc| ids.iter().all(|i| doc.node(*i).is_some_and(|n| matches!(n.kind, figcraft_doc::NodeKind::Instance { .. }))))
-                    && let Some(at) = entries.iter().position(|e| e.1 == "component.create")
-                {
-                    entries[at] = (tr("Go to main component"), "component.goToMain");
                 }
                 // A right-clicked ruler guide (selected, with no layers) can be removed.
                 if !has_sel && app.session.ds().is_ok_and(|d| d.selected_guide().is_some()) {

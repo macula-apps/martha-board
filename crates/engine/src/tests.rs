@@ -185,61 +185,6 @@ fn find_replace_rejects_empty_find() {
 }
 
 #[test]
-fn components_and_instances_sync() {
-    let mut s = sess();
-    let f = id(&s.execute("frame.create", &json!({"x": 0, "y": 0, "width": 100, "height": 50, "name": "Button"})).unwrap());
-    let label = id(&s.execute("text.create", &json!({"text": "OK", "x": 10, "y": 10, "parent": f})).unwrap());
-    let c = id(&s.execute("component.create", &json!({"ids": [f]})).unwrap());
-    assert_eq!(c, f);
-    let i = id(&s.execute("instance.create", &json!({"component": c, "x": 200, "y": 0})).unwrap());
-    let doc = s.doc().unwrap();
-    assert_eq!(doc.node(i).unwrap().children.len(), 1);
-    let inst_label = doc.node(i).unwrap().children[0];
-    // Edit the main: instance follows.
-    s.execute("node.set", &json!({"id": c, "props": {"fill": "#00ff00"}})).unwrap();
-    assert_eq!(s.doc().unwrap().node(i).unwrap().fills[0].solid_color().unwrap().to_hex(), "00FF00");
-    // Override text in the instance, then change main text: override wins.
-    s.execute("text.set", &json!({"id": inst_label, "characters": "Cancel"})).unwrap();
-    s.execute("text.set", &json!({"id": label, "characters": "Yes"})).unwrap();
-    let doc = s.doc().unwrap();
-    let kid = doc.node(i).unwrap().children[0];
-    assert_eq!(kid, inst_label, "ids are stable across syncs");
-    assert_eq!(doc.node(kid).unwrap().kind.text().unwrap().characters, "Cancel");
-    // Reset clears overrides.
-    s.execute("component.resetInstance", &json!({"ids": [i]})).unwrap();
-    let doc = s.doc().unwrap();
-    let kid = doc.node(i).unwrap().children[0];
-    assert_eq!(doc.node(kid).unwrap().kind.text().unwrap().characters, "Yes");
-    // Detach.
-    s.execute("component.detach", &json!({"ids": [i]})).unwrap();
-    assert_eq!(s.doc().unwrap().node(i).unwrap().kind.type_name(), "FRAME");
-    assert!(s.doc().unwrap().validate().is_empty());
-}
-
-#[test]
-fn variants_switch() {
-    let mut s = sess();
-    let a = id(&s
-        .execute(
-            "node.create",
-            &json!({"type": "component", "x": 0, "y": 0, "width": 40, "height": 40, "name": "State=Default", "props": {"fill": "#ff0000"}}),
-        )
-        .unwrap());
-    let b = id(&s
-        .execute(
-            "node.create",
-            &json!({"type": "component", "x": 60, "y": 0, "width": 40, "height": 40, "name": "State=Hover", "props": {"fill": "#0000ff"}}),
-        )
-        .unwrap());
-    s.execute("component.combineVariants", &json!({"ids": [a, b]})).unwrap();
-    let i = id(&s.execute("instance.create", &json!({"component": a, "x": 0, "y": 200})).unwrap());
-    s.execute("instance.setProperties", &json!({"ids": [i], "properties": {"State": "Hover"}})).unwrap();
-    let n = s.doc().unwrap().node(i).unwrap().clone();
-    assert!(matches!(n.kind, NodeKind::Instance { component, .. } if component == b));
-    assert_eq!(n.fills[0].solid_color().unwrap().to_hex(), "0000FF");
-}
-
-#[test]
 fn styles_and_variables() {
     let mut s = sess();
     let r = id(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10, "props": {"fill": "#123456"}})).unwrap());

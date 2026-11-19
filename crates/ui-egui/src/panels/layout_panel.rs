@@ -35,13 +35,7 @@ pub fn layout_section(app: &mut FigApp, ui: &mut Ui, doc: &Arc<Document>, sel: &
     let al = common(doc, sel, |n| n.layout.clone());
     let has_al = matches!(al, Some(Some(_)));
     let title = if has_al { tr("Auto layout") } else { tr("Layout") };
-    // An instance's auto layout is its main's (only padding, gap and alignment are its own); the
-    // layers inside it override their size and resizing, not their place in the layout.
-    let facts = crate::right::in_instance(ui.ctx(), doc, sel);
-    let (in_instance, nested) = (facts.any, facts.nested);
-    let btns: Vec<(Icon, &str)> = if in_instance {
-        vec![]
-    } else if layout_containers && no_al {
+    let btns: Vec<(Icon, &str)> = if layout_containers && no_al {
         vec![(Icon::Plus, crate::shortcuts::tip(tr("Add auto layout"), "layout.add"))]
     } else if has_al {
         vec![(Icon::Minus, crate::shortcuts::tip(tr("Remove auto layout"), "layout.remove"))]
@@ -51,27 +45,22 @@ pub fn layout_section(app: &mut FigApp, ui: &mut Ui, doc: &Arc<Document>, sel: &
     if widgets::section_header(ui, title, &btns, false).is_some() {
         app.run(if has_al { "layout.remove" } else { "layout.add" }, json!({"ids": ids}));
     }
-    let from_main = tr("In an instance, this comes from the main component");
     if let Some(Some(l)) = &al {
-        ui.add_enabled_ui(!in_instance, |ui| direction(app, ui, &ids, l)).response.on_disabled_hover_text(from_main);
+        direction(app, ui, &ids, l);
     }
-    dimensions(app, ui, doc, sel, has_al, nested, from_main);
+    dimensions(app, ui, doc, sel, has_al);
     if let Some(Some(l)) = &al {
         alignment(app, ui, &ids, l);
         spacing(app, ui, &ids, l);
-        ui.add_enabled_ui(!in_instance, |ui| {
-            advanced(app, ui, &ids, l);
-            if l.mode == LayoutMode::Grid && sel.len() == 1 {
-                tracks(app, ui, doc, &ids);
-            }
-        })
-        .response
-        .on_disabled_hover_text(from_main);
+        advanced(app, ui, &ids, l);
+        if l.mode == LayoutMode::Grid && sel.len() == 1 {
+            tracks(app, ui, doc, &ids);
+        }
     }
     crate::selection_spacing::panel(app, ui, sel);
     let grid_parent = sel.iter().all(|i| parent_of(doc, *i).and_then(|p| p.layout.as_ref()).is_some_and(|l| l.mode == LayoutMode::Grid));
     if grid_parent && common(doc, sel, |n| n.child_layout.absolute) == Some(false) {
-        ui.add_enabled_ui(!nested, |ui| grid_cell(app, ui, doc, sel)).response.on_disabled_hover_text(from_main);
+        grid_cell(app, ui, doc, sel);
     }
     if frames {
         let clip = common(doc, sel, |n| n.clip);
@@ -157,8 +146,7 @@ fn limit(n: &Node, horizontal: bool, is_min: bool) -> Option<f64> {
     }
 }
 
-/// `nested`: layers inside an instance, whose proportion lock is their main's (`from_main` says so).
-fn dimensions(app: &mut FigApp, ui: &mut Ui, doc: &Document, sel: &[NodeId], has_al: bool, nested: bool, from_main: &str) {
+fn dimensions(app: &mut FigApp, ui: &mut Ui, doc: &Document, sel: &[NodeId], has_al: bool) {
     let ids = sel.to_vec();
     let w_of = |n: &Node| (n.width * 100.0).round() / 100.0;
     let h_of = |n: &Node| (n.height * 100.0).round() / 100.0;
@@ -171,12 +159,7 @@ fn dimensions(app: &mut FigApp, ui: &mut Ui, doc: &Document, sel: &[NodeId], has
         let e = widgets::number_field_mixed(ui, Id::unique("lay_h"), Lead::Text("H"), h, "", col, 1.0);
         app.field_of(&ids, "height", e, h_of, |v| json!(v.max(0.0)));
         let locked = common(doc, sel, |n| n.constrain_proportions).unwrap_or(false);
-        let link = ui
-            .add_enabled_ui(!nested, |ui| {
-                icons::button(ui, if locked { Icon::LinkOn } else { Icon::LinkOff }, 24.0, locked, tr("Constrain proportions"))
-            })
-            .inner
-            .on_disabled_hover_text(from_main);
+        let link = icons::button(ui, if locked { Icon::LinkOn } else { Icon::LinkOff }, 24.0, locked, tr("Constrain proportions"));
         if link.clicked() {
             app.set_props(&ids, json!({"constrainProportions": !locked}));
         }

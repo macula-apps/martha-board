@@ -6,7 +6,7 @@ use figcraft_doc::proto::Expr;
 use serde_json::json;
 
 use crate::Session;
-use crate::components::tests::ex;
+use crate::test_helpers::ex;
 use crate::test_variables as tv;
 
 /// The issue's document: Theme with `shadow`, `surface` and `alias` (→ surface), then `shadow`

@@ -9,8 +9,8 @@ use figcraft_doc::{Document, Node, NodeId, VariableValue};
 use serde_json::{Value, json};
 
 use crate::Session;
-use crate::components::tests::ex;
 use crate::params::id_of;
+use crate::test_helpers::ex;
 use crate::test_variables as tv;
 
 fn idv(v: &Value) -> NodeId {

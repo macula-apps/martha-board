@@ -1,9 +1,9 @@
 //! Reordering paints, effects and layout grids (`fill.move`, `stroke.move`, `effect.move`,
 //! `grid.move`): one undo step each, items keep everything, variable bindings and style links
-//! follow; layout grid fields and instances' component properties bound to variables.
+//! follow; layout grid fields bound to variables.
 
 use figcraft_color::{Color, Gradient, GradientKind, ImageScaleMode, Paint};
-use figcraft_doc::{GridKind, LayoutGrid, Node, NodeId, NodeKind};
+use figcraft_doc::{GridKind, LayoutGrid, Node, NodeId};
 use serde_json::{Value, json};
 
 use crate::Session;
@@ -215,64 +215,4 @@ fn layout_grid_fields_bind_to_number_variables_and_follow_moves() {
     assert!(node(&s, f).bound.is_empty());
     ex(&mut s, "edit.undo", json!({}));
     assert_eq!(node(&s, f).bound.len(), 2);
-}
-
-#[test]
-fn instance_properties_bind_to_boolean_and_string_variables() {
-    let mut s = Session::new();
-    let f = id(ex(&mut s, "frame.create", json!({"x": 0, "y": 0, "width": 200, "height": 100, "name": "Card"})));
-    let title = id(ex(&mut s, "text.create", json!({"text": "Hello", "x": 10, "y": 10, "parent": f})));
-    let dot = id(ex(&mut s, "shape.ellipse", json!({"x": 170, "y": 10, "width": 20, "height": 20, "parent": f})));
-    let c = id(ex(&mut s, "component.create", json!({"ids": [f]})));
-    ex(&mut s, "component.addProperty", json!({"id": dot, "name": "Show dot", "type": "boolean", "default": true}));
-    ex(&mut s, "component.addProperty", json!({"id": c, "name": "Title", "type": "text", "layer": title}));
-    let i = id(ex(&mut s, "instance.create", json!({"component": c, "x": 300, "y": 0})));
-    let copy = |s: &Session, src: NodeId| {
-        let doc = s.doc().unwrap();
-        doc.subtree(i).into_iter().find(|x| doc.node(*x).and_then(|n| n.source) == Some(src)).unwrap()
-    };
-    let (ititle, idot) = (copy(&s, title), copy(&s, dot));
-    tv::collection(&mut s, "Flags", &["Short", "Long"]);
-    tv::variable(&mut s, "Flags", "badge", "boolean", &[json!(false)]);
-    tv::variable(&mut s, "Flags", "label", "string", &[json!("Hi")]);
-    tv::set(&mut s, "label", "Long", json!("Hello there"));
-    // Bound to an instance's boolean and text properties.
-    tv::bind(&mut s, &[i], "componentProperties/Show dot", "badge");
-    tv::bind(&mut s, &[i], "componentProperties/Title", "label");
-    assert!(!node(&s, idot).visible, "the bound boolean hides the dot");
-    assert_eq!(node(&s, ititle).kind.text().unwrap().characters, "Hi");
-    // Values and modes flow in.
-    tv::set_default(&mut s, "badge", json!(true));
-    assert!(node(&s, idot).visible);
-    tv::mode(&mut s, i, "Flags", "Long");
-    assert_eq!(node(&s, ititle).kind.text().unwrap().characters, "Hello there");
-    assert!(node(&s, ititle).overrides.is_empty(), "property values aren't overrides");
-    // A main edit rebuilds the instance: its bindings stay.
-    ex(&mut s, "node.set", json!({"id": dot, "props": {"fill": "#00FF00"}}));
-    assert!(node(&s, i).bound.contains_key("componentProperties/Title"));
-    tv::set(&mut s, "label", "Long", json!("After edit"));
-    assert_eq!(node(&s, ititle).kind.text().unwrap().characters, "After edit");
-    // Renaming the property keeps the binding; deleting it drops the binding.
-    ex(&mut s, "component.editProperty", json!({"id": c, "name": "Title", "newName": "Heading"}));
-    assert!(node(&s, i).bound.contains_key("componentProperties/Heading"));
-    tv::set(&mut s, "label", "Long", json!("Renamed"));
-    assert_eq!(node(&s, ititle).kind.text().unwrap().characters, "Renamed");
-    ex(&mut s, "component.deleteProperty", json!({"id": c, "name": "Heading"}));
-    assert!(!node(&s, i).bound.keys().any(|k| k.contains("Heading")));
-    assert!(matches!(node(&s, i).kind, NodeKind::Instance { .. }));
-    // Unbinding keeps the value (the Long mode's `false`).
-    assert!(!node(&s, idot).visible);
-    tv::unbind(&mut s, i, "componentProperties/Show dot");
-    tv::set(&mut s, "badge", "Long", json!(true));
-    assert!(!node(&s, idot).visible);
-    tv::set(&mut s, "badge", "Long", json!(false));
-    // Resetting the instance drops its property bindings with its values; detaching too.
-    tv::bind(&mut s, &[i], "componentProperties/Show dot", "badge");
-    assert!(!node(&s, idot).visible);
-    ex(&mut s, "component.resetInstance", json!({"ids": [i]}));
-    assert!(node(&s, i).bound.is_empty());
-    assert!(node(&s, idot).visible, "back to the default");
-    tv::bind(&mut s, &[i], "componentProperties/Show dot", "badge");
-    ex(&mut s, "component.detach", json!({"ids": [i]}));
-    assert!(node(&s, i).bound.is_empty());
 }

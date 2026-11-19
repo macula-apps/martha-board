@@ -1,6 +1,6 @@
 use super::{
-    Done, FigApp, LeftTab, MobilePanel, NodeId, PANEL_DEFAULT, Value, comments, dialogs, home, import_report, layers, live, menus, missing_fonts,
-    plugins_ui, updates_ui, versions,
+    Done, FigApp, MobilePanel, NodeId, PANEL_DEFAULT, Value, comments, dialogs, home, import_report, layers, live, menus, missing_fonts, plugins_ui,
+    updates_ui, versions,
 };
 
 impl FigApp {
@@ -143,18 +143,7 @@ impl FigApp {
                     self.services.save_prefs(&self.session.prefs);
                 }
                 "focus.region" => self.ui.nav.step(r.data.get("step").and_then(Value::as_i64).unwrap_or(1).clamp(-4, 4) as i32),
-                "panel.layers" => self.ui.left_tab = LeftTab::File,
-                "panel.assets" => {
-                    self.ui.left_tab = LeftTab::Assets;
-                    self.ui.open_left_panel();
-                    self.ui.versions = Default::default();
-                }
                 "panel.versionHistory" => versions::open(self),
-                "panel.libraries" => {
-                    self.ui.left_tab = LeftTab::Assets;
-                    self.ui.open_left_panel();
-                    self.ui.libraries = true;
-                }
                 "home" => self.ui.home = true,
                 "home.templates" => {
                     self.ui.home = true;

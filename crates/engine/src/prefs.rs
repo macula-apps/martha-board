@@ -112,12 +112,6 @@ pub struct Prefs {
     /// `widget:<plugin>`.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub recent_actions: Vec<String>,
-    /// The team libraries you added (`library.add`) or checked (`library.check`), as hashes of
-    /// their links (which carry tokens), newest first, at most
-    /// [`MAX_TEAM_LIBRARIES`](crate::library_server::MAX_TEAM_LIBRARIES): only these are checked
-    /// for updates by themselves. A file naming another one doesn't contact its server (#1097).
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub team_libraries: Vec<String>,
 }
 
 /// Recently run actions kept for the Actions palette (newest first).
@@ -158,7 +152,6 @@ impl Default for Prefs {
             view: BTreeMap::new(),
             board_grid: Default::default(),
             recent_actions: Vec::new(),
-            team_libraries: Vec::new(),
         }
     }
 }
@@ -204,13 +197,10 @@ pub struct Clipboard {
     /// The page-space bounds of the copied selection.
     pub bounds: Option<figcraft_geom::Rect>,
     pub source_doc: u64,
-    /// Copied component/set roots, excluding cuts and originals discarded by undo (ids are reused).
-    pub copied_components: std::collections::BTreeSet<NodeId>,
     /// Monotonic generation of the copied layers (contents, images, bounds and source). A UI
     /// clipboard mirror records it, so a later programmatic copy that never touched the system
     /// clipboard is not mistaken for the user's own copy just because the text still matches.
     pub layers_generation: u64,
-    /// The document copied from (pastes into other files follow its mains) and its file path.
+    /// The document copied from.
     pub source: Option<Arc<Document>>,
-    pub source_path: Option<String>,
 }

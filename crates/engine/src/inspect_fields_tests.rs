@@ -15,6 +15,22 @@ fn create(s: &mut Session, params: Value) -> NodeId {
     crate::params::id_of(&run(s, "node.create", params)["id"]).unwrap()
 }
 
+/// A main component `name` at `[x, y, width, height]` on the page and an instance of it at
+/// `[ix, iy]`, written into the document as a file holds them (components have no commands since
+/// #28) → (main, instance).
+fn component_and_instance(s: &mut Session, name: &str, [x, y, w, h]: [f64; 4], [ix, iy]: [f64; 2]) -> (NodeId, NodeId) {
+    let page = s.page().unwrap();
+    crate::variable_data::edit(s, |doc| {
+        let kind = NodeKind::Component { description: String::new(), props: Default::default(), prop_order: Vec::new() };
+        let main = doc.create(page, kind, name, x, y, w, h)?;
+        let instance = doc.create(page, NodeKind::Instance { component: main, props: Default::default() }, name, ix, iy, w, h)?;
+        let fills = doc.get(main)?.fills.clone();
+        doc.get_mut(instance)?.fills = fills;
+        Ok((main, instance))
+    })
+    .unwrap()
+}
+
 fn tree() -> (Session, NodeId, NodeId) {
     let mut s = Session::new();
     let frame = create(&mut s, json!({"type": "frame", "name": "Card", "x": 100, "y": 200, "width": 300, "height": 200}));
@@ -57,8 +73,7 @@ fn golden_tree() -> (Session, NodeId) {
         json!({"type": "rectangle", "parent": frame, "name": "Hidden", "width": 20, "height": 30,
         "props": {"visible": false, "locked": true, "fill": "#654321"}}),
     );
-    let main = create(&mut s, json!({"type": "component", "name": "Button", "x": 400, "y": 200, "width": 80, "height": 40}));
-    run(&mut s, "instance.create", json!({"component": main, "x": 500, "y": 200}));
+    component_and_instance(&mut s, "Button", [400.0, 200.0, 80.0, 40.0], [500.0, 200.0]);
     run(&mut s, "page.add", json!({"name": "Second"}));
     (s, frame)
 }
@@ -68,7 +83,8 @@ fn empty_options_keep_the_main_tree_and_document_output() {
     let (s, frame) = golden_tree();
     // Captured with this builder on origin/main (43af145a12eacd1e87f5f5e6984c49b7da040288), plus the
     // document `id` that #1533 added. That id comes from a process-wide counter, so it is the
-    // session's own.
+    // session's own. The component and its instance are written into the document since #28, so
+    // they are no undo steps.
     let expected = json!({
         "colorProfile": "srgb",
         "currentPage": 7,
@@ -77,8 +93,6 @@ fn empty_options_keep_the_main_tree_and_document_output() {
             "redo": 0,
             "undo": [
                 "Add page",
-                "Create instance",
-                "Create layer",
                 "Create layer",
                 "Create layer",
                 "Create layer"
@@ -386,8 +400,7 @@ fn selecting_visible_makes_it_explicit_for_every_node_including_pages() {
 #[test]
 fn component_names_are_selected_without_other_instance_properties_even_with_a_missing_main() {
     let mut s = Session::new();
-    let main = create(&mut s, json!({"type": "component", "name": "Button"}));
-    let instance = crate::params::id_of(&run(&mut s, "instance.create", json!({"component": main}))["id"]).unwrap();
+    let (_, instance) = component_and_instance(&mut s, "Button", [0.0, 0.0, 100.0, 100.0], [0.0, 0.0]);
     for params in [json!({"fields": ["mainComponentName"]}), json!({"outline": true})] {
         let compact = node(&s, instance, 0, params);
         assert_eq!(compact["mainComponentName"], "Button");
@@ -423,8 +436,7 @@ fn the_catalogue_accepts_emitted_keys_and_structure_keys() {
     run(&mut s, "node.set", json!({"ids": [frame], "props": {"layout": "grid", "fill": "#123456", "stroke": "#abcdef"}}));
     s.doc_mut().unwrap().get_mut(frame).unwrap().dev_note = "Ready for review".into();
     s.doc_mut().unwrap().get_mut(frame).unwrap().dev_changed = true;
-    let main = create(&mut s, json!({"type": "component", "name": "Button"}));
-    let instance = crate::params::id_of(&run(&mut s, "instance.create", json!({"component": main}))["id"]).unwrap();
+    let (_, instance) = component_and_instance(&mut s, "Button", [0.0, 0.0, 100.0, 100.0], [0.0, 0.0]);
     s.doc_mut().unwrap().get_mut(text).unwrap().kind.text_mut().unwrap().style.style_id = Some("synthetic-style".into());
     // Exercise each of the six property helpers, including their more expensive values.
     for (id, key, sibling) in [
@@ -538,10 +550,10 @@ fn stored_text_and_stroke_settings_are_read_back_as_set() {
     }
 }
 
-/// A frame's variable modes, a layer's component property bindings and an exposed nested instance
-/// are reported.
+/// A frame's variable modes, and a layer's component property references and an exposed nested
+/// instance that a file holds, are reported.
 #[test]
-fn modes_property_bindings_and_exposed_instances_are_read() {
+fn modes_property_references_and_exposed_instances_a_file_holds_are_read() {
     let mut s = Session::new();
     s.execute("file.new", &json!({})).unwrap();
     let c = tv::collection(&mut s, "Theme", &["Light", "Dark"]);
@@ -549,16 +561,12 @@ fn modes_property_bindings_and_exposed_instances_are_read() {
     tv::mode(&mut s, crate::params::id_of(&frame).unwrap(), &c, "Dark");
     let modes = s.execute("node.get", &json!({"id": frame})).unwrap()["variableModes"].clone();
     assert_eq!(modes.as_object().map(|m| m.len()), Some(1), "{modes}");
-    let card = s.execute("node.create", &json!({"type": "frame", "name": "Card", "width": 100, "height": 50})).unwrap()["id"].clone();
-    let title = s.execute("node.create", &json!({"type": "text", "parent": card.clone(), "text": "Title"})).unwrap()["id"].clone();
-    let main = s.execute("component.create", &json!({"ids": [card]})).unwrap()["id"].clone();
-    s.execute("component.addProperty", &json!({"id": main.clone(), "name": "Label", "type": "text", "layer": title.clone()})).unwrap();
+    let (main, nested) = component_and_instance(&mut s, "Tag", [300.0, 0.0, 40.0, 20.0], [0.0, 100.0]);
+    let title = s.execute("node.create", &json!({"type": "text", "parent": main, "text": "Title"})).unwrap()["id"].clone();
+    let title = crate::params::id_of(&title).unwrap();
+    s.doc_mut().unwrap().get_mut(title).unwrap().prop_refs.insert("characters".into(), "Label".into());
     let refs = s.execute("node.get", &json!({"id": title})).unwrap()["propertyReferences"].clone();
     assert!(refs.as_object().is_some_and(|r| r.values().any(|v| v.as_str().is_some_and(|p| p.starts_with("Label")))), "{refs}");
-    let tag = s.execute("node.create", &json!({"type": "frame", "name": "Tag", "x": 300, "width": 40, "height": 20})).unwrap()["id"].clone();
-    let tag_main = s.execute("component.create", &json!({"ids": [tag]})).unwrap()["id"].clone();
-    let nested = s.execute("instance.create", &json!({"component": tag_main})).unwrap()["id"].clone();
-    s.execute("node.reparent", &json!({"ids": [nested.clone()], "parent": main})).unwrap();
-    s.execute("component.exposeInstance", &json!({"id": nested.clone()})).unwrap();
+    s.doc_mut().unwrap().get_mut(nested).unwrap().exposed = true;
     assert_eq!(s.execute("node.get", &json!({"id": nested})).unwrap()["exposedInstance"], true);
 }

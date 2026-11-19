@@ -5,8 +5,7 @@ use std::sync::Arc;
 
 use egui::{Id, Ui};
 use figcraft_color::{Color, Paint};
-use figcraft_doc::{Document, NodeId, PublishedLibrary, Style, StyleKind};
-use figcraft_engine::library;
+use figcraft_doc::{Document, NodeId, Style, StyleKind};
 use figcraft_engine::selection_colors::{PaintTarget, SelectionColor, collect, create_refusal};
 use serde_json::json;
 
@@ -66,7 +65,7 @@ pub(crate) fn toggle(app: &mut FigApp, targets: Vec<PaintTarget>, response: Opti
 }
 
 /// Draw the selection-colour groups (two, or one when a selected layer has children): swatch opens the picker, hex and opacity
-/// edits, style/variable detach, a style from this file or an enabled library, Create
+/// edits, style/variable detach, a style from this file, Create
 /// style, and “select layers with this color”; disabled during an interaction.
 pub fn section(app: &mut FigApp, ui: &mut Ui, doc: &Arc<Document>, ids: &[NodeId]) {
     let Ok(ds) = app.session.ds() else { return };
@@ -199,19 +198,11 @@ pub fn section(app: &mut FigApp, ui: &mut Ui, doc: &Arc<Document>, ids: &[NodeId
     create_form(app, ui.ctx(), uid);
 }
 
-/// The paint styles a row's Styles menu offers: this file's (not library copies), then each enabled
-/// library's published ones under its name (a library this session hasn't read offers none). A choice
-/// applies the style to the row's targets.
+/// The paint styles a row's Styles menu offers: this file's. A choice applies the style to the
+/// row's targets.
 fn style_items(app: &mut FigApp, ui: &mut Ui, doc: &Document, group: &SelectionColor, t: &Tokens) {
-    let paint = |s: &&Style| matches!(s.kind, StyleKind::Paint { .. });
-    let local: Vec<&Style> = library::local_styles(doc).filter(paint).collect();
-    let libs = crate::style_picker::libraries(app, doc);
-    let offered: Vec<(&PublishedLibrary, Vec<&Style>)> = libs
-        .iter()
-        .map(|l| (l.as_ref(), l.doc.styles.iter().filter(|s| l.manifest.style(&s.id).is_some_and(|x| x.published)).filter(paint).collect::<Vec<_>>()))
-        .filter(|(_, list)| !list.is_empty())
-        .collect();
-    if local.is_empty() && offered.is_empty() {
+    let local: Vec<&Style> = doc.styles.iter().filter(|s| matches!(s.kind, StyleKind::Paint { .. })).collect();
+    if local.is_empty() {
         widgets::label(ui, tr("No color styles"), t.text_secondary);
     }
     for style in local {
@@ -219,17 +210,6 @@ fn style_items(app: &mut FigApp, ui: &mut Ui, doc: &Document, group: &SelectionC
             app.run("selection.applyColorStyle", json!({"targets": group.targets, "style": style.id}));
             app.ui.picker = None;
             ui.close();
-        }
-    }
-    for (lib, list) in offered {
-        ui.separator();
-        widgets::label(ui, &lib.manifest.name, t.text_secondary);
-        for style in list {
-            if crate::right::menu_item(ui, &style.name, "") {
-                app.run("selection.applyColorStyle", json!({"targets": group.targets, "style": style.id, "library": lib.manifest.id}));
-                app.ui.picker = None;
-                ui.close();
-            }
         }
     }
 }
@@ -606,40 +586,6 @@ mod tests {
 
     fn text_at(texts: &[(String, Pos2)], s: &str) -> Pos2 {
         texts.iter().rev().find(|(t, _)| t == s).unwrap_or_else(|| panic!("{s:?} isn't drawn")).1
-    }
-
-    #[test]
-    fn styles_menu_offers_an_enabled_librarys_published_color_styles() {
-        let dir = std::env::temp_dir().join(format!("figcraft-selection-colors-panel-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir(&dir).unwrap();
-        let path = dir.join("library.figcraft");
-        let mut publisher = Session::new();
-        publisher.execute("style.create", &json!({"type":"paint","name":"Ocean","value":"#00ffff"})).unwrap();
-        publisher.execute("style.create", &json!({"type":"paint","name":"_Draft","value":"#ffff00"})).unwrap();
-        publisher.execute("library.publish", &json!({})).unwrap();
-        publisher.execute("file.saveAs", &json!({"path":path})).unwrap();
-        let (mut p, a, b) = Panel::new();
-        p.app.run("library.add", json!({"path":path}));
-        let red = text_at(&p.frame(vec![]), "FF0000");
-        p.click(Pos2::new(228.0, red.y));
-        let texts = p.frame(vec![]);
-        let library_name = p.app.session.doc().unwrap().libraries.enabled[0].name.clone();
-        assert!(texts.iter().any(|(s, _)| *s == library_name), "library styles are listed under the library's name");
-        assert!(!texts.iter().any(|(s, _)| s == "_Draft"), "unpublished styles aren't offered");
-        p.click(text_at(&texts, "Ocean"));
-        let _ = std::fs::remove_dir_all(&dir);
-        let doc = p.app.session.doc().unwrap();
-        let copy = doc.node(a).unwrap().styles.fill.clone().unwrap();
-        assert!(library::is_remote_style(doc, &copy));
-        assert_eq!(doc.node(a).unwrap().fills[0].solid_color().unwrap().to_hex(), "00FFFF");
-        assert!(doc.node(b).unwrap().styles.fill.is_none());
-        assert!(p.app.ui.last_error.is_none());
-        // The copy is listed under its library, not as one of this file's styles.
-        let blue = text_at(&p.frame(vec![]), "0000FF");
-        p.click(Pos2::new(228.0, blue.y));
-        let texts = p.frame(vec![]);
-        assert_eq!(texts.iter().filter(|(s, _)| s == "Ocean").count(), 2, "the linked row's name and the library's entry");
     }
 
     #[test]

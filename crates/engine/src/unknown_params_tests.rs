@@ -46,7 +46,6 @@ fn documented_alternatives_and_empty_params_are_taken() {
     assert_eq!(param_names("file.import").map(|n| n.contains(&"path") && n.contains(&"data") && n.contains(&"name")), Some(true));
     assert_eq!(param_names("file.export").map(|n| n.contains(&"scale") && n.contains(&"size")), Some(true));
     assert_eq!(param_names("collab.share").map(|n| n.contains(&"via") && !n.contains(&"local")), Some(true));
-    assert_eq!(param_names("component.editProperty").map(|n| n.contains(&"value") && n.contains(&"newValue")), Some(true));
     // Docs whose shape used to hide names: a stray brace, a comma in an example, a second object.
     assert_eq!(param_names("collab.join"), Some(&["code", "link"][..]));
     // Commands that run another command's code take its names too.

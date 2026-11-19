@@ -137,34 +137,6 @@ fn the_hover_and_drop_highlights_show_over_kept_geometry() {
 }
 
 #[test]
-fn the_design_panels_instance_facts_follow_edits_and_the_selection() {
-    let mut s = Session::new();
-    let f = id(s.execute("node.create", &json!({"type": "frame", "x": 0, "y": 0, "width": 100, "height": 100})).unwrap());
-    id(s.execute("node.create", &json!({"type": "rectangle", "x": 10, "y": 10, "width": 20, "height": 20, "parent": f})).unwrap());
-    let main = id(s.execute("component.create", &json!({"ids": [f]})).unwrap());
-    let inst = id(s.execute("instance.create", &json!({"component": main, "x": 300, "y": 0})).unwrap());
-    let child = s.doc().unwrap().node(inst).unwrap().children[0];
-    let ctx = Context::default();
-    let facts = |s: &Session| {
-        let ds = s.ds().unwrap();
-        crate::right::in_instance(&ctx, &ds.doc.clone(), &ds.selection.clone())
-    };
-    let facts_of = |s: &mut Session, ids: Value| {
-        s.execute("select.set", &json!({"ids": ids})).unwrap();
-        let f = facts(s);
-        (f.any, f.nested)
-    };
-    assert_eq!(facts_of(&mut s, json!([main])), (false, false));
-    assert_eq!(facts_of(&mut s, json!([inst])), (true, false));
-    assert_eq!(facts_of(&mut s, json!([inst, child])), (true, true));
-    assert_eq!(facts_of(&mut s, json!([inst])), (true, false));
-    s.execute("component.detach", &json!({"ids": [inst]})).unwrap();
-    assert!(s.doc().unwrap().node(inst).is_some(), "detaching keeps the layer");
-    assert_eq!(s.ds().unwrap().selection, vec![inst], "and the selection");
-    assert_eq!(facts(&s), crate::right::InInstance { any: false, nested: false }, "an edit");
-}
-
-#[test]
 fn the_position_fields_follow_edits_and_the_selection() {
     let (mut app, ctx, ids) = setup();
     let x = |app: &FigApp| {

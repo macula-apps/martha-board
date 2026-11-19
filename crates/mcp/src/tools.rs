@@ -152,7 +152,7 @@ fn tools() -> Vec<Value> {
         tool(
             "list_commands",
             "List commands",
-            "List FigCraft commands: id, label, menu path, shortcut, whether it is undoable, and a parameter description. Every menu item, panel action and shortcut is a command; run one with run_command (or several as one undo step with batch). Most commands act on `ids` when given, else on the selection. Use `filter` to narrow (e.g. \"align\", \"layout\", \"style\", \"component\").",
+            "List FigCraft commands: id, label, menu path, shortcut, whether it is undoable, and a parameter description. Every menu item, panel action and shortcut is a command; run one with run_command (or several as one undo step with batch). Most commands act on `ids` when given, else on the selection. Use `filter` to narrow (e.g. \"align\", \"layout\", \"style\", \"board\").",
             obj(json!({"filter": string("Case-insensitive substring matched against id, label, menu path and parameter docs")}), &[]),
             true,
         ),
@@ -161,7 +161,7 @@ fn tools() -> Vec<Value> {
             "Run command",
             "Execute one FigCraft command by id with JSON params (ids and params from list_commands). Mutating commands are one undo step each; a failing command leaves the document unchanged. Examples: {\"command\":\"align.left\",\"params\":{\"ids\":[3,4]}}, {\"command\":\"layout.add\",\"params\":{\"ids\":[2],\"direction\":\"vertical\"}}, {\"command\":\"style.create\",\"params\":{\"type\":\"paint\",\"name\":\"Brand/Primary\",\"from\":5}}. Returns the command's result (creation commands return {\"id\"}). Programmatic calls never open dialogs.",
             obj(
-                json!({"command": string("Command id, e.g. node.create, align.left, component.create, file.export"), "params": {"type": "object", "description": "Command parameters (see list_commands)"}}),
+                json!({"command": string("Command id, e.g. node.create, align.left, board.sticky, file.export"), "params": {"type": "object", "description": "Command parameters (see list_commands)"}}),
                 &["command"],
             ),
             false,
@@ -186,12 +186,12 @@ fn tools() -> Vec<Value> {
             "Create a layer (engine `node.create`) and return its id and inspected properties. Coordinates are page units, y down; x/y are relative to the parent frame (the page when there is none, so then they are page coordinates; groups don't count). Inside an auto-layout frame the position is decided by the layout. The new layer becomes the selection.",
             obj(
                 json!({
-                    "type": {"type": "string", "enum": ["frame", "rectangle", "ellipse", "polygon", "star", "line", "arrow", "text", "vector", "section", "component", "slice"], "description": "Layer type"},
+                    "type": {"type": "string", "enum": ["frame", "rectangle", "ellipse", "polygon", "star", "line", "arrow", "text", "vector", "section", "slice"], "description": "Layer type"},
                     "x": num("Left, relative to the parent frame (default 0). For a vector with `path` or `points`, x/y move their own origin instead: data whose box starts at (30, 0) makes a layer whose left is x + 30. Start the path at 0,0 to place its left edge at x, or set x afterwards with set_properties (which moves the left edge)"),
                     "y": num("Top, relative to the parent frame (default 0). For a vector with `path` or `points`, their own top is added, as for x"),
                     "width": num("Width (default 100; text hugs its content unless width is set, which makes it wrap; for a vector with path, width/height scale the path, one alone keeping its proportion, and without them the path's own box is used)"),
                     "height": num("Height (default 100; ignored for lines/arrows and auto-height text)"),
-                    "parent": id_schema("Parent frame/group/component id (default: the current page)"),
+                    "parent": id_schema("Parent frame or group id (default: the current page)"),
                     "index": int("Z-index among the parent's children (default: on top)"),
                     "name": string("Layer name"),
                     "text": string("Characters, for type text"),

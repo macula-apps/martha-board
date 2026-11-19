@@ -355,7 +355,6 @@ pub fn specs() -> Vec<CommandSpec> {
             ok()
         }),
         spec!("view.layers", "Layers panel", "{}", false, |s, _| ui(s, "panel.layers")),
-        spec!("view.assets", "Assets panel", "{}", false, |s, _| ui(s, "panel.assets")),
         spec!("view.design", "Design panel", "{}", false, |s, _| ui(s, "panel.design")),
         spec!("view.leftSidebar", "Show/Hide left sidebar", "{}", false, |s, _| ui(s, "panel.leftSidebar")),
         spec!(
@@ -540,7 +539,6 @@ pub fn specs() -> Vec<CommandSpec> {
                 Ok(json!({"shown": show}))
             }
         ),
-        spec!("libraries.open", "Libraries", "{}", false, |s, _| ui(s, "panel.libraries")),
         spec!(
             "tool.set",
             "Choose tool",

@@ -26,7 +26,7 @@ replaced.
 | L3 | `figcraft-format` | ~1.5k | Native `.figcraft` (zip of `document.json` + images; streamed JSON), local library files, versions |
 | L4 | `figcraft-svg` | ~3.7k | SVG export and import (usvg) |
 | L4 | `figcraft-pdf` | ~2.3k | PDF export (krilla) with print options |
-| L5 | `figcraft-engine` | ~58.3k | Sessions, undo history (`Arc` snapshots), the command registry (`cmd/*`, `spec!`), pointer tools and vector edit mode, snapping and measuring, components sync, libraries, the branch compare, the menu catalog (`catalog.rs`) and the keymap (`keymap.rs`), a panic guard |
+| L5 | `figcraft-engine` | ~58.3k | Sessions, undo history (`Arc` snapshots), the command registry (`cmd/*`, `spec!`), pointer tools and vector edit mode, snapping and measuring, the branch compare, the menu catalog (`catalog.rs`) and the keymap (`keymap.rs`), a panic guard |
 | L6 | `figcraft-ui-egui` | ~55.4k | The UI3-style frontend: canvas (render worker), toolbar, layers, the Design panel, colour picker, menus, dialogs, comments, accessibility (AccessKit), the control channel server |
 | L6 | `figcraft-mcp` | ~2.4k | MCP server (JSON-RPC over stdio), headless or bridged to a running app |
 | L6 | `figcraft-collab-net` | ~3.0k | Live sessions over the network: the WebSocket transport (tungstenite, a reader and a writer thread per connection), the hub that runs a collaboration core server per open file for the session host the app embeds and for `figcraft-server` (behind a `Backend`), the joining and managing clients (publishing), invite links, presence relay and limits; the browser client; the only crate allowed networking dependencies |
@@ -38,9 +38,9 @@ replaced.
 A `Document` holds pages, a persistent map of nodes (frames, groups, sections, rectangles,
 ellipses, polygons, stars, lines, vector networks, text with styled runs, boolean groups,
 components, component sets, instances, slices), styles, variable collections, comments, versions
-and images by hash. Instances keep their main's id and per-layer overrides; the engine keeps their
-materialised children in sync when a main changes (directly for value, size and add/remove edits,
-by a rebuild otherwise). Snapshots are cheap (`Arc` and structural sharing), which gives unlimited
+and images by hash. Instances keep their main's id and per-layer overrides and hold their
+materialised children; since the components commands left (#28) nothing rebuilds them from their
+main: a file's instances draw, export and save as the layers they hold. Snapshots are cheap (`Arc` and structural sharing), which gives unlimited
 undo with one step per gesture.
 
 ## Commands: one path for every surface
@@ -80,6 +80,7 @@ input.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-19 | minor | Dropped components, instances and libraries (local and team) with the component playground, `data.fill` and the synthetic design content (#28): their commands, the Assets and component panels, what the MCP server says about them and `figcraft-cli perf --instances`; `perf` and the UI benchmarks build large boards instead. `figcraft-doc` keeps the component, instance and library types, so a file holding them opens, draws and saves unchanged. `figcraft-engine` about 7.5k code lines fewer, `figcraft-ui-egui` about 2.3k (tokei, test files apart); the rows above keep their earlier counts. |
 | 2026-11-19 | minor | Dropped the Android Vector Drawable (XML) export: the `figcraft-vectordrawable` crate (L4, ~1.2k lines) and the `xml` format in the export commands, the Export section, the CLI and MCP. `figcraft-doc` keeps the `vectorDrawable` format and `vdCompat` so a saved file that has one still opens; exporting it fails with a message that it was removed. |
 | 2026-11-19 | minor | Dropped Developer Mode (code generators, Code Connect, annotations, measurements, dev resources, ready for dev and the Inspect tab); the branch compare moved to `sharing/compare` and the asset export to `cmd/file/assets`: `figcraft-engine` ~65.2k → ~58.3k lines, `figcraft-ui-egui` ~57.4k → ~55.4k. The engine and UI rows had kept their 2026-10-10 counts until now. |
 | 2026-11-19 | minor | Dropped the importers and exporters of other design apps' files (`.fig`, FigJam `.jam`, `.sketch`, `.penpot`, REST API file JSON and its variables JSON): `figcraft-format` keeps the native format only (~5.2k → ~1.5k lines). |

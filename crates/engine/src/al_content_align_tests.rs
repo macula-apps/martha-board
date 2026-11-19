@@ -1,5 +1,5 @@
 //! Wrapped-line alignment through commands: the `contentAlign` prop and its alias, undo, the CSS
-//! and inspect output, instance overrides, the REST and `.fig` mappings, and junk values.
+//! and inspect output, the REST and `.fig` mappings, and junk values.
 
 use serde_json::{Value, json};
 
@@ -41,18 +41,6 @@ fn content_align_spreads_the_rows_and_undoes() {
     assert_eq!(content(&s, f), ContentAlign::SpaceBetween);
     s.execute("node.set", &json!({"id": f, "props": {"contentAlign": "auto", "crossAlign": "max"}})).unwrap();
     assert_eq!(ys(&s, &kids), [55.0, 55.0, 80.0]);
-}
-
-#[test]
-fn an_instance_keeps_its_own_line_alignment() {
-    let mut s = Session::new();
-    let (f, _) = wrapping(&mut s);
-    let comp = id(s.execute("component.create", &json!({"ids": [f]})).unwrap());
-    let inst = id(s.execute("instance.create", &json!({"component": comp, "x": 200, "y": 0})).unwrap());
-    s.execute("node.set", &json!({"id": inst, "props": {"contentAlign": "spaceBetween"}})).unwrap();
-    // A change to the main reaches the instance; its own alignment stays.
-    s.execute("node.set", &json!({"id": comp, "props": {"padding": 2}})).unwrap();
-    assert_eq!((content(&s, comp), content(&s, inst)), (ContentAlign::Auto, ContentAlign::SpaceBetween));
 }
 
 #[test]
