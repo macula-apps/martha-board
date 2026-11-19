@@ -208,7 +208,7 @@ fn a_path_handle_drags_with_a_preview_and_one_undo_step() {
     assert_eq!(drawn(&s, k)[1], pt(200.0, 50.0));
 }
 
-/// Dev Mode only inspects, a locked connector stays, and a short run shows no handle (it would
+/// A locked connector stays, and a short run shows no handle (it would
 /// sit on what's next to it) until zoomed in; the ends' handles win over a path handle.
 #[test]
 fn path_handles_show_where_they_can_be_used() {
