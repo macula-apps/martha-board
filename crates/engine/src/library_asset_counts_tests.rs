@@ -1,13 +1,15 @@
 //! What a file counts as inserting and detaching a library's styles and variables, as the help
 //! center's library analytics page says: applying one, or copying or duplicating content that uses
 //! it, inserts it; the Detach button detaches it. Content that is an instance counts as the
-//! instance alone, and local styles and variables count nothing. An undo takes its count back.
+//! instance alone, and local styles and variables count nothing. An undo takes its count back. Binding
+//! a library variable left with the variables editor (#16): no command inserts or detaches one now.
 
 use serde_json::{Value, json};
 
 use crate::Session;
 use crate::components::tests::{ex, idv};
 use crate::library_server::{asset_action_reports, asset_actions};
+use crate::test_variables as tv;
 use figcraft_collab::message::MAX_ASSET_USAGE;
 use figcraft_doc::{AssetCount, Document, NodeId, NodeKind, PublishedLibrary};
 
@@ -17,8 +19,8 @@ fn user() -> (Session, String, Value) {
     let mut a = Session::new();
     let r = idv(&ex(&mut a, "shape.rectangle", json!({"x": 0, "y": 0, "width": 40, "height": 40})));
     let style = ex(&mut a, "style.create", json!({"type": "paint", "name": "Brand", "from": r.0}));
-    let coll = ex(&mut a, "variable.createCollection", json!({"name": "Tokens"}));
-    ex(&mut a, "variable.create", json!({"name": "Accent", "type": "color", "collection": coll["id"], "value": "#0D99FF"}));
+    let coll = tv::collection(&mut a, "Tokens", &["Mode 1"]);
+    tv::variable(&mut a, &coll, "Accent", "color", &[json!("#0D99FF")]);
     let card = idv(&ex(&mut a, "frame.create", json!({"x": 0, "y": 100, "width": 100, "height": 40, "name": "Card"})));
     ex(&mut a, "style.apply", json!({"ids": [card.0], "style": style["id"]}));
     ex(&mut a, "component.create", json!({"ids": [card.0]}));
@@ -52,9 +54,6 @@ fn applying_counts_once_per_layer_that_takes_it() {
     assert_eq!(counts(&s).0, (2, 0));
     ex(&mut s, "library.applyStyle", json!({"library": lib, "style": "Brand", "ids": [one.0]}));
     assert_eq!(counts(&s).0, (2, 0), "a layer that has it already adds nothing");
-    let three = rect(&mut s, 200);
-    ex(&mut s, "library.bindVariable", json!({"library": lib, "variable": "Accent", "ids": [three.0], "field": "fill"}));
-    assert_eq!(counts(&s).1, (1, 0));
 }
 
 #[test]
@@ -106,19 +105,15 @@ fn applying_and_detaching_inside_an_instance_counts_nothing() {
     };
     let targets = [placed.0, i.0, layer.0, nested.0, deep.0];
     ex(&mut s, "library.applyStyle", json!({"library": lib, "style": "Brand", "ids": targets}));
-    ex(&mut s, "library.bindVariable", json!({"library": lib, "variable": "Accent", "ids": targets, "field": "stroke"}));
     let d = s.doc().unwrap();
-    assert!(d.node(deep).unwrap().styles.fill.is_some() && !d.node(deep).unwrap().bound.is_empty(), "the nested layer took both");
+    assert!(d.node(deep).unwrap().styles.fill.is_some(), "the nested layer took it");
     ex(&mut s, "style.detach", json!({"ids": targets, "which": "fill"}));
-    ex(&mut s, "variable.bind", json!({"ids": targets, "field": "stroke"}));
     assert_eq!(counts(&s), ((0, 0), (0, 0)));
     // The same on a plain layer counts.
     let plain = rect(&mut s, 600);
     ex(&mut s, "library.applyStyle", json!({"library": lib, "style": "Brand", "ids": [plain.0]}));
-    ex(&mut s, "library.bindVariable", json!({"library": lib, "variable": "Accent", "ids": [plain.0], "field": "stroke"}));
     ex(&mut s, "style.detach", json!({"ids": [plain.0], "which": "fill"}));
-    ex(&mut s, "variable.bind", json!({"ids": [plain.0], "field": "stroke"}));
-    assert_eq!(counts(&s), ((1, 1), (1, 1)));
+    assert_eq!(counts(&s), ((1, 1), (0, 0)));
 }
 
 #[test]
@@ -126,11 +121,8 @@ fn only_the_detach_buttons_detach() {
     let (mut s, lib, _) = user();
     let (one, two) = (rect(&mut s, 0), rect(&mut s, 100));
     ex(&mut s, "library.applyStyle", json!({"library": lib, "style": "Brand", "ids": [one.0, two.0]}));
-    ex(&mut s, "library.bindVariable", json!({"library": lib, "variable": "Accent", "ids": [two.0], "field": "stroke"}));
     ex(&mut s, "style.detach", json!({"ids": [one.0, two.0], "which": "fill"}));
     assert_eq!(counts(&s).0, (2, 2));
-    ex(&mut s, "variable.bind", json!({"ids": [two.0], "field": "stroke"}));
-    assert_eq!(counts(&s).1, (1, 1));
     // Another style in its place isn't a detach of the first.
     let local = ex(&mut s, "style.create", json!({"type": "paint", "name": "Mine", "from": one.0}));
     ex(&mut s, "library.applyStyle", json!({"library": lib, "style": "Brand", "ids": [one.0]}));

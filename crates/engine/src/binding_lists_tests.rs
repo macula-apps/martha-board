@@ -7,6 +7,7 @@ use figcraft_doc::{EffectKind, NodeId};
 use serde_json::json;
 
 use crate::Session;
+use crate::test_variables as tv;
 
 fn id(v: serde_json::Value) -> NodeId {
     NodeId(v["id"].as_u64().unwrap())
@@ -19,9 +20,9 @@ fn ex(s: &mut Session, cmd: &str, p: serde_json::Value) {
 fn setup() -> (Session, NodeId) {
     let mut s = Session::new();
     let r = id(s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap());
-    ex(&mut s, "variable.createCollection", json!({"name": "T"}));
+    tv::collection(&mut s, "T", &["Mode 1"]);
     for (name, kind, value) in [("brand", "color", json!("#FF0000")), ("small", "number", json!(2)), ("large", "number", json!(30))] {
-        ex(&mut s, "variable.create", json!({"collection": "T", "name": name, "type": kind, "value": value}));
+        tv::variable(&mut s, "T", name, kind, &[json!(value)]);
     }
     (s, r)
 }
@@ -42,7 +43,7 @@ fn a_bound_fill_colour_keeps_the_other_fills() {
     let (mut s, r) = setup();
     ex(&mut s, "fill.add", json!({"ids": [r], "color": "#00FF00"}));
     ex(&mut s, "fill.set", json!({"ids": [r], "index": 0, "color": "#0000FF", "opacity": 0.5}));
-    ex(&mut s, "variable.bind", json!({"ids": [r], "field": "fill", "variable": "brand"}));
+    tv::bind(&mut s, &[r], "fill", "brand");
     let fills = s.doc().unwrap().node(r).unwrap().fills.clone();
     assert_eq!(fills.len(), 2, "the second fill stays");
     assert_eq!(fills[0].kind, PaintKind::Solid { color: Color::from_rgb8_const(0xFF, 0, 0) });
@@ -51,7 +52,7 @@ fn a_bound_fill_colour_keeps_the_other_fills() {
     // Removing the bound (first) fill takes the binding with it.
     ex(&mut s, "fill.remove", json!({"ids": [r], "index": 0}));
     assert!(bound(&s, r).is_empty());
-    ex(&mut s, "variable.set", json!({"variable": "brand", "value": "#123456"}));
+    tv::set_default(&mut s, "brand", json!("#123456"));
     let fills = s.doc().unwrap().node(r).unwrap().fills.clone();
     assert_eq!(fills.len(), 1);
     assert_eq!(fills[0].kind, PaintKind::Solid { color: Color::from_rgb8_const(0, 0xFF, 0) }, "the remaining fill isn't recoloured");
@@ -63,17 +64,17 @@ fn effect_bindings_follow_their_effects() {
     for _ in 0..3 {
         ex(&mut s, "effect.add", json!({"ids": [r], "type": "layerBlur"}));
     }
-    ex(&mut s, "variable.bind", json!({"ids": [r], "field": "effects/0/radius", "variable": "small"}));
-    ex(&mut s, "variable.bind", json!({"ids": [r], "field": "effects/2/radius", "variable": "large"}));
+    tv::bind(&mut s, &[r], "effects/0/radius", "small");
+    tv::bind(&mut s, &[r], "effects/2/radius", "large");
     assert_eq!((blur(&s, r, 0), blur(&s, r, 2)), (2.0, 30.0));
     // Move the "small" effect to the top: its binding goes with it.
     ex(&mut s, "effect.move", json!({"ids": [r], "from": 0, "to": 2}));
     assert_eq!((blur(&s, r, 1), blur(&s, r, 2)), (30.0, 2.0));
-    ex(&mut s, "variable.set", json!({"variable": "small", "value": 5}));
+    tv::set_default(&mut s, "small", json!(5));
     assert_eq!((blur(&s, r, 1), blur(&s, r, 2)), (30.0, 5.0));
     // Removing the effect under the "large" one shifts its binding down.
     ex(&mut s, "effect.remove", json!({"ids": [r], "index": 0}));
-    ex(&mut s, "variable.set", json!({"variable": "large", "value": 40}));
+    tv::set_default(&mut s, "large", json!(40));
     assert_eq!((blur(&s, r, 0), blur(&s, r, 1)), (40.0, 5.0));
     // Removing a bound effect drops its binding.
     ex(&mut s, "effect.remove", json!({"ids": [r], "index": 1}));
@@ -110,57 +111,36 @@ fn glass_fields_take_number_variables() {
     let (mut s, r) = setup();
     ex(&mut s, "effect.add", json!({"ids": [r], "type": "glass"}));
     // Percent fields read the variable as the Design panel shows them; `radius` is the frost.
-    ex(&mut s, "variable.bind", json!({"ids": [r], "field": "effects/0/splay", "variable": "large"}));
-    ex(&mut s, "variable.bind", json!({"ids": [r], "field": "effects/0/radius", "variable": "small"}));
-    ex(&mut s, "variable.bind", json!({"ids": [r], "field": "effects/0/depth", "variable": "large"}));
+    tv::bind(&mut s, &[r], "effects/0/splay", "large");
+    tv::bind(&mut s, &[r], "effects/0/radius", "small");
+    tv::bind(&mut s, &[r], "effects/0/depth", "large");
     let g = glass(&s, r);
     assert_eq!((g.splay, g.frost, g.depth), (0.3, 2.0, 30.0));
     // A new value follows, clamped to the field's range (frost stops at 100).
-    ex(&mut s, "variable.set", json!({"variable": "small", "value": 150}));
-    ex(&mut s, "variable.set", json!({"variable": "large", "value": 75}));
+    tv::set_default(&mut s, "small", json!(150));
+    tv::set_default(&mut s, "large", json!(75));
     let g = glass(&s, r);
     assert_eq!((g.splay, g.frost, g.depth), (0.75, figcraft_doc::Glass::MAX_FROST, 75.0));
-    // A colour variable doesn't fit a glass field.
-    assert!(s.execute("variable.bind", &json!({"ids": [r], "field": "effects/0/refraction", "variable": "brand"})).is_err());
     // An effect style binds them too, and every layer using it follows.
     let fx = ex_value(&mut s, "style.create", json!({"type": "effect", "name": "Pane", "from": r}))["id"].as_str().unwrap().to_string();
-    ex(&mut s, "style.bind", json!({"style": fx, "field": "effects/0/refraction", "variable": "large"}));
+    tv::bind_style(&mut s, &fx, "effects/0/refraction", "large");
     assert_eq!(glass(&s, r).refraction, 0.75);
-    assert!(s.execute("style.bind", &json!({"style": fx, "field": "effects/0/spread", "variable": "large"})).is_err(), "glass has no spread");
 }
 
 #[test]
-fn a_layer_binds_only_fields_its_effects_have() {
+fn a_binding_to_a_field_its_effect_lacks_does_nothing() {
     let (mut s, r) = setup();
     ex(&mut s, "effect.add", json!({"ids": [r], "type": "dropShadow"}));
     ex(&mut s, "effect.add", json!({"ids": [r], "type": "glass"}));
-    // As an effect style does: a drop shadow has no refraction, glass no spread, there is no
-    // effect 5, and a key that names no effect's field names nothing. Nothing is bound.
-    for (field, var, says) in [
-        ("effects/0/refraction", "large", "no field"),
-        ("effects/1/spread", "large", "no field"),
-        ("effects/5/radius", "large", "no field"),
-        ("effects/x/radius", "large", "no field"),
-        ("effects/0", "large", "no field"),
-        ("effects", "large", "no field"),
-        ("effects/1/lightAngle", "brand", "doesn't take a color variable"),
-        ("effects/0/color", "large", "doesn't take a number variable"),
-    ] {
-        let e = s.execute("variable.bind", &json!({"ids": [r], "field": field, "variable": var})).unwrap_err().to_string();
-        assert!(e.contains(says), "{field} ← {var}: {e}");
-    }
-    assert!(s.doc().unwrap().node(r).unwrap().bound.is_empty());
-    // The fields each effect has still bind.
-    ex(&mut s, "variable.bind", json!({"ids": [r], "field": "effects/0/spread", "variable": "small"}));
-    ex(&mut s, "variable.bind", json!({"ids": [r], "field": "effects/1/refraction", "variable": "large"}));
+    // The fields each effect has bind.
+    tv::bind(&mut s, &[r], "effects/0/spread", "small");
+    tv::bind(&mut s, &[r], "effects/1/refraction", "large");
     assert_eq!(s.doc().unwrap().node(r).unwrap().bound.len(), 2);
-    // A binding an older file already has on a field its effect lacks does nothing, and unbinds.
+    // A binding a file has on a field its effect lacks does nothing.
     let large = s.doc().unwrap().variables.get("large").unwrap().id.clone();
     s.doc_mut().unwrap().get_mut(r).unwrap().bound.insert("effects/0/refraction".into(), large);
-    ex(&mut s, "variable.set", json!({"variable": "large", "value": 40}));
+    tv::set_default(&mut s, "large", json!(40));
     assert!(matches!(&s.doc().unwrap().node(r).unwrap().effects[0].kind, EffectKind::DropShadow(_)));
-    ex(&mut s, "variable.bind", json!({"ids": [r], "field": "effects/0/refraction"}));
-    assert!(!s.doc().unwrap().node(r).unwrap().bound.contains_key("effects/0/refraction"));
 }
 
 fn ex_value(s: &mut Session, cmd: &str, p: serde_json::Value) -> serde_json::Value {
@@ -170,11 +150,6 @@ fn ex_value(s: &mut Session, cmd: &str, p: serde_json::Value) -> serde_json::Val
 fn fill_hex(s: &Session, r: NodeId) -> Vec<String> {
     s.doc().unwrap().node(r).unwrap().fills.iter().filter_map(|p| p.solid_color()).map(|c| c.to_hex()).collect()
 }
-
-fn brand_id(s: &Session) -> String {
-    s.doc().unwrap().variables.get("brand").unwrap().id.clone()
-}
-
 #[test]
 fn explicit_paint_edits_detach_the_colour_binding() {
     // An edit that reported success keeps its colour: the binding it overwrote lets go (as
@@ -186,18 +161,18 @@ fn explicit_paint_edits_detach_the_colour_binding() {
     ];
     for (cmd, mut p) in edits {
         let (mut s, r) = setup();
-        ex(&mut s, "variable.bind", json!({"ids": [r], "field": "fill", "variable": "brand"}));
+        tv::bind(&mut s, &[r], "fill", "brand");
         p["ids"] = json!([r]);
         ex(&mut s, cmd, p.clone());
         assert_eq!(fill_hex(&s, r), ["00FF00"], "{cmd} {p}");
         assert!(bound(&s, r).is_empty(), "{cmd} {p}");
-        ex(&mut s, "variable.set", json!({"variable": "brand", "value": "#123456"}));
+        tv::set_default(&mut s, "brand", json!("#123456"));
         assert_eq!(fill_hex(&s, r), ["00FF00"], "{cmd} {p}: no longer follows the variable");
     }
     for (cmd, mut p) in [("stroke.set", json!({"color": "#00FF00"})), ("node.set", json!({"props": {"stroke": "#00FF00"}}))] {
         let (mut s, r) = setup();
         ex(&mut s, "node.set", json!({"ids": [r], "props": {"strokes": ["#000000"]}}));
-        ex(&mut s, "variable.bind", json!({"ids": [r], "field": "stroke", "variable": "brand"}));
+        tv::bind(&mut s, &[r], "stroke", "brand");
         p["ids"] = json!([r]);
         ex(&mut s, cmd, p);
         let n = s.doc().unwrap().node(r).unwrap();
@@ -209,34 +184,24 @@ fn explicit_paint_edits_detach_the_colour_binding() {
 #[test]
 fn clearing_bound_fills_adds_no_paint_back() {
     let (mut s, r) = setup();
-    ex(&mut s, "variable.bind", json!({"ids": [r], "field": "fill", "variable": "brand"}));
+    tv::bind(&mut s, &[r], "fill", "brand");
     ex(&mut s, "node.set", json!({"ids": [r], "props": {"fills": []}}));
     assert!(s.doc().unwrap().node(r).unwrap().fills.is_empty());
     assert!(bound(&s, r).is_empty());
-    ex(&mut s, "variable.set", json!({"variable": "brand", "value": "#123456"}));
+    tv::set_default(&mut s, "brand", json!("#123456"));
     assert!(s.doc().unwrap().node(r).unwrap().fills.is_empty(), "the variable doesn't bring the fill back");
 }
 
 #[test]
 fn paint_opacity_edits_keep_the_colour_binding() {
     let (mut s, r) = setup();
-    ex(&mut s, "variable.bind", json!({"ids": [r], "field": "fill", "variable": "brand"}));
+    tv::bind(&mut s, &[r], "fill", "brand");
     ex(&mut s, "fill.set", json!({"ids": [r], "opacity": 0.5}));
-    ex(&mut s, "variable.set", json!({"variable": "brand", "value": "#0000FF"}));
+    tv::set_default(&mut s, "brand", json!("#0000FF"));
     assert_eq!(fill_hex(&s, r), ["0000FF"], "the colour still follows the variable");
     assert_eq!(s.doc().unwrap().node(r).unwrap().fills[0].opacity, 0.5);
     // The same colour with another opacity, through node.set, keeps it too.
     ex(&mut s, "node.set", json!({"ids": [r], "props": {"fills": [{"type": "solid", "color": "#0000FF", "opacity": 0.25}]}}));
     assert_eq!(bound(&s, r).len(), 1);
     assert_eq!(s.doc().unwrap().node(r).unwrap().fills[0].opacity, 0.25);
-}
-
-#[test]
-fn paints_set_with_their_binding_in_the_same_call_keep_it() {
-    let (mut s, r) = setup();
-    ex(&mut s, "variable.bind", json!({"ids": [r], "field": "fill", "variable": "brand"}));
-    let brand = brand_id(&s);
-    ex(&mut s, "node.set", json!({"ids": [r], "props": {"fills": ["#00FF00"], "boundVariables": {"fill": brand}}}));
-    assert_eq!(bound(&s, r), [("fill".to_string(), brand)]);
-    assert_eq!(fill_hex(&s, r), ["FF0000"], "the binding given with the paints applies");
 }

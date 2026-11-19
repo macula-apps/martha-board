@@ -226,9 +226,7 @@ fn pasting_an_image_keeps_the_other_fills_variables() {
     let mut w = Win::new();
     let oval =
         NodeId(w.app.session.execute("shape.ellipse", &json!({"x": 200, "y": 100, "width": 120, "height": 80})).unwrap()["id"].as_u64().unwrap());
-    w.app.session.execute("variable.createCollection", &json!({"name": "Theme"})).unwrap();
-    w.app.session.execute("variable.create", &json!({"collection": "Theme", "name": "brand", "type": "color", "value": "#FF0000"})).unwrap();
-    w.app.session.execute("variable.bind", &json!({"ids": [oval.0], "field": "fill", "variable": "brand"})).unwrap();
+    crate::test_variables::bind_color(&mut w.app.session, &[oval], "fill", "brand", "#FF0000");
     assert!(!w.app.session.doc().unwrap().node(oval).unwrap().bound.is_empty());
 
     w.copy_image_elsewhere();

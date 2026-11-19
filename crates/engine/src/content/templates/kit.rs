@@ -1,5 +1,7 @@
 //! The builder the starter templates share: a throwaway session whose document is built by
-//! running commands, the way a user (or a script) would make it.
+//! running commands, the way a user (or a script) would make it. Variables, their bindings and
+//! modes have no commands since the variables editor left (#16): the kit writes them into the
+//! document itself.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -9,7 +11,13 @@ use figcraft_doc::{Document, NodeId, NodeKind};
 use serde_json::{Map, Value, json};
 
 use super::glyphs::Glyph;
+use crate::variable_data;
 use crate::{EngineError, Result, Session};
+
+/// The error for a variable, collection or mode the kit can't find or a value it can't read.
+fn bad_value(what: &str) -> EngineError {
+    EngineError::Other(format!("template variables: `{what}`"))
+}
 
 pub(super) const V: &str = "vertical";
 pub(super) const H: &str = "horizontal";
@@ -213,26 +221,43 @@ impl Kit {
     }
 
     /// A variable collection with `modes`, and its variables: (name, type, one value per mode).
+    /// Written into the document directly, as the variables editor made them.
     pub fn variables(&mut self, collection: &str, modes: &[&str], vars: Vec<(&str, &str, Vec<Value>)>) -> Result<()> {
-        self.run("variable.createCollection", json!({"name": collection, "modes": modes}))?;
-        for (name, kind, values) in vars {
-            let values: Map<String, Value> = modes.iter().map(ToString::to_string).zip(values).collect();
-            self.run("variable.create", json!({"collection": collection, "name": name, "type": kind, "values": values}))?;
-        }
-        Ok(())
+        variable_data::edit(&mut self.s, |doc| {
+            let cid = variable_data::add_collection(doc, collection, modes);
+            let mode_ids: Vec<String> =
+                doc.variables.collection_by_id(&cid).map(|c| c.modes.iter().map(|m| m.id.clone()).collect()).unwrap_or_default();
+            for (name, kind, values) in vars {
+                let kind = variable_data::kind_of(kind).ok_or_else(|| bad_value(kind))?;
+                let mut by_mode = BTreeMap::new();
+                for (mode, v) in mode_ids.iter().zip(&values) {
+                    by_mode.insert(mode.clone(), variable_data::value_of(kind, v).ok_or_else(|| bad_value(name))?);
+                }
+                variable_data::add_variable(doc, &cid, name, kind, by_mode);
+            }
+            Ok(())
+        })
     }
 
     /// Bind fields of layer `id` to variables: (field, variable name). Gives the layer back.
     pub fn bound(&mut self, id: NodeId, binds: &[(&str, &str)]) -> Result<NodeId> {
         for (field, variable) in binds {
-            self.run("variable.bind", json!({"ids": [id.0], "field": field, "variable": variable}))?;
+            variable_data::edit(&mut self.s, |doc| {
+                let vid = doc.variables.get(variable).map(|v| v.id.clone()).ok_or_else(|| bad_value(variable))?;
+                variable_data::bind(doc, id, field, &vid)
+            })?;
         }
         Ok(id)
     }
 
     /// Show `frame` in `mode` of variable collection `collection`.
     pub fn mode(&mut self, frame: NodeId, collection: &str, mode: &str) -> Result<()> {
-        self.run("variable.setMode", json!({"ids": [frame.0], "collection": collection, "mode": mode})).map(drop)
+        variable_data::edit(&mut self.s, |doc| {
+            let coll = doc.variables.collection(collection).ok_or_else(|| bad_value(collection))?;
+            let mid = coll.find_mode(mode).map(|m| m.id.clone()).ok_or_else(|| bad_value(mode))?;
+            let cid = coll.id.clone();
+            variable_data::set_mode(doc, frame, &cid, &mid)
+        })
     }
 
     /// Combine components (named "Property=Value, …") into a component set called `name`.

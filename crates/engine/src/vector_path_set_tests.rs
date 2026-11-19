@@ -7,6 +7,7 @@
 use figcraft_doc::{NodeId, NodeKind, VectorNetwork};
 use serde_json::{Value, json};
 
+use crate::test_variables as tv;
 use crate::{EngineError, Session};
 
 fn ex(s: &mut Session, cmd: &str, p: Value) -> Value {
@@ -44,8 +45,8 @@ fn bad_msg(r: crate::Result<Value>) -> String {
 #[test]
 fn a_new_path_keeps_the_layer() {
     let mut s = Session::new();
-    ex(&mut s, "variable.createCollection", json!({"name": "T"}));
-    ex(&mut s, "variable.create", json!({"collection": "T", "name": "brand", "type": "color", "value": "#FF0000"}));
+    tv::collection(&mut s, "T", &["Mode 1"]);
+    tv::variable(&mut s, "T", "brand", "color", &[json!("#FF0000")]);
     let below = vector(&mut s, json!({"path": "M0 0 L5 5"}));
     let v = vector(&mut s, json!({"name": "Chart line", "path": "M0 0 L10 10", "x": 40, "y": 30}));
     let above = vector(&mut s, json!({"path": "M0 0 L5 5"}));
@@ -56,7 +57,7 @@ fn a_new_path_keeps_the_layer() {
             "effects": [{"type": "dropShadow", "color": "#00000040", "offset": [0, 2], "radius": 4}],
             "constraints": {"horizontal": "right", "vertical": "bottom"}}}),
     );
-    ex(&mut s, "variable.bind", json!({"ids": [v], "field": "fill", "variable": "brand"}));
+    tv::bind(&mut s, &[v], "fill", "brand");
     let before = s.doc().unwrap().node(v).unwrap().clone();
 
     let out = ex(&mut s, "node.set", json!({"ids": [v], "props": {"path": "M0 0 L20 0 L20 8 Z"}}));

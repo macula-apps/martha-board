@@ -407,7 +407,13 @@ fn measure_components(table: &mut Table, col: usize, instances: usize) -> CliRes
         d.page = page;
     }
     let colors = ["#FF0000", "#00AA00"];
-    exec(&mut s, "variable.bind", json!({"ids": [glyph], "field": "fill", "variable": null}));
+    // The glyph lets go of its colour variable first (no command unbinds since #16), so the edits
+    // below time the colour alone.
+    if let Ok(d) = s.doc_mut()
+        && let Ok(n) = d.get_mut(glyph)
+    {
+        n.bound.remove("fill");
+    }
     table.put(
         col,
         "edit deep main: icon colour (all copies follow)",

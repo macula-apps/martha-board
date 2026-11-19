@@ -10,6 +10,7 @@ use serde_json::{Value, json};
 
 use crate::Session;
 use crate::params::id_of;
+use crate::test_variables as tv;
 
 /// splitmix64: a fixed seed gives the same walk everywhere.
 struct Rng(u64);
@@ -108,9 +109,9 @@ fn scene() -> (Session, NodeId) {
     let comp = s.execute("component.create", &json!({"ids": [main]})).unwrap()["id"].clone();
     s.execute("instance.create", &json!({"component": comp, "x": 130, "y": 340})).unwrap();
     s.execute("instance.create", &json!({"component": comp, "x": 100, "y": 10, "parent": outer})).unwrap();
-    s.execute("variable.createCollection", &json!({"name": "T"})).unwrap();
-    s.execute("variable.create", &json!({"collection": "T", "name": "brand", "type": "color", "value": "#FF8000"})).unwrap();
-    s.execute("variable.bind", &json!({"ids": [part, g1], "field": "fill", "variable": "brand"})).unwrap();
+    tv::collection(&mut s, "T", &["Mode 1"]);
+    tv::variable(&mut s, "T", "brand", "color", &[json!("#FF8000")]);
+    tv::bind(&mut s, &[part, g1], "fill", "brand");
     let style = s.execute("style.create", &json!({"type": "paint", "name": "Accent", "from": g2})).unwrap()["id"].clone();
     s.execute("style.apply", &json!({"ids": [mr, blurred], "style": style})).unwrap();
     s.execute("select.none", &json!({})).unwrap();
@@ -208,7 +209,12 @@ fn step(s: &mut Session, page: NodeId, view: &mut View, rng: &mut Rng) -> String
             let Some(sib) = parent.and_then(|p| p.children.get(rng.below(p.children.len())).copied()) else { return "no sibling".into() };
             if rng.chance(0.5) && sib != n { ("object.group", json!({"ids": [n, sib]})) } else { ("object.ungroup", json!({"ids": [n]})) }
         }
-        22 => ("variable.set", json!({"variable": "brand", "value": rng.color()})),
+        22 => {
+            // A new value of the bound variable, as a collaborator or a library update brings it.
+            let c = rng.color();
+            tv::set_default(s, "brand", json!(c));
+            return format!("brand = {c}");
+        }
         23 => {
             let styles = &doc.styles;
             let Some(st) = styles.get(rng.below(styles.len())) else { return "no style".into() };

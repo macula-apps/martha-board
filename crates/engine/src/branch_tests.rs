@@ -9,6 +9,7 @@ use serde_json::{Value, json};
 
 use crate::Session;
 use crate::collab_tests::{base, random_command};
+use crate::test_variables as tv;
 
 fn ok(s: &mut Session, cmd: &str, p: Value) -> Value {
     s.execute(cmd, &p).unwrap_or_else(|e| panic!("{cmd} {p}: {e}"))
@@ -139,7 +140,7 @@ fn styles_variables_and_comments_merge() {
     let page = s.ds().unwrap().page;
     ok(&mut s, "comment.add", json!({"x": 1, "y": 2, "text": "On the branch", "page": page}));
     ok(&mut s, "doc.switch", json!({"index": 0}));
-    ok(&mut s, "variable.create", json!({"collection": "Tokens", "name": "accent", "type": "color", "value": "#FF00FF"}));
+    tv::variable(&mut s, "Tokens", "accent", "color", &[json!("#FF00FF")]);
     let review = ok(&mut s, "branch.review", json!({"id": id}));
     let what: Vec<&str> = review["branch"]["document"].as_array().unwrap().iter().map(|d| d["what"].as_str().unwrap()).collect();
     assert!(what.contains(&"Style “Brand”") && what.contains(&"Comment “On the branch”"), "{what:?}");

@@ -3,30 +3,12 @@ use figcraft_doc::ordered_props;
 use super::instance::preferred_arg;
 use super::variants::{fit_set, wrap_in_set};
 use super::{
-    BTreeMap, Document, NodeId, NodeKind, PROP_BINDING, PropDef, Result, SLOT, Session, Value, VariableType, VariableValue, bad, boolean,
-    default_variant, find_variant, get, id, id_of, inside_instance, instances_of, json, main_of, ok, owning_component, prop_default_value,
-    req_string, req_targets, set_boolean_default, slot_edited, slots_of, string, takes_value, targets, variant_conflicts, variant_name,
-    variant_options, variant_props, variant_set,
+    BTreeMap, Document, NodeId, NodeKind, PROP_BINDING, PropDef, Result, SLOT, Session, Value, VariableValue, bad, boolean, default_variant,
+    find_variant, get, id, id_of, inside_instance, instances_of, json, main_of, ok, owning_component, prop_default_value, req_string, req_targets,
+    set_boolean_default, slot_edited, slots_of, string, takes_value, targets, variant_conflicts, variant_name, variant_options, variant_props,
+    variant_set,
 };
 use crate::components::{instance_prop_list, prop_list};
-
-/// Whether instance `id` has a component property `name` that a `kind` variable can drive (a
-/// boolean property takes a boolean variable, a text or variant property a string one).
-pub(crate) fn check_prop_binding(doc: &Document, id: NodeId, name: &str, kind: VariableType) -> std::result::Result<(), String> {
-    let Some(NodeKind::Instance { component, .. }) = doc.node(id).map(|n| &n.kind) else {
-        return Err(format!("{id} is not an instance (component properties are bound on instances)"));
-    };
-    if variant_set(doc, *component).is_some_and(|set| variant_options(doc, set).iter().any(|(o, _)| o == name)) {
-        return if kind == VariableType::String { Ok(()) } else { Err(format!("`{name}` is a variant property: bind a string variable")) };
-    }
-    match (prop_defs(doc, *component).get(name), kind) {
-        (Some(PropDef::Boolean { .. }), VariableType::Boolean) | (Some(PropDef::Text { .. }), VariableType::String) => Ok(()),
-        (Some(PropDef::Boolean { .. }), _) => Err(format!("`{name}` is a boolean property: bind a boolean variable")),
-        (Some(PropDef::Text { .. }), _) => Err(format!("`{name}` is a text property: bind a string variable")),
-        (Some(_), _) => Err(format!("`{name}`: only boolean and text properties can be bound to variables")),
-        (None, _) => Err(format!("the instance has no property named `{name}`")),
-    }
-}
 
 /// Write bound variable values into instance `id`'s boolean and text property values, and switch
 /// it to the variant its bound variant properties name (only what changed; the instance then

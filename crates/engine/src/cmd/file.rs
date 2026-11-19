@@ -33,7 +33,7 @@ pub use export::{
 use export::{export, export_frames_pdf, export_layers, pdf_bytes};
 use load::font_report;
 pub use load::{MAX_DOCUMENT_FILE, load, load_bytes, load_path};
-pub(crate) use load::{read_capped, recovered, recovered_from, write};
+pub(crate) use load::{read_capped, recovered, recovered_from};
 pub use open::MAX_RECENT;
 pub(crate) use open::open;
 use open::{import, open_recent, revert};

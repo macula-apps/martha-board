@@ -199,8 +199,6 @@ mod open_issues_tests;
 #[cfg(test)]
 mod padding_individual_tests;
 #[cfg(test)]
-mod page_variable_modes_tests;
-#[cfg(test)]
 mod palette_tests;
 #[cfg(test)]
 mod panel_remove_tests;
@@ -255,6 +253,8 @@ mod style_props_tests;
 #[cfg(test)]
 mod table_paste_tests;
 #[cfg(test)]
+mod test_variables;
+#[cfg(test)]
 mod text_enter_tests;
 #[cfg(test)]
 mod text_link_tests;
@@ -270,16 +270,6 @@ mod ui_params_tests;
 mod ui_scale_tests;
 #[cfg(test)]
 mod usage_summary_tests;
-#[cfg(test)]
-mod variable_picker_tests;
-#[cfg(test)]
-mod variables_export_ui_tests;
-#[cfg(test)]
-mod variables_rename_tests;
-#[cfg(test)]
-mod variables_select_tests;
-#[cfg(test)]
-mod variables_window_resize_tests;
 #[cfg(test)]
 mod variants_discovery_tests;
 #[cfg(test)]
@@ -327,7 +317,6 @@ pub use dialogs::missing_fonts;
 pub use dialogs::plugins_ui;
 pub use dialogs::sampled_color;
 pub use dialogs::updates_ui;
-pub use dialogs::variables_panel;
 pub use home::home_recents;
 pub use home::online;
 pub use panels::assets_panel;
@@ -344,7 +333,6 @@ pub use panels::section_panel;
 pub use panels::selection_colors;
 pub use panels::shortcuts_panel;
 pub use panels::typography;
-pub use panels::variable_ui;
 pub use panels::vector_panel;
 pub use panels::versions;
 use widgets::board_picker;
@@ -448,8 +436,6 @@ pub struct UiState {
     pub context_menu_shown: bool,
     /// This frame's Actions toolbar button rect: presses on it toggle, never dismiss.
     pub actions_rect: Option<egui::Rect>,
-    /// The Variables editor, when open.
-    pub variables: Option<variables_panel::Editor>,
     pub about: bool,
     /// The tab the About window shows.
     pub about_tab: dialogs::AboutTab,
@@ -527,7 +513,7 @@ pub struct UiState {
     /// Files the user opened whose fonts are yet to be checked (by document uid).
     pub font_checks: Vec<u64>,
     pub missing_fonts: Option<missing_fonts::Shown>,
-    /// The eyedropper's Cmd/Ctrl+Shift pick, to make a colour style or variable of.
+    /// The eyedropper's Cmd/Ctrl+Shift pick, to make a colour style of.
     pub sampled_color: Option<sampled_color::SampledColor>,
     pub screenshot_requests: Vec<(u64, String)>,
     pub frame_ms: f64,
@@ -649,7 +635,6 @@ impl Default for UiState {
             palette_armed: false,
             context_menu_shown: false,
             actions_rect: None,
-            variables: None,
             about: false,
             about_tab: dialogs::AboutTab::About,
             preferences: false,

@@ -1,7 +1,7 @@
 use super::glyphs::{LeadGlyph, paint_lead};
 use super::{
     Align2, CornerRadius, FIELD_H, FieldEdit, FigApp, Id, LetterSpacing, LineHeight, MIXED, NodeId, Rect, Sense, Stroke, StrokeKind, Tokens, Ui,
-    Value, VariableType, commit_text, json, live, pos2, regular, tr, trim_num, vec2, widgets,
+    Value, commit_text, json, live, pos2, regular, tr, trim_num, vec2, widgets,
 };
 
 /// Line height, letter spacing or paragraph spacing: property, field id, glyph and tooltip.
@@ -62,30 +62,6 @@ pub(super) fn spacing_input(ui: &mut Ui, field: &SpacingField, value: &str, widt
         Some(FieldEdit::Scrub(v, done)) => Some(SpacingEdit::Scrub(v, done)),
         _ => typed.map(SpacingEdit::Typed),
     }
-}
-
-/// A spacing field that whole layers can bind to a number variable (in pixels): the variable's
-/// chip when bound, else the editable field with a variable button on hover. While a text range is
-/// selected it only takes values. Returns a typed commit or a live scrub.
-pub(super) fn spacing_field(
-    app: &mut FigApp,
-    ui: &mut Ui,
-    ids: &[NodeId],
-    f: &SpacingField,
-    value: &str,
-    width: f32,
-    range: bool,
-) -> Option<SpacingEdit> {
-    let rect = Rect::from_min_size(ui.cursor().min, vec2(width, FIELD_H));
-    if !range && crate::variable_ui::bound_chip(app, ui, ids, f.field, VariableType::Number, rect) {
-        ui.allocate_rect(rect, Sense::hover());
-        return None;
-    }
-    let out = spacing_input(ui, f, value, width);
-    if !range && ui.data(|d| d.get_temp::<String>(f.id.with("editing")).is_none()) {
-        crate::variable_ui::bind_button(ui, rect, ids, f.field, VariableType::Number);
-    }
-    out
 }
 
 /// A spacing value beside its scrub icon, centered in the same field while idle and editing.

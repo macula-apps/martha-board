@@ -5,6 +5,7 @@ use serde_json::{Value, json};
 
 use crate::Session;
 use crate::params::id_of;
+use crate::test_variables as tv;
 use figcraft_color::PaintKind;
 use figcraft_doc::{NodeId, NodeKind};
 
@@ -239,11 +240,11 @@ fn svg_text_paths_import_as_text_on_a_path() {
 fn text_and_curve(s: &mut Session, path_props: Value) -> (NodeId, NodeId) {
     let t = id(s.execute("text.create", &json!({"text": "Around", "x": 0, "y": 0})).unwrap());
     let v = id(s.execute("vector.create", &json!({"path": "M0 0 C50 -50 150 -50 200 0", "x": 40, "y": 100, "props": path_props})).unwrap());
-    s.execute("variable.createCollection", &json!({"name": "Paint"})).unwrap();
+    tv::collection(s, "Paint", &["Mode 1"]);
     for (name, value) in [("ink", "#00FF00"), ("shadow", "#FF000080")] {
-        s.execute("variable.create", &json!({"collection": "Paint", "name": name, "type": "color", "value": value})).unwrap();
+        tv::variable(s, "Paint", name, "color", &[json!(value)]);
     }
-    s.execute("variable.bind", &json!({"ids": [t], "field": "fills/0/color", "variable": "ink"})).unwrap();
+    tv::bind(s, &[t], "fills/0/color", "ink");
     s.execute("effect.add", &json!({"ids": [t], "type": "layerBlur"})).unwrap();
     (t, v)
 }
@@ -255,7 +256,7 @@ fn text_put_on_a_filled_path_takes_its_fill_and_effects() {
     let brand = s.execute("style.create", &json!({"type": "paint", "name": "Brand", "value": "#3366FF"})).unwrap()["id"].clone();
     s.execute("style.apply", &json!({"ids": [v], "style": brand})).unwrap();
     s.execute("effect.add", &json!({"ids": [v], "type": "dropShadow"})).unwrap();
-    s.execute("variable.bind", &json!({"ids": [v], "field": "effects/0/color", "variable": "shadow"})).unwrap();
+    tv::bind(&mut s, &[v], "effects/0/color", "shadow");
     let path = s.doc().unwrap().node(v).unwrap().clone();
     let text = s.doc().unwrap().node(t).unwrap().clone();
     assert!(path.styles.fill.is_some() && path.bound.contains_key("effects/0/color"));
@@ -301,8 +302,8 @@ fn text_put_on_a_path_with_an_empty_effect_style_keeps_its_own_effects() {
 fn text_put_on_a_path_takes_a_fill_binding_made_through_fills() {
     let mut s = Session::new();
     let (t, v) = text_and_curve(&mut s, json!({"fill": "#FF0000"}));
-    s.execute("variable.bind", &json!({"ids": [v], "field": "fills", "variable": "shadow"})).unwrap();
-    s.execute("variable.bind", &json!({"ids": [t], "field": "fills", "variable": "ink"})).unwrap();
+    tv::bind(&mut s, &[v], "fills", "shadow");
+    tv::bind(&mut s, &[t], "fills", "ink");
     let path = s.doc().unwrap().node(v).unwrap().clone();
     assert!(path.bound.contains_key("fills"));
     s.execute("text.onPath", &json!({"ids": [t, v]})).unwrap();
@@ -368,9 +369,9 @@ fn a_pattern_of_itself_draws_nothing_instead_of_recursing() {
 fn the_text_on_a_path_tool_carries_a_fill_bound_through_fills() {
     let mut s = Session::new();
     let v = id(s.execute("vector.create", &json!({"path": "M0 0 L200 0", "x": 40, "y": 100, "props": {"fill": "#FF0000"}})).unwrap());
-    s.execute("variable.createCollection", &json!({"name": "Paint"})).unwrap();
-    s.execute("variable.create", &json!({"collection": "Paint", "name": "ink", "type": "color", "value": "#00FF00"})).unwrap();
-    s.execute("variable.bind", &json!({"ids": [v], "field": "fills", "variable": "ink"})).unwrap();
+    tv::collection(&mut s, "Paint", &["Mode 1"]);
+    tv::variable(&mut s, "Paint", "ink", "color", &[json!("#00FF00")]);
+    tv::bind(&mut s, &[v], "fills", "ink");
     let bound = s.doc().unwrap().node(v).unwrap().bound.clone();
     assert!(bound.contains_key("fills"));
     s.set_tool(crate::tools::ToolId::TextOnPath);

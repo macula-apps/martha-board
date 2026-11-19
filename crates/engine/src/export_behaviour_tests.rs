@@ -76,6 +76,25 @@ fn shadow(s: &mut Session, id: NodeId, offset: (f64, f64), radius: f64, spread: 
     s.doc_mut().unwrap().get_mut(id).unwrap().effects.push(e);
 }
 
+/// A fresh, empty folder under the system's temporary folder, removed when it is dropped, so a test
+/// that fails part way leaves nothing behind.
+struct ScratchDir(std::path::PathBuf);
+
+impl ScratchDir {
+    fn new(name: &str) -> Self {
+        let dir = std::env::temp_dir().join(format!("{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        ScratchDir(dir)
+    }
+}
+
+impl Drop for ScratchDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
 fn file_names(r: &Value) -> Vec<String> {
     r["files"].as_array().unwrap().iter().map(|f| f["name"].as_str().unwrap().to_string()).collect()
 }
@@ -135,12 +154,10 @@ fn export_file_names_take_the_suffix_and_slashes_make_folders() {
         assert_eq!(names.get(i).map(String::as_str), Some(*want), "{why}");
     }
     // Into a folder: the slash makes a subfolder.
-    let dir = std::env::temp_dir().join(format!("figcraft-export-names-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let scratch = ScratchDir::new("figcraft-export-names");
+    let dir = &scratch.0;
     ex(&mut s, "file.exportLayers", json!({"ids": [close], "dir": dir.to_string_lossy()}));
     assert!(dir.join("icons").join("close.png").is_file(), "the folder is created");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -582,9 +599,8 @@ fn exporting_assets_writes_settings_icons_and_images() {
     let plain = rect(&mut s, 250.0, 10.0, 40.0, 40.0, "#0000FF", Some(f));
     name(&mut s, plain, "Plain");
 
-    let dir = std::env::temp_dir().join(format!("figcraft-export-assets-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let scratch = ScratchDir::new("figcraft-export-assets");
+    let dir = &scratch.0;
     let r = ex(&mut s, "file.exportLayers", json!({"ids": [f], "assets": true, "dir": dir.to_string_lossy()}));
     let mut names = file_names(&r);
     names.sort();
@@ -593,5 +609,4 @@ fn exporting_assets_writes_settings_icons_and_images() {
     assert!(read("Badge.jpg").starts_with(&[0xFF, 0xD8, 0xFF]), "export settings as they say: a JPG");
     assert!(text(&read("Glyph.svg")).contains("<svg"), "an icon as SVG");
     assert_eq!(png_size(&read("Photo.png")), (200, 100), "an image as a PNG of the layer at 1x");
-    let _ = std::fs::remove_dir_all(&dir);
 }

@@ -1171,7 +1171,7 @@ pub fn accept_updates(doc: &mut Document, lib: &PublishedLibrary) -> Result<Pend
         let keys = |list: &[ImportedRecord]| list.iter().map(|r| r.key.clone()).collect::<BTreeSet<_>>();
         import_variables(doc, lib, &keys(&p.variables), &keys(&p.collections), true);
     }
-    crate::cmd::variables::sync_extensions(doc);
+    crate::variable_data::sync_extensions(doc);
     let m = &lib.manifest;
     if let Some(l) = doc.libraries_mut().enabled.iter_mut().find(|l| l.id == m.id)
         && (l.version != m.version || l.name != m.name)
@@ -1524,7 +1524,9 @@ pub fn read_libraries<'a>(cache: &'a Cache, doc: &'a Document) -> impl Iterator<
     })
 }
 
-/// The variable collections library `lib` offers.
+/// The variable collections library `lib` offers. Only the tests' fixtures read it since the
+/// variables editor left (#16).
+#[cfg(test)]
 pub fn published_collections(lib: &PublishedLibrary) -> impl Iterator<Item = &Collection> {
     let m = &lib.manifest;
     lib.doc.variables.collections.iter().filter(|c| m.collection(&c.id).is_some_and(|x| x.published))

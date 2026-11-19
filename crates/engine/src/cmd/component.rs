@@ -2,7 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use figcraft_doc::{Document, Node, NodeId, NodeKind, PropDef, VariableType, VariableValue};
+use figcraft_doc::{Document, Node, NodeId, NodeKind, PropDef, VariableValue};
 use serde_json::{Value, json};
 
 use super::edit::{roots, z_sorted};
@@ -23,7 +23,7 @@ mod variants;
 use instance::{detach, make_slot, push_changes, remove_slot, reset_instance, reset_override, reset_slot, restore_main, slot_insert, swap};
 pub(crate) use instance::{swap_at, swap_instance};
 use props::{add_prop, bind_prop, delete_prop, edit_prop, set_props};
-pub(crate) use props::{apply_prop_bindings, check_prop_binding, describe_props};
+pub(crate) use props::{apply_prop_bindings, describe_props};
 use variants::{add_variant, combine, create_set};
 pub use variants::{can_add_variant, can_combine_variants, can_create_set};
 

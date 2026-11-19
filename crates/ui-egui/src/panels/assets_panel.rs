@@ -1104,7 +1104,7 @@ pub(crate) fn period_totals(v: &Value, kind: &str) -> Option<(u64, u64)> {
 /// answer's `id`), `None` for nothing to list. A server from before style and variable reports
 /// shows just components, and says so.
 fn usage_kind(ui: &mut Ui, w: f32, id: Id, v: &Value) -> Option<&'static str> {
-    const KINDS: [(&str, &str); 3] = [("components", "Components"), ("styles", "Styles"), ("variables", "Variables")];
+    const KINDS: [(&str, &str); 3] = [("components", tr_noop("Components")), ("styles", tr_noop("Styles")), ("variables", tr_noop("Variables"))];
     if v["assetsKnown"].as_bool() != Some(true) {
         hint(ui, tr("This server doesn't count styles and variables"));
         return Some(KINDS[0].0);

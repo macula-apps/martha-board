@@ -2,18 +2,17 @@
 //! enable, use and update other libraries (their components, styles and variables), swap one for
 //! another, and see how files use a team library.
 
-use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use figcraft_doc::{Document, ImportedComponent, ImportedRecord, LibraryLink, LibraryManifest, NodeId, PublishedLibrary, VariableId};
+use figcraft_doc::{Document, ImportedComponent, ImportedRecord, LibraryLink, LibraryManifest, NodeId, PublishedLibrary};
 use serde_json::{Value, json};
 
 use figcraft_collab::message::{AssetUsage, FileDetached, LibraryReply, LibraryReq, WeekActions};
 
 use super::CommandSpec;
 use crate::library::{
-    Pending, Selection, absolute_path, accept_updates, asset_root, default_selection, find_link, import, import_styles, import_variables,
-    is_remote_variable, pending, prune, publish, publishable, published_collections, published_variables,
+    Pending, Selection, absolute_path, accept_updates, asset_root, default_selection, find_link, import, import_styles, pending, prune, publish,
+    publishable,
 };
 use crate::library_server::{archive, is_server_link, read_archive, shown_path};
 use crate::live::{NetReply, NetRequest, PublishOptions};
@@ -137,49 +136,6 @@ pub fn specs() -> Vec<CommandSpec> {
             true,
             apply_style
         ),
-        spec!(
-            "library.importVariable",
-            "Import library variable",
-            "{library, variable (id or name of a published variable)}  → {variable (local, read-only linked copy to use with variable.bind, or as an alias in variable.set)}",
-            true,
-            |s, p| {
-                let (lib, key) = variable_arg(s, "library.importVariable", p, "variable")?;
-                Ok(json!({"variable": import_variable(s, &lib, &key)?}))
-            }
-        ),
-        spec!(
-            "library.bindVariable",
-            "Bind library variable",
-            "{library, variable (id or name of a published variable), field (as variable.bind), ids?}  copies the variable in (linked, read-only) and binds it",
-            true,
-            |s, p| {
-                let (lib, key) = variable_arg(s, "library.bindVariable", p, "variable")?;
-                let local = import_variable(s, &lib, &key)?;
-                super::styles::bind(s, &with(p, &["ids", "id", "field"], json!({"variable": local})))?;
-                Ok(json!({"variable": local}))
-            }
-        ),
-        spec!(
-            "library.aliasVariable",
-            "Alias library variable",
-            "{library, alias (id or name of a published variable of the same type), variable (a local variable), mode? (default first)}  copies the library variable in (linked, read-only) and makes the local variable's value an alias of it",
-            true,
-            alias
-        ),
-        spec!(
-            "library.setVariableMode",
-            "Set library variable mode",
-            "{library, collection (id or name of a published collection), mode (id or name), ids? (frames; the page when omitted)}  copies the collection in (linked, read-only) and sets its mode on the frames",
-            true,
-            set_mode
-        ),
-        spec!(
-            "library.extendCollection",
-            "Extend library collection",
-            "{library, collection (id or name of a published collection), name? (default \"<name> (extended)\")}  → {id}: a collection of this file with the library collection's modes and variables (they follow its updates); override their values per mode with variable.set (variable.resetOverride goes back to the inherited value) and add variables of its own",
-            true,
-            extend
-        ),
     ]
 }
 
@@ -220,70 +176,6 @@ fn component_arg(s: &mut Session, cmd: &str, p: &Value) -> Result<(LibraryLink, 
     let by_name = || v.as_str().and_then(|t| m.components.iter().find(|a| a.published && a.name == t)).map(|a| a.id);
     let key = id_of(v).filter(|i| offered(*i)).or_else(by_name).ok_or_else(|| bad(cmd, format!("\"{}\" publishes no component {v}", link.name)))?;
     Ok((link, lib, key))
-}
-
-/// The `library` and a published variable named by `param` (id, else name): (library, the
-/// variable's id in the library).
-fn variable_arg(s: &mut Session, cmd: &str, p: &Value, param: &str) -> Result<(Arc<PublishedLibrary>, VariableId)> {
-    let (link, lib) = library(s, cmd, p)?;
-    let key = req_string(cmd, p, param)?;
-    let id = published_variables(&lib).find(|v| v.id == key).or_else(|| published_variables(&lib).find(|v| v.name == key)).map(|v| v.id.clone());
-    let id = id.ok_or_else(|| bad(cmd, format!("\"{}\" publishes no variable `{key}`", link.name)))?;
-    Ok((lib, id))
-}
-
-/// Copy library variable `key` in (with what it aliases); its local id.
-fn import_variable(s: &mut Session, lib: &PublishedLibrary, key: &str) -> Result<VariableId> {
-    let map = import_variables(s.doc_mut()?, lib, &BTreeSet::from([key.to_string()]), &BTreeSet::new(), false);
-    map.variables.get(key).cloned().ok_or_else(|| EngineError::Other("the variable didn't import".into()))
-}
-
-fn alias(s: &mut Session, p: &Value) -> Result<Value> {
-    let cmd = "library.aliasVariable";
-    let own = req_string(cmd, p, "variable")?;
-    let doc = s.doc()?;
-    let kind = doc.variables.get(&own).filter(|v| !is_remote_variable(doc, &v.id)).map(|v| v.kind);
-    let kind = kind.ok_or_else(|| bad(cmd, format!("no local variable `{own}`")))?;
-    let (lib, key) = variable_arg(s, cmd, p, "alias")?;
-    if lib.doc.variables.get_by_id(&key).is_some_and(|v| v.kind != kind) {
-        return Err(bad(cmd, "the library variable has another type"));
-    }
-    let local = import_variable(s, &lib, &key)?;
-    super::styles::var_set(s, &with(p, &["variable", "mode"], json!({"value": {"alias": local}})))?;
-    Ok(json!({"variable": local}))
-}
-
-fn set_mode(s: &mut Session, p: &Value) -> Result<Value> {
-    let cmd = "library.setVariableMode";
-    let (link, lib) = library(s, cmd, p)?;
-    let key = req_string(cmd, p, "collection")?;
-    let coll = published_collections(&lib)
-        .find(|c| c.id == key)
-        .or_else(|| published_collections(&lib).find(|c| c.name == key))
-        .ok_or_else(|| bad(cmd, format!("\"{}\" publishes no variable collection `{key}`", link.name)))?;
-    let m = req_string(cmd, p, "mode")?;
-    let mode = coll.find_mode(&m).map(|x| x.id.clone()).ok_or_else(|| bad(cmd, "no such mode"))?;
-    let key = coll.id.clone();
-    let map = import_variables(s.doc_mut()?, &lib, &BTreeSet::new(), &BTreeSet::from([key.clone()]), false);
-    let local = map.collections.get(&key).cloned().ok_or_else(|| EngineError::Other("the collection didn't import".into()))?;
-    super::styles::set_mode(s, &with(p, &["ids", "id"], json!({"collection": local, "mode": mode})))?;
-    Ok(json!({"collection": local}))
-}
-
-fn extend(s: &mut Session, p: &Value) -> Result<Value> {
-    let cmd = "library.extendCollection";
-    let (link, lib) = library(s, cmd, p)?;
-    let key = req_string(cmd, p, "collection")?;
-    let coll = published_collections(&lib)
-        .find(|c| c.id == key)
-        .or_else(|| published_collections(&lib).find(|c| c.name == key))
-        .cloned()
-        .ok_or_else(|| bad(cmd, format!("\"{}\" publishes no variable collection `{key}`", link.name)))?;
-    let vars: BTreeSet<VariableId> = published_variables(&lib).filter(|v| v.collection == coll.id).map(|v| v.id.clone()).collect();
-    let doc = s.doc_mut()?;
-    let map = import_variables(doc, &lib, &vars, &BTreeSet::from([coll.id.clone()]), false);
-    let parent = map.collections.get(&coll.id).cloned().ok_or_else(|| EngineError::Other("the collection didn't import".into()))?;
-    Ok(json!({"id": super::variables::add_extension(doc, parent, &coll.name, p)}))
 }
 
 /// What `p` asks `cmd` to publish of `doc` (`include`, else the default after `prev`; less

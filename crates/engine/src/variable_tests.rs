@@ -1,22 +1,22 @@
-//! Variable bindings through the session: binding, value edits and modes reach the layers.
+//! Variable bindings in a document: bound layers take their variables' values in their modes and follow
+//! new values (a file holds them; a collaborator or a library update changes them).
 
 use serde_json::json;
 
 use crate::Session;
 use crate::params::id_of;
+use crate::test_variables as tv;
 
 fn stale_bound_color_document() -> (figcraft_doc::Document, figcraft_doc::NodeId) {
     let mut s = Session::new();
     let id = id_of(&s.execute("shape.rectangle", &json!({"x": 4000, "y": 4000, "width": 23, "height": 17})).unwrap()["id"]).unwrap();
     let page = s.doc().unwrap().first_page().unwrap();
-    s.execute("variable.createCollection", &json!({"name": "Theme", "modes": ["Light", "Dark"]})).unwrap();
-    s.execute("variable.create", &json!({"collection": "Theme", "name": "surface", "type": "color", "value": "#FFFFFF"})).unwrap();
-    s.execute("variable.create", &json!({"collection": "Theme", "name": "size", "type": "number", "value": 23})).unwrap();
-    s.execute("variable.set", &json!({"variable": "surface", "mode": "Dark", "value": "#202124"})).unwrap();
-    s.execute("variable.set", &json!({"variable": "size", "mode": "Dark", "value": 99})).unwrap();
-    s.execute("variable.bind", &json!({"ids": [id], "field": "fill", "variable": "surface"})).unwrap();
-    s.execute("variable.bind", &json!({"ids": [id], "field": "width", "variable": "size"})).unwrap();
-    s.execute("variable.setMode", &json!({"collection": "Theme", "mode": "Dark"})).unwrap();
+    tv::collection(&mut s, "Theme", &["Light", "Dark"]);
+    tv::variable(&mut s, "Theme", "surface", "color", &[json!("#FFFFFF"), json!("#202124")]);
+    tv::variable(&mut s, "Theme", "size", "number", &[json!(23), json!(99)]);
+    tv::bind(&mut s, &[id], "fill", "surface");
+    tv::bind(&mut s, &[id], "width", "size");
+    tv::mode(&mut s, page, "Theme", "Dark");
     let mut doc = s.doc().unwrap().clone();
     let node = doc.get_mut(id).unwrap();
     node.name = "load-binding-sentinel".into();
@@ -75,29 +75,25 @@ fn initial_paint_settlement_preserves_existing_dirty_nodes() {
 }
 
 #[test]
-fn bound_layers_follow_variable_values_and_unbind() {
+fn bound_layers_follow_variable_values_and_modes() {
     let mut s = Session::new();
     let r = id_of(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"]).unwrap();
-    s.execute("variable.createCollection", &json!({"name": "Tokens", "modes": ["Light", "Dark"]})).unwrap();
-    s.execute("variable.create", &json!({"collection": "Tokens", "name": "size/lg", "type": "number", "value": 48})).unwrap();
-    s.execute("variable.create", &json!({"collection": "Tokens", "name": "brand", "type": "color", "value": "#0D99FF"})).unwrap();
-    s.execute("variable.bind", &json!({"ids": [r], "field": "width", "variable": "size/lg"})).unwrap();
-    s.execute("variable.bind", &json!({"ids": [r], "field": "fill", "variable": "brand"})).unwrap();
+    tv::collection(&mut s, "Tokens", &["Light", "Dark"]);
+    tv::variable(&mut s, "Tokens", "size/lg", "number", &[json!(48)]);
+    tv::variable(&mut s, "Tokens", "brand", "color", &[json!("#0D99FF")]);
+    tv::bind(&mut s, &[r], "width", "size/lg");
+    tv::bind(&mut s, &[r], "fill", "brand");
     let node = |s: &Session| s.doc().unwrap().node(r).unwrap().clone();
     assert_eq!(node(&s).width, 48.0);
     assert_eq!(node(&s).fills.first().and_then(|p| p.solid_color()).map(|c| c.to_hex()), Some("0D99FF".into()));
-    // Editing the variable updates the bound layer.
-    s.execute("variable.set", &json!({"variable": "size/lg", "value": 64})).unwrap();
+    // A new value of the variable updates the bound layer.
+    tv::set(&mut s, "size/lg", "Light", json!(64));
     assert_eq!(node(&s).width, 64.0);
     // A mode with another value applies through the page.
-    s.execute("variable.set", &json!({"variable": "size/lg", "mode": "Dark", "value": 80})).unwrap();
-    s.execute("variable.setMode", &json!({"collection": "Tokens", "mode": "Dark"})).unwrap();
+    tv::set(&mut s, "size/lg", "Dark", json!(80));
+    let page = s.page().unwrap();
+    tv::mode(&mut s, page, "Tokens", "Dark");
     assert_eq!(node(&s).width, 80.0);
-    // Unbinding keeps the value and stops following.
-    s.execute("variable.bind", &json!({"ids": [r], "field": "width", "variable": null})).unwrap();
-    s.execute("variable.set", &json!({"variable": "size/lg", "mode": "Dark", "value": 99})).unwrap();
-    assert_eq!(node(&s).width, 80.0);
-    assert!(s.execute("variable.bind", &json!({"ids": [r], "field": "width", "variable": "nope"})).is_err());
 }
 
 #[test]
@@ -106,19 +102,16 @@ fn opacity_padding_text_and_visibility_follow_their_variables() {
     let f = id_of(&s.execute("frame.create", &json!({"x": 0, "y": 0, "width": 100, "height": 100})).unwrap()["id"]).unwrap();
     s.execute("layout.add", &json!({"ids": [f]})).unwrap();
     let t = id_of(&s.execute("text.create", &json!({"text": "Hello", "x": 200, "y": 0})).unwrap()["id"]).unwrap();
-    s.execute("variable.createCollection", &json!({"name": "Tokens"})).unwrap();
+    tv::collection(&mut s, "Tokens", &["Mode 1"]);
     for (name, kind, value) in
         [("fade", "number", json!(40)), ("pad", "number", json!(12)), ("label", "string", json!("Sign in")), ("shown", "boolean", json!(false))]
     {
-        s.execute("variable.create", &json!({"collection": "Tokens", "name": name, "type": kind, "value": value})).unwrap();
+        tv::variable(&mut s, "Tokens", name, kind, &[value]);
     }
-    let bind = |s: &mut Session, id, field: &str, var: &str| {
-        s.execute("variable.bind", &json!({"ids": [id], "field": field, "variable": var})).unwrap();
-    };
-    bind(&mut s, f, "opacity", "fade");
-    bind(&mut s, f, "paddingHorizontal", "pad");
-    bind(&mut s, t, "characters", "label");
-    bind(&mut s, t, "visible", "shown");
+    tv::bind(&mut s, &[f], "opacity", "fade");
+    tv::bind(&mut s, &[f], "paddingHorizontal", "pad");
+    tv::bind(&mut s, &[t], "characters", "label");
+    tv::bind(&mut s, &[t], "visible", "shown");
     let doc = s.doc().unwrap();
     let frame = doc.node(f).unwrap();
     // Opacity variables are percentages.
@@ -129,8 +122,8 @@ fn opacity_padding_text_and_visibility_follow_their_variables() {
     assert_eq!(text.kind.text().map(|x| x.characters.as_str()), Some("Sign in"));
     assert!(!text.visible);
     // Out-of-range percentages clamp; booleans flip visibility back.
-    s.execute("variable.set", &json!({"variable": "fade", "value": 250})).unwrap();
-    s.execute("variable.set", &json!({"variable": "shown", "value": true})).unwrap();
+    tv::set(&mut s, "fade", "Mode 1", json!(250));
+    tv::set(&mut s, "shown", "Mode 1", json!(true));
     let doc = s.doc().unwrap();
     assert_eq!(doc.node(f).unwrap().opacity, 1.0);
     assert!(doc.node(t).unwrap().visible);
@@ -140,15 +133,15 @@ fn opacity_padding_text_and_visibility_follow_their_variables() {
 fn line_height_and_letter_spacing_follow_number_variables_in_pixels() {
     let mut s = Session::new();
     let t = id_of(&s.execute("text.create", &json!({"text": "Hello", "x": 0, "y": 0})).unwrap()["id"]).unwrap();
-    s.execute("variable.createCollection", &json!({"name": "Type"})).unwrap();
-    s.execute("variable.create", &json!({"collection": "Type", "name": "leading", "type": "number", "value": 24})).unwrap();
-    s.execute("variable.create", &json!({"collection": "Type", "name": "tracking", "type": "number", "value": 2})).unwrap();
-    s.execute("variable.bind", &json!({"ids": [t], "field": "lineHeight", "variable": "leading"})).unwrap();
-    s.execute("variable.bind", &json!({"ids": [t], "field": "letterSpacing", "variable": "tracking"})).unwrap();
+    tv::collection(&mut s, "Type", &["Mode 1"]);
+    tv::variable(&mut s, "Type", "leading", "number", &[json!(24)]);
+    tv::variable(&mut s, "Type", "tracking", "number", &[json!(2)]);
+    tv::bind(&mut s, &[t], "lineHeight", "leading");
+    tv::bind(&mut s, &[t], "letterSpacing", "tracking");
     let style = |s: &Session| s.doc().unwrap().node(t).unwrap().kind.text().unwrap().style.clone();
     assert_eq!(style(&s).line_height, figcraft_doc::LineHeight::Pixels(24.0));
     assert_eq!(style(&s).letter_spacing, figcraft_doc::LetterSpacing::Pixels(2.0));
-    s.execute("variable.set", &json!({"variable": "leading", "value": 30})).unwrap();
+    tv::set(&mut s, "leading", "Mode 1", json!(30));
     assert_eq!(style(&s).line_height, figcraft_doc::LineHeight::Pixels(30.0));
 }
 
@@ -158,18 +151,13 @@ fn effects_follow_their_variables() {
     let r = id_of(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"]).unwrap();
     s.execute("effect.add", &json!({"ids": [r], "type": "dropShadow"})).unwrap();
     s.execute("effect.add", &json!({"ids": [r], "type": "layerBlur"})).unwrap();
-    s.execute("variable.createCollection", &json!({"name": "Fx"})).unwrap();
+    tv::collection(&mut s, "Fx", &["Mode 1"]);
     for (name, kind, value) in [("y", "number", json!(6)), ("blur", "number", json!(12)), ("shadow", "color", json!("#FF000080"))] {
-        s.execute("variable.create", &json!({"collection": "Fx", "name": name, "type": kind, "value": value})).unwrap();
+        tv::variable(&mut s, "Fx", name, kind, &[value]);
     }
-    let bind = |s: &mut Session, field: &str, var: &str| {
-        s.execute("variable.bind", &json!({"ids": [r], "field": field, "variable": var})).unwrap();
-    };
-    bind(&mut s, "effects/0/offsetY", "y");
-    bind(&mut s, "effects/0/color", "shadow");
-    bind(&mut s, "effects/1/radius", "blur");
-    // There is no effect 9 to bind (see `binding_lists_tests::a_layer_binds_only_fields_its_effects_have`).
-    assert!(s.execute("variable.bind", &json!({"ids": [r], "field": "effects/9/radius", "variable": "blur"})).is_err());
+    tv::bind(&mut s, &[r], "effects/0/offsetY", "y");
+    tv::bind(&mut s, &[r], "effects/0/color", "shadow");
+    tv::bind(&mut s, &[r], "effects/1/radius", "blur");
     let fx = |s: &Session| s.doc().unwrap().node(r).unwrap().effects.clone();
     match &fx(&s)[0].kind {
         figcraft_doc::EffectKind::DropShadow(sh) => {
@@ -180,10 +168,6 @@ fn effects_follow_their_variables() {
         k => panic!("{k:?}"),
     }
     assert!(matches!(fx(&s)[1].kind, figcraft_doc::EffectKind::LayerBlur(ref b) if b.radius == 12.0));
-    s.execute("variable.set", &json!({"variable": "blur", "value": -3})).unwrap();
+    tv::set(&mut s, "blur", "Mode 1", json!(-3));
     assert!(matches!(fx(&s)[1].kind, figcraft_doc::EffectKind::LayerBlur(ref b) if b.radius == 0.0), "clamped");
-    // Pickers offer effect-scoped variables for these fields.
-    let doc = s.doc().unwrap();
-    assert_eq!(crate::cmd::variables::field_scope(doc, r, "effects/0/color"), Some("EFFECT_COLOR"));
-    assert_eq!(crate::cmd::variables::field_scope(doc, r, "effects/0/spread"), Some("EFFECT_FLOAT"));
 }

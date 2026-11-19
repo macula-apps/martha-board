@@ -1,8 +1,8 @@
 use super::menu::{context_popup, menu_check, menu_item, menu_popup, row, row_context_menu, row_rect, row_target};
 use super::{
     Blur, BlurType, Document, Effect, EffectKind, FieldEdit, FigApp, Glass, GridAlign, GridKind, Icon, Id, LayoutGrid, Lead, ListDrag,
-    MAX_BLUR_RADIUS, NodeId, Noise, NoiseMode, Paint, Sense, Shadow, StyleSlot, Texture, Ui, VariableType, common, icons, json, move_flags,
-    moved_index, remove_flags, removed_index, style_picker, tr, trf, trn, vec2, widgets,
+    MAX_BLUR_RADIUS, NodeId, Noise, NoiseMode, Paint, Sense, Shadow, StyleSlot, Texture, Ui, common, icons, json, move_flags, moved_index,
+    remove_flags, removed_index, style_picker, tr, trf, trn, vec2, widgets,
 };
 use crate::property_rows::PropertyKind;
 
@@ -116,28 +116,18 @@ pub(crate) fn effect_open(ctx: &egui::Context, i: usize) -> bool {
     ctx.data(|d| d.get_temp::<bool>(Id::unique((FX_OPEN, i)))).unwrap_or(false)
 }
 
-/// A number field of effect `i` that can be bound to a variable (`effects/<i>/<prop>`).
-fn fx_field(app: &mut FigApp, ui: &mut Ui, ids: &[NodeId], i: usize, prop: &str, lead: Lead, value: f64, width: f32) -> Option<FieldEdit> {
-    fx_field_in(app, ui, ids, i, prop, lead, Some(value), "", width)
+/// A number field of effect `i`'s `prop`.
+fn fx_field(ui: &mut Ui, i: usize, prop: &str, lead: Lead, value: f64, width: f32) -> Option<FieldEdit> {
+    fx_field_in(ui, i, prop, lead, Some(value), "", width)
 }
 
 /// [`fx_field`] showing `value` as given (a glass percentage) with `suffix` after it.
-fn fx_field_in(
-    app: &mut FigApp,
-    ui: &mut Ui,
-    ids: &[NodeId],
-    i: usize,
-    prop: &str,
-    lead: Lead,
-    value: Option<f64>,
-    suffix: &str,
-    width: f32,
-) -> Option<FieldEdit> {
-    crate::variable_ui::number_field(app, ui, ids, &format!("effects/{i}/{prop}"), Id::unique(("fx", prop, i)), lead, value, suffix, width)
+fn fx_field_in(ui: &mut Ui, i: usize, prop: &str, lead: Lead, value: Option<f64>, suffix: &str, width: f32) -> Option<FieldEdit> {
+    widgets::number_field(ui, Id::unique(("fx", prop, i)), lead, value, suffix, width, 1.0)
 }
 
 /// Draw type-specific effect fields for shadows, blurs, noise, texture and glass, using live
-/// scrub edits that stay one undo step and bindable colour fields.
+/// scrub edits that stay one undo step.
 fn effect_settings(app: &mut FigApp, ui: &mut Ui, ids: &[NodeId], i: usize, e: &Effect) {
     let half = widgets::col_width(ui.available_width());
     let set = |app: &mut FigApp, e2: Effect, scrub: Option<bool>| {
@@ -173,24 +163,19 @@ fn effect_settings(app: &mut FigApp, ui: &mut Ui, ids: &[NodeId], i: usize, e: &
             let inner = matches!(e.kind, EffectKind::InnerShadow(_));
             let mk = |s2: Shadow| Effect { kind: if inner { EffectKind::InnerShadow(s2) } else { EffectKind::DropShadow(s2) }, visible: e.visible };
             row(ui, 32.0, |ui| {
-                let ed = fx_field(app, ui, ids, i, "offsetX", Lead::Text("X"), s.offset.0, half);
+                let ed = fx_field(ui, i, "offsetX", Lead::Text("X"), s.offset.0, half);
                 edit(app, ed, &|v| mk(Shadow { offset: (v, s.offset.1), ..s.clone() }));
-                let ed = fx_field(app, ui, ids, i, "offsetY", Lead::Text("Y"), s.offset.1, half);
+                let ed = fx_field(ui, i, "offsetY", Lead::Text("Y"), s.offset.1, half);
                 edit(app, ed, &|v| mk(Shadow { offset: (s.offset.0, v), ..s.clone() }));
             });
             row(ui, 32.0, |ui| {
-                let ed = fx_field(app, ui, ids, i, "radius", Lead::Text(tr("Blur")), s.radius, half);
+                let ed = fx_field(ui, i, "radius", Lead::Text(tr("Blur")), s.radius, half);
                 edit(app, ed, &|v| mk(Shadow { radius: v.max(0.0), ..s.clone() }));
-                let ed = fx_field(app, ui, ids, i, "spread", Lead::Text(tr("Spread")), s.spread, half);
+                let ed = fx_field(ui, i, "spread", Lead::Text(tr("Spread")), s.spread, half);
                 edit(app, ed, &|v| mk(Shadow { spread: v, ..s.clone() }));
             });
-            // The colour: a bound variable's chip, else swatch, hex and alpha with a variable button.
-            let color_field = format!("effects/{i}/color");
-            row(ui, 32.0, |ui| {
-                crate::variable_ui::bindable(app, ui, ids, &color_field, VariableType::Color, ui.available_width(), |app, ui| {
-                    fx_color(app, ui, ids, i, e, false, &edit_color)
-                });
-            });
+            // The colour: swatch, hex and alpha.
+            row(ui, 32.0, |ui| fx_color(app, ui, ids, i, e, false, &edit_color));
             if !inner {
                 row(ui, 32.0, |ui| {
                     if widgets::checkbox(ui, s.show_behind, tr("Show behind transparent areas")) {
@@ -221,12 +206,12 @@ fn effect_settings(app: &mut FigApp, ui: &mut Ui, ids: &[NodeId], i: usize, e: &
             row(ui, 32.0, |ui| {
                 if b.is_progressive() {
                     // The ramp's start and end points are dragged on the canvas.
-                    let ed = fx_field(app, ui, ids, i, "startRadius", Lead::Text(tr("Start")), b.start_radius, half);
+                    let ed = fx_field(ui, i, "startRadius", Lead::Text(tr("Start")), b.start_radius, half);
                     edit(app, ed, &|v| with(&|b2| b2.start_radius = v.clamp(0.0, MAX_BLUR_RADIUS)));
-                    let ed = fx_field(app, ui, ids, i, "radius", Lead::Text(tr("End")), b.radius, half);
+                    let ed = fx_field(ui, i, "radius", Lead::Text(tr("End")), b.radius, half);
                     edit(app, ed, &|v| with(&|b2| b2.radius = v.clamp(0.0, MAX_BLUR_RADIUS)));
                 } else {
-                    let ed = fx_field(app, ui, ids, i, "radius", Lead::Text(tr("Blur")), b.radius, ui.available_width());
+                    let ed = fx_field(ui, i, "radius", Lead::Text(tr("Blur")), b.radius, ui.available_width());
                     edit(app, ed, &|v| with(&|b2| b2.radius = v.clamp(0.0, MAX_BLUR_RADIUS)));
                 }
             });
@@ -315,30 +300,29 @@ fn effect_settings(app: &mut FigApp, ui: &mut Ui, ids: &[NodeId], i: usize, e: &
                     }
                 })
             };
-            // Each field takes a variable (`effects/<i>/<field>`), read as the field shows it:
-            // percentages for the 0–1 values, and the frost as `radius` (see `Glass::set_bound`).
+            // Percentages for the 0–1 values.
             let pct = |v: f64| Some((v * 100.0).round());
             let unit = |v: f64| (v / 100.0).clamp(0.0, 1.0);
             row(ui, 32.0, |ui| {
-                let ed = fx_field_in(app, ui, ids, i, "lightAngle", Lead::Text(tr("Light|glass")), Some(g.light_angle.round()), "°", half);
+                let ed = fx_field_in(ui, i, "lightAngle", Lead::Text(tr("Light|glass")), Some(g.light_angle.round()), "°", half);
                 edit(app, ed, &|v| with(&|gl| gl.light_angle = v.clamp(-180.0, 180.0)));
-                let ed = fx_field_in(app, ui, ids, i, "lightIntensity", Lead::Text(tr("Intensity")), pct(g.light_intensity), "%", half);
+                let ed = fx_field_in(ui, i, "lightIntensity", Lead::Text(tr("Intensity")), pct(g.light_intensity), "%", half);
                 edit(app, ed, &|v| with(&|gl| gl.light_intensity = unit(v)));
             });
             row(ui, 32.0, |ui| {
-                let ed = fx_field_in(app, ui, ids, i, "refraction", Lead::Text(tr("Refraction")), pct(g.refraction), "%", half);
+                let ed = fx_field_in(ui, i, "refraction", Lead::Text(tr("Refraction")), pct(g.refraction), "%", half);
                 edit(app, ed, &|v| with(&|gl| gl.refraction = unit(v)));
-                let ed = fx_field_in(app, ui, ids, i, "depth", Lead::Text(tr("Depth")), Some(g.depth), "", half);
+                let ed = fx_field_in(ui, i, "depth", Lead::Text(tr("Depth")), Some(g.depth), "", half);
                 edit(app, ed, &|v| with(&|gl| gl.depth = v.clamp(1.0, 1000.0)));
             });
             row(ui, 32.0, |ui| {
-                let ed = fx_field_in(app, ui, ids, i, "dispersion", Lead::Text(tr("Dispersion")), pct(g.dispersion), "%", half);
+                let ed = fx_field_in(ui, i, "dispersion", Lead::Text(tr("Dispersion")), pct(g.dispersion), "%", half);
                 edit(app, ed, &|v| with(&|gl| gl.dispersion = unit(v)));
-                let ed = fx_field_in(app, ui, ids, i, "radius", Lead::Text(tr("Frost")), Some(g.sanitized().frost), "", half);
+                let ed = fx_field_in(ui, i, "radius", Lead::Text(tr("Frost")), Some(g.sanitized().frost), "", half);
                 edit(app, ed, &|v| with(&|gl| gl.frost = v.clamp(0.0, Glass::MAX_FROST)));
             });
             row(ui, 32.0, |ui| {
-                let ed = fx_field_in(app, ui, ids, i, "splay", Lead::Text(tr("Splay")), pct(g.splay), "%", half);
+                let ed = fx_field_in(ui, i, "splay", Lead::Text(tr("Splay")), pct(g.splay), "%", half);
                 edit(app, ed, &|v| with(&|gl| gl.splay = unit(v)));
             });
         }
@@ -469,15 +453,13 @@ fn grids_with(list: &[LayoutGrid], i: usize, f: impl FnOnce(&mut LayoutGrid)) ->
 }
 
 /// Layout grid `i`'s settings: size (grids); count, type, width or height, margin or offset and
-/// gutter (columns and rows); colour. The numbers can be bound to number variables
-/// (`layoutGrids/<i>/<size|count|gutter|offset>`).
+/// gutter (columns and rows); colour.
 fn grid_settings(app: &mut FigApp, ui: &mut Ui, ids: &[NodeId], list: &[LayoutGrid], i: usize, g: &LayoutGrid) {
     let col = widgets::col_width(ui.available_width());
     let set = |f: &dyn Fn(&mut LayoutGrid)| json!({"ids": ids, "props": {"grids": grids_with(list, i, f)}});
-    // One bindable number field, applied with `apply` (a scrub is one undo step).
+    // One number field, applied with `apply` (a scrub is one undo step).
     let field = |app: &mut FigApp, ui: &mut Ui, name: &str, value: f64, apply: &dyn Fn(&mut LayoutGrid, f64)| {
-        let key = format!("layoutGrids/{i}/{name}");
-        let e = crate::variable_ui::number_field(app, ui, ids, &key, Id::unique(("grid_field", name, i)), Lead::None, Some(value), "", col);
+        let e = widgets::number_field(ui, Id::unique(("grid_field", name, i)), Lead::None, Some(value), "", col, 1.0);
         app.field_run(e, "node.set", |v| set(&|x| apply(x, v)));
     };
     let size = |x: &mut LayoutGrid, v: f64| x.size = v.max(1.0);
@@ -492,13 +474,12 @@ fn grid_settings(app: &mut FigApp, ui: &mut Ui, ids: &[NodeId], list: &[LayoutGr
         row(ui, 32.0, |ui| {
             // 0 is Auto for fixed-size columns (rows); a stretched grid has at least one.
             let count = (!auto_count(g)).then(|| f64::from(g.count.max(1)));
-            let key = format!("layoutGrids/{i}/count");
             let id = Id::unique(("grid_field", "count", i));
             // A stretched grid has at least one band, so 0 (Auto) isn't a count it can take.
             let e = if g.align == GridAlign::Stretch {
-                crate::variable_ui::number_field_or(app, ui, ids, &key, id, count, col, "", Lead::None, "")
+                widgets::number_field_with(ui, id, Lead::None, count, "", col, 1.0, widgets::Empty::Text("")).and_then(widgets::Edit::settled)
             } else {
-                crate::variable_ui::number_field_auto(app, ui, ids, &key, id, count, col, Lead::None, "")
+                widgets::number_field_with(ui, id, Lead::None, count, "", col, 1.0, widgets::Empty::Auto).and_then(widgets::Edit::settled)
             };
             app.field_run(e, "node.set", |v| {
                 set(&|x| x.count = if x.align == GridAlign::Stretch { v.round().clamp(1.0, 1000.0) } else { v.round().clamp(0.0, 1000.0) } as u32)
@@ -537,7 +518,7 @@ fn grid_settings(app: &mut FigApp, ui: &mut Ui, ids: &[NodeId], list: &[LayoutGr
                     // The frame, divided by the count: shown as Auto and not editable.
                     ui.add_enabled_ui(false, |ui| {
                         let auto = widgets::Empty::Text(tr("Auto"));
-                        widgets::number_field_bindable(ui, Id::unique(("grid_field", "size", i)), Lead::Named(span), None, "", col, 1.0, None, auto)
+                        widgets::number_field_with(ui, Id::unique(("grid_field", "size", i)), Lead::Named(span), None, "", col, 1.0, auto)
                     });
                     field(app, ui, "offset", g.offset, &offset);
                 });

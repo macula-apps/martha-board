@@ -214,14 +214,6 @@ pub(crate) fn fmt_num(v: f64) -> String {
     if (r - r.round()).abs() < 1e-9 { format!("{}", r.round() as i64) } else { format!("{r}") }
 }
 
-/// What a number field's variable button did.
-pub enum BindEvent {
-    /// Open the variable picker below this point.
-    Open(egui::Pos2),
-    /// Detach the bound variable.
-    Detach,
-}
-
 /// A number field `width` wide. `value` None shows "Mixed". `suffix` (e.g. "%" or "°") is shown
 /// after the number. Typing supports simple math (`10+5`, `*2`).
 pub fn number_field(ui: &mut Ui, id: Id, lead: Lead, value: Option<f64>, suffix: &str, width: f32, step: f64) -> Option<FieldEdit> {
@@ -247,31 +239,19 @@ pub fn edit_began_with_command(ui: &Ui, id: Id) -> bool {
 /// [`number_field`] over several layers: without a single value (`value` None, "Mixed") a relative
 /// edit comes back as one for each layer ([`Edit::Each`]).
 pub fn number_field_mixed(ui: &mut Ui, id: Id, lead: Lead, value: Option<f64>, suffix: &str, width: f32, step: f64) -> Option<Edit> {
-    number_field_bindable(ui, id, lead, value, suffix, width, step, None, Empty::Text(tr("Mixed"))).0
+    number_field_impl(ui, id, lead, value, suffix, width, step, Empty::Text(tr("Mixed")))
 }
 
 /// [`number_field`] that shows `empty` (dim) for no value instead of "Mixed" (e.g. "Auto"): there
 /// is no value to edit relative to, so `+4` is 4.
 pub fn number_field_or(ui: &mut Ui, id: Id, value: Option<f64>, empty: &str, width: f32, step: f64) -> Option<FieldEdit> {
-    number_field_impl(ui, id, Lead::None, value, "", width, step, None, Empty::Text(empty)).0?.settled()
+    number_field_impl(ui, id, Lead::None, value, "", width, step, Empty::Text(empty))?.settled()
 }
 
-/// [`number_field`] that can bind a variable: `binding` None = not bindable, `Some(None)` = shows
-/// a variable button on hover, `Some(Some(name))` = bound (shows the name; click to change, the
-/// detach button unbinds). No value shows `empty` ("Mixed", "Auto"); [`Empty::Auto`] also takes
-/// the word for Auto as 0.
-pub fn number_field_bindable(
-    ui: &mut Ui,
-    id: Id,
-    lead: Lead,
-    value: Option<f64>,
-    suffix: &str,
-    width: f32,
-    step: f64,
-    binding: Option<Option<&str>>,
-    empty: Empty<'_>,
-) -> (Option<Edit>, Option<BindEvent>) {
-    number_field_impl(ui, id, lead, value, suffix, width, step, binding, empty)
+/// [`number_field_mixed`] that shows `empty` for no value ("Mixed", "Auto"); [`Empty::Auto`] also
+/// takes the word for Auto as 0.
+pub fn number_field_with(ui: &mut Ui, id: Id, lead: Lead, value: Option<f64>, suffix: &str, width: f32, step: f64, empty: Empty<'_>) -> Option<Edit> {
+    number_field_impl(ui, id, lead, value, suffix, width, step, empty)
 }
 
 /// A save admitted for another document cannot make this reused field commit its cached draft.
@@ -295,25 +275,12 @@ fn cancel_retargeted_field_save(ui: &mut Ui, id: Id) {
 }
 
 /// Implement the shared number field: label/icon lead, scrubbing, keyboard stepping and
-/// typing, select-all when a click starts editing, bindable values and deferred-save
-/// cancellation; returns an edit and/or bind event.
-fn number_field_impl(
-    ui: &mut Ui,
-    id: Id,
-    lead: Lead,
-    value: Option<f64>,
-    suffix: &str,
-    width: f32,
-    step: f64,
-    binding: Option<Option<&str>>,
-    empty: Empty<'_>,
-) -> (Option<Edit>, Option<BindEvent>) {
+/// typing, select-all when a click starts editing and deferred-save cancellation; returns an
+/// edit.
+fn number_field_impl(ui: &mut Ui, id: Id, lead: Lead, value: Option<f64>, suffix: &str, width: f32, step: f64, empty: Empty<'_>) -> Option<Edit> {
     cancel_retargeted_field_save(ui, id);
     let t = Tokens::get(ui.ctx());
     let (rect, _) = ui.allocate_exact_size(vec2(width, FIELD_H), Sense::hover());
-    if let Some(Some(name)) = binding {
-        return (None, bound_field(ui, id, lead, rect, name));
-    }
     let mut out: Option<Edit> = None;
     let lead_w = match lead {
         Lead::None | Lead::Named(_) => 6.0,
@@ -526,23 +493,7 @@ fn number_field_impl(
             crate::bidi::paint_name(ui.painter(), pos2(edit_rect.min.x, rect.center().y), &s, regular(11.0), col, edit_rect.width());
         }
     }
-    // The variable button shows while the pointer is over a bindable field.
-    let mut bind = None;
-    if binding.is_some() && ui.data(|d| d.get_temp::<String>(editing_id)).is_none() {
-        let br = Rect::from_center_size(pos2(rect.max.x - 11.0, rect.center().y), vec2(18.0, 18.0));
-        let bresp = ui.interact(br, id.with("bind"), Sense::click());
-        if bresp.has_focus() || rect.contains(ui.input(|i| i.pointer.hover_pos()).unwrap_or(egui::Pos2::new(f32::NAN, f32::NAN))) {
-            if bresp.hovered() {
-                ui.painter().rect_filled(br, CornerRadius::same(4), t.hover);
-            }
-            icons::paint(ui.painter(), br.shrink(3.0), Icon::Variable, t.icon_secondary);
-        }
-        let bresp = bresp.tip(tr("Apply variable"));
-        if bresp.clicked() {
-            bind = Some(BindEvent::Open(rect.left_bottom()));
-        }
-    }
-    (out, bind)
+    out
 }
 
 /// The width a text label takes at the start of a field `field_w` wide: the label as drawn plus
@@ -550,51 +501,6 @@ fn number_field_impl(
 pub(crate) fn text_lead_width(ui: &Ui, label: &str, field_w: f32) -> f32 {
     let text = ui.painter().layout_no_wrap(label.to_string(), regular(11.0), Color32::PLACEHOLDER).size().x;
     (12.0 + text).min(field_w - 32.0).max(24.0)
-}
-
-/// A field bound to a variable: the lead, then the variable's name in a chip; the chip opens the
-/// picker and the detach button unbinds.
-/// A field showing the variable `name` bound to it in `rect`: click to change, detach to unbind.
-pub fn bound_field(ui: &mut Ui, id: Id, lead: Lead, rect: Rect, name: &str) -> Option<BindEvent> {
-    let t = Tokens::get(ui.ctx());
-    let resp = ui.interact(rect, id.with("bound"), Sense::click());
-    a11y::combo(&resp, lead.name(), name, false);
-    ui.painter().rect_filled(rect, CornerRadius::same(5), t.field);
-    if resp.hovered() {
-        ui.painter().rect_stroke(rect, CornerRadius::same(5), Stroke::new(1.0, t.field_hover_border), StrokeKind::Inside);
-    }
-    let lead_w = match lead {
-        Lead::None | Lead::Named(_) => 4.0,
-        Lead::Text(s) => {
-            let w = text_lead_width(ui, s, rect.width());
-            crate::bidi::paint_name(ui.painter(), pos2(rect.min.x + 8.0, rect.center().y), s, regular(11.0), t.text_secondary, w - 12.0);
-            w
-        }
-        Lead::Icon(i, _) => {
-            icons::paint(ui.painter(), Rect::from_center_size(pos2(rect.min.x + 13.0, rect.center().y), vec2(14.0, 14.0)), i, t.icon_secondary);
-            24.0
-        }
-    };
-    let dr = Rect::from_center_size(pos2(rect.max.x - 11.0, rect.center().y), vec2(18.0, 18.0));
-    let chip = Rect::from_min_max(pos2(rect.min.x + lead_w - 2.0, rect.min.y + 3.0), pos2(dr.min.x - 2.0, rect.max.y - 3.0));
-    ui.painter().rect_filled(chip, CornerRadius::same(4), t.hover);
-    ui.painter().rect_stroke(chip, CornerRadius::same(4), Stroke::new(1.0, t.border), StrokeKind::Inside);
-    // Grouped names ("size/card") show their last part; the tooltip has the full name.
-    let short = name.rsplit('/').next().unwrap_or(name);
-    let galley = ui.painter().layout_no_wrap(short.to_string(), regular(11.0), t.text);
-    ui.painter().with_clip_rect(chip.shrink2(vec2(5.0, 0.0))).galley(pos2(chip.min.x + 5.0, chip.center().y - galley.size().y / 2.0), galley, t.text);
-    let dresp = ui.interact(dr, id.with("detach"), Sense::click()).tip(tr("Detach variable"));
-    if resp.hovered() || dresp.hovered() || dresp.has_focus() {
-        if dresp.hovered() {
-            ui.painter().rect_filled(dr, CornerRadius::same(4), t.hover);
-        }
-        icons::paint(ui.painter(), dr.shrink(3.0), Icon::Detach, t.icon_secondary);
-    }
-    if dresp.clicked() {
-        return Some(BindEvent::Detach);
-    }
-    let resp = resp.on_hover_text(name);
-    resp.clicked().then(|| BindEvent::Open(rect.left_bottom()))
 }
 
 /// A text field that commits on Enter / focus loss. Returns the new text when committed.

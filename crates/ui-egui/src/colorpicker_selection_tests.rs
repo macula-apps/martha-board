@@ -193,30 +193,6 @@ fn moved_page_effect_and_text_range_swatches_still_toggle_the_picker_closed() {
 }
 
 #[test]
-fn a_press_in_the_gradient_variable_picker_keeps_the_colour_picker_open() {
-    use egui::{Pos2, RawInput, Rect, pos2, vec2};
-    let (mut u, a, _) = two();
-    u.app.session.execute("fill.set", &json!({"id":a,"paint":{"type":"linearGradient","stops":["#ff0000","#0000ff"]}})).unwrap();
-    u.app.open_picker(PickerTarget::Paint { fills: true, index: 0, ids: vec![a] }, None);
-    for _ in 0..5 {
-        u.frame(vec![]);
-    }
-    // Open the same child picker used by a gradient stop, away from the parent's card.
-    let _ = u.ctx.run_ui(RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1440.0, 900.0))), ..Default::default() }, |ui| {
-        crate::variable_ui::open(ui, &[a], "fills/0/stops/0/color", figcraft_doc::VariableType::Color, pos2(500.0, 180.0));
-    });
-    for _ in 0..5 {
-        u.frame(vec![]);
-    }
-    let child = crate::variable_ui::picker_rect(&u.ctx).unwrap();
-    let at = child.min + vec2(30.0, 20.0);
-    assert!(!u.app.ui.picker_popover.as_ref().unwrap().rect.contains(at));
-    u.button(at, true);
-    assert!(u.app.ui.picker.is_some(), "the child variable picker is part of the interaction");
-    u.button(at, false);
-}
-
-#[test]
 fn dragging_a_gradient_handle_on_the_canvas_keeps_the_picker_open() {
     // #1852: the handles belong to the picker, so the press that starts a drag is not a press
     // outside it: the picker and the handles stay, the drag is one undo step, and a press elsewhere

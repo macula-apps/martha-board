@@ -5,6 +5,7 @@ use serde_json::{Value, json};
 
 use crate::Session;
 use crate::params::id_of;
+use crate::test_variables as tv;
 use figcraft_doc::NodeId;
 
 fn run(s: &mut Session, cmd: &str, p: Value) -> Value {
@@ -19,20 +20,29 @@ fn fill(s: &Session, n: NodeId) -> String {
     s.doc().unwrap().node(n).unwrap().fills.first().and_then(|p| p.solid_color()).map(|c| c.to_hex()).unwrap_or_default()
 }
 
+/// Show `n` in `mode` of "Tone" (null: Auto again), as a file holds it.
 fn set_mode(s: &mut Session, n: NodeId, mode: Value) {
-    run(s, "variable.setMode", json!({"ids": [n], "collection": "Tone", "mode": mode}));
+    match mode.as_str() {
+        Some(m) => tv::mode(s, n, "Tone", m),
+        None => crate::variable_data::edit(s, |doc| {
+            let tone = doc.variables.collection("Tone").unwrap().id.clone();
+            doc.get_mut(n)?.var_modes.remove(&tone);
+            Ok(())
+        })
+        .unwrap(),
+    }
 }
 
 /// A "Tone" collection whose variable `c` is red in mode A and blue in mode B.
 fn tone(s: &mut Session) {
-    run(s, "variable.createCollection", json!({"name": "Tone", "modes": ["A", "B"]}));
-    run(s, "variable.create", json!({"collection": "Tone", "name": "c", "type": "color", "values": {"A": "#FF0000", "B": "#0000FF"}}));
+    tv::collection(s, "Tone", &["A", "B"]);
+    tv::variable(s, "Tone", "c", "color", &[json!("#FF0000"), json!("#0000FF")]);
 }
 
 /// A component filled from `c`, on `mode` when one is given.
 fn swatch(s: &mut Session, name: &str, mode: Option<&str>) -> NodeId {
     let f = id(run(s, "frame.create", json!({"x": 0, "y": 0, "width": 40, "height": 40, "name": name})));
-    run(s, "variable.bind", json!({"ids": [f], "field": "fill", "variable": "c"}));
+    tv::bind(s, &[f], "fill", "c");
     if let Some(m) = mode {
         set_mode(s, f, json!(m));
     }

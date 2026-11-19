@@ -1,12 +1,11 @@
 use super::axes::variable_axes;
 use super::glyphs::{LeadGlyph, caption, feature_row, text_seg};
 use super::picker::{font_picker, remember_family};
-use super::spacing::{SpacingField, commit_spacing, parse_letter_spacing, parse_line_height, spacing_field, spacing_input};
+use super::spacing::{SpacingField, commit_spacing, parse_letter_spacing, parse_line_height, spacing_input};
 use super::{
-    Arc, DecorationLength, Document, FEATURES, FIELD_H, FieldEdit, FigApp, Icon, Id, Lead, LeadingTrim, ListStyle, MIXED, NodeId, SIZES, Sense, TABS,
-    TextAlignH, TextAlignV, TextAutoResize, TextCase, TextData, TextDecoration, TextDirection, TextStyle, Tokens, Ui, Value, VariableType, common,
-    field_row, icons, json, live, menu_item, menu_popup, regular, row, semibold, text_style_params, tr, tr_noop, trf, trim_num, uniform, vec2,
-    widgets,
+    Arc, DecorationLength, Document, FEATURES, FieldEdit, FigApp, Icon, Id, Lead, LeadingTrim, ListStyle, MIXED, NodeId, SIZES, Sense, TABS,
+    TextAlignH, TextAlignV, TextAutoResize, TextCase, TextData, TextDecoration, TextDirection, TextStyle, Tokens, Ui, Value, common, field_row,
+    icons, json, live, menu_item, menu_popup, regular, row, semibold, text_style_params, tr, tr_noop, trf, trim_num, uniform, widgets,
 };
 
 /// The font rows: family, style and size, line height and letter spacing.
@@ -24,18 +23,15 @@ pub(super) fn font_rows(
     // Font family.
     let family = uniform(styles, |s| s.font_family.clone());
     let fstyle = uniform(styles, |s| s.font_style.clone());
-    row(ui, 32.0, |ui| family_row(app, ui, ids, family.as_deref(), editing, apply_style));
+    row(ui, 32.0, |ui| family_row(app, ui, ids, family.as_deref(), apply_style));
 
     // Style + size.
     // One of the two field columns of the section's grid.
     let half = widgets::col_width(ui.available_width());
     row(ui, 32.0, |ui| {
-        let resp = font_dropdown(app, ui, ids, "fontStyle", fstyle.as_deref(), half, editing);
+        let resp = widgets::dropdown(ui, fstyle.as_deref().unwrap_or(tr(MIXED)), half, None);
         let fam = family.clone();
         menu_popup(&resp).width(200.0).show(|ui| {
-            if !editing && apply_variable_item(ui, ids, "fontStyle", &resp) {
-                return;
-            }
             match &fam {
                 Some(fam) => {
                     let list = figcraft_text::family_styles(fam);
@@ -61,12 +57,7 @@ pub(super) fn font_rows(
         });
         let size = uniform(styles, |s| s.font_size);
         ui.spacing_mut().item_spacing.x = 0.0;
-        // The whole layer's size can follow a variable; a selected range just takes a value.
-        let e = if editing {
-            widgets::number_field(ui, Id::unique("ty_size"), Lead::None, size, "", ui.available_width() - 20.0, 1.0)
-        } else {
-            crate::variable_ui::number_field(app, ui, ids, "fontSize", Id::unique("ty_size"), Lead::None, size, "", ui.available_width() - 20.0)
-        };
+        let e = widgets::number_field(ui, Id::unique("ty_size"), Lead::None, size, "", ui.available_width() - 20.0, 1.0);
         match e {
             Some(FieldEdit::Set(v)) => apply_style(app, "fontSize", json!(v.clamp(1.0, 5000.0))),
             // The text editing session already groups undo; just apply.
@@ -95,7 +86,7 @@ pub(super) fn font_rows(
         let lh = uniform(styles, |s| s.line_height);
         let lh_label = lh.map(|l| l.label()).unwrap_or_else(|| tr(MIXED).into());
         let field = SpacingField { field: "lineHeight", id: Id::unique("ty_lh"), glyph: LeadGlyph::LineHeight, tip: tr("Line height") };
-        if let Some(edit) = spacing_field(app, ui, ids, &field, &lh_label, half, editing)
+        if let Some(edit) = spacing_input(ui, &field, &lh_label, half)
             && let Some(v) = parse_line_height(&edit.text(), lh)
         {
             commit_spacing(app, ids, range, &field, &edit, v);
@@ -103,7 +94,7 @@ pub(super) fn font_rows(
         let ls = uniform(styles, |s| s.letter_spacing);
         let ls_label = ls.map(|l| l.label()).unwrap_or_else(|| tr(MIXED).into());
         let field = SpacingField { field: "letterSpacing", id: Id::unique("ty_ls"), glyph: LeadGlyph::LetterSpacing, tip: tr("Letter spacing") };
-        if let Some(edit) = spacing_field(app, ui, ids, &field, &ls_label, half, editing)
+        if let Some(edit) = spacing_input(ui, &field, &ls_label, half)
             && let Some(v) = parse_letter_spacing(&edit.text(), ls)
         {
             commit_spacing(app, ids, range, &field, &edit, v);
@@ -194,43 +185,14 @@ pub(super) fn menu_item_hover(ui: &mut Ui, label: &str) -> (bool, bool) {
     (r.clicked(), r.hovered())
 }
 
-/// The font family or font style dropdown for `field`, `width` wide, showing `shown` (Mixed when
-/// None). While whole layers are edited and `field` is bound to the same variable on every one of
-/// `ids`, the variable's chip is drawn in place of the dropdown (a click picks another variable,
-/// its detach button unbinds it), and the returned response opens no menu.
-fn font_dropdown(app: &mut FigApp, ui: &mut Ui, ids: &[NodeId], field: &str, shown: Option<&str>, width: f32, editing: bool) -> egui::Response {
-    if !editing && app.session.doc().ok().and_then(|d| crate::variable_ui::bound_name(d, ids, field)).is_some() {
-        let (rect, resp) = ui.allocate_exact_size(vec2(width, FIELD_H), Sense::hover());
-        crate::variable_ui::bound_chip(app, ui, ids, field, VariableType::String, rect);
-        return resp;
-    }
-    widgets::dropdown(ui, shown.unwrap_or(tr(MIXED)), width, None)
-}
-
-/// Apply variable at the top of the font family or font style menu opened from `anchor`: a click
-/// opens the variable picker on string variables for `field` of `ids` and closes the menu (true).
-fn apply_variable_item(ui: &mut Ui, ids: &[NodeId], field: &str, anchor: &egui::Response) -> bool {
-    let picked = menu_item(ui, tr("Apply variable"), "");
-    if picked {
-        crate::variable_ui::open(ui, ids, field, VariableType::String, anchor.rect.left_bottom());
-        ui.close();
-    } else {
-        ui.separator();
-    }
-    picked
-}
-
 /// The font family field and its searchable menu (hovering a family previews it on the canvas).
-fn family_row(app: &mut FigApp, ui: &mut Ui, ids: &[NodeId], family: Option<&str>, editing: bool, apply_style: &dyn Fn(&mut FigApp, &str, Value)) {
+fn family_row(app: &mut FigApp, ui: &mut Ui, ids: &[NodeId], family: Option<&str>, apply_style: &dyn Fn(&mut FigApp, &str, Value)) {
     let range = figcraft_engine::textedit::selected_range(&app.session);
     let w = ui.available_width();
-    let resp = font_dropdown(app, ui, ids, "fontFamily", family, w, editing);
+    let resp = widgets::dropdown(ui, family.unwrap_or(tr(MIXED)), w, None);
     let offer = app.services.can_ask_for_local_fonts();
     let mut ask = false;
     let before_search = |ui: &mut Ui| {
-        if !editing && apply_variable_item(ui, ids, "fontFamily", &resp) {
-            return true;
-        }
         ask = offer && local_fonts_item(ui);
         ask
     };

@@ -76,13 +76,13 @@ Each may be given more than once, as `--flag DIR` or `--flag=DIR`:
   `initialize`'s `instructions` name the folders, so the agent knows where it may work.
 - **What is covered:** everything a call does, because the engine reaches the file system through
   one module (`crates/engine/src/automation/file_access.rs`), and `crates/engine/clippy.toml` refuses `std::fs`
-  anywhere else in the engine, so a command added later is covered too. That is `open_file` (and the
-  `variables` file it may name), `save_file`, `export {path}`, and through `run_command` / `batch`
+  anywhere else in the engine, so a command added later is covered too. That is `open_file`,
+  `save_file`, `export {path}`, and through `run_command` / `batch`
   every command that names a file: `file.open`, `file.openRecent` (recent files outside the roots
   are never listed, opened, removed or named: `index` counts the files listed), `file.import`,
   `file.placeImage`, `image.place`, `file.save`, `file.saveAs`, `file.revert`, `file.recover`,
   `file.export`, `file.exportSvg`, `file.exportLayers` (and the folders it makes), `file.exportFramesPdf`, `library.add` and the library files open documents link to,
-  `variable.export`, `component.playground {path}`,
+  `component.playground {path}`,
   `plugin.import {path}`, a development plugin's module read again from disk,
   `plugin.directory.publish {path}` and its assets, `collab.recoverFile {path}`, and the headless
   `ui.render` / `ui.screenshot` with a `path`.
@@ -354,26 +354,17 @@ Or in a project's `.mcp.json`:
   `null`), so a later `style.update` doesn't overwrite the edit; `style.apply` replaces variables
   bound to what the style sets; a text style goes on text layers only. In one call, a style link
   (`fillStyle`, `textStyle`…) wins over values it sets; set a deviation in a later call, which
-  unlinks it. Names are trimmed per `/` folder part. A `fill` or `stroke` can also bind a variable:
-  `node.create {type: "rectangle", props: {fill: {"$var": "Theme/surface"}}}` creates and binds in
-  one undo step, and `node.set` takes the same wrapper. `$var` takes an exact variable id first,
-  else an unambiguous exact name or `Collection/name` (names can contain `/`); unknown or ambiguous
-  names are errors. The wrapper is applied after literal values and style links, and clears that
-  paint's style link even when the colour is unchanged. Only `fill` and `stroke` take variables in
-  props; use `variable.bind` for other fields. `style.move {styles, before?, folder?}`
+  unlinks it. Names are trimmed per `/` folder part. `style.move {styles, before?, folder?}`
   reorders (and with `folder`, renames into it), `style.duplicate {style}` adds "<name> copy" right
   below, `style.renameFolder {folder, name}`.
-- **Variables**: `variable.bind` refuses a variable of a type the field doesn't take (a colour on
-  `width`); scopes only filter pickers. `variable.delete` / `variable.deleteCollection` unbind the
-  layers using them (they keep their last value) and give aliases to them their values. An
-  explicit edit that changes a bound field's value (`node.set`, `transform.resize`,
-  `object.opacityKeys`, `text.style`, `text.set`, the text size, weight and
-  tracking shortcuts, a canvas drag) detaches that field's variable; fields the edit
-  left as they were stay bound.
-  `variable.addMode {from}` duplicates a mode, `variable.moveMode {collection, mode, to}` reorders
-  (index 0 is the default mode, which layers on Auto follow). `variable.update {codeSyntax: {WEB?,
-  iOS?, ANDROID?}}` sets code names (`""` clears); generated CSS uses the Web one, SwiftUI the iOS one and
-  Compose the Android one (a variable without one keeps its value there).
+- **Variables** left the app (#16): no command creates, edits, binds or exports them, and no
+  command sets a layer's variable modes. A file that carries collections, modes, values and
+  bindings (on layers and styles) still opens, shows its bound values in each layer's modes and
+  saves them unchanged; `inspect_document` and `get_node` report `boundVariables` and
+  `variableModes`. An explicit edit that changes a bound field's value (`node.set`,
+  `transform.resize`, `object.opacityKeys`, `text.style`, `text.set`, the text size, weight and
+  tracking shortcuts, a canvas drag) detaches that field's variable; fields the edit left as they
+  were stay bound.
 - **Live previews**: `text.preview {command, params}` shows what `style.apply`,
   `library.applyStyle`, `text.setVariations` or `text.style` would do on the canvas without an undo
   step (in place of an earlier preview); `text.endPreview` puts the document back. Any other command
@@ -399,7 +390,7 @@ a later step can use `{"$step": 0, "field": "ids/0"}` to target the first match.
 | Tool | What it does |
 |---|---|
 | `list_commands {filter?}` | Every command: id, label, menu, shortcut, undoable, params doc. |
-| `run_command {command, params}` | Run any command (e.g. `align.left`, `layout.add`, `component.create`, `instance.place` (drop an instance at a page point into the frame or auto layout slot under it), `component.exposeInstance` / `instance.exposed` (nested instance properties on instances), `component.makeSlot` / `instance.slotInsert` / `instance.resetSlot` (slots, below), `style.create`, `variable.bind`, `variable.update` (rename, describe, scope), `variable.set` with `{alias}` or a colour calculation (`{alpha}`, `{mix}`), `variable.renameMode` / `variable.removeMode`, `variable.deleteCollection`). |
+| `run_command {command, params}` | Run any command (e.g. `align.left`, `layout.add`, `component.create`, `instance.place` (drop an instance at a page point into the frame or auto layout slot under it), `component.exposeInstance` / `instance.exposed` (nested instance properties on instances), `component.makeSlot` / `instance.slotInsert` / `instance.resetSlot` (slots, below), `style.create`). |
 | `batch {commands: [{command, params}], label?}` | Several commands as one undo step (`command.batch`), which keeps one copy of the document however many steps there are (an `edit.undo` step undoes the batch's edits so far together); all-or-nothing for open documents and their document state. Failed inner commands are removed from the journal; preferences, clipboard, tool state and UI requests are not rolled back. A step can use what an earlier step returned: name it with `"as": "card"` and `{"$ref": "card"}` anywhere in a later step's params becomes the `id` in its result (`{"$step": n}` does the same by zero-based position); `"field"` takes another key or a slash path such as `ids/0` (see Step references below). |
 | `create_node {type, x, y, width, height, parent, index, name, text, path, props}` | Create a frame, rectangle, ellipse, polygon, star, line, arrow, text, vector, section, component or slice; returns `{id, node}`. |
 | `set_properties {ids, props}` | `node.set` on layers (geometry, fills, strokes, effects, corner radius, auto layout, sizing, constraints, masks (`isMask`, `maskType: alpha\|vector\|luminance`), a section's `sectionContentsHidden`, text…); returns the updated layers. |
@@ -858,8 +849,8 @@ build has no file system, so there the commands that read library files return a
   the file's components, component sets, styles and variable collections as a new version (by
   default everything except names starting with `.` or `_`, or what the last publish offered;
   `include`/`exclude` take component ids and style or collection ids or names). A collection comes
-  with its variables (values per mode, aliases, scopes), except those hidden from publishing
-  (`variable.update {variable, hiddenFromPublishing: true}`). Components, styles and variables that
+  with its variables (values per mode, aliases, scopes), except those a file marks hidden from
+  publishing (`hiddenFromPublishing`). Components, styles and variables that
   published assets use (a component's bound variables, a variable's alias targets) come along,
   unoffered. Each asset keeps the version it last changed in; publishing with no changes is refused.
   Save the file (`file.save`) so other files see the new version.
@@ -877,32 +868,19 @@ build has no file system, so there the commands that read library files return a
   applies it. Instances of library components behave like any instance: overrides, properties,
   variants, swap, reset, detach. Library components keep their variable bindings and explicit modes
   (bound to copies of the library's variables).
-- **Library variables**: `library.bindVariable {library, variable, field, ids?}` copies a published
-  variable in (linked, read-only, with the variables it aliases and its collection) and binds it
-  like `variable.bind`; `library.aliasVariable {library, alias, variable, mode?}` makes a local
-  variable's value an alias of a library variable; `library.setVariableMode {library, collection,
-  mode, ids?}` sets a library collection's mode on frames (the page when no ids are given; the
-Design panel's Variable modes section lists enabled libraries' collections under the library's
-name and sets them this way);
-  `library.importVariable {library, variable}` only copies it (then `variable.bind`, `variable.set
-  {value: {alias}}`). The copies render without the library file. Editing the copies (library
-  components, styles, variables or collections) is refused; edit the library file and publish.
-- **Extended collections**: `library.extendCollection {library, collection, name?}` → `{id}` makes
-  a collection of this file (default name "<name> (extended)") with the library collection's modes
-  and one inheriting variable per variable of it. `variable.set` on an inheriting variable
-  overrides its value in that mode (the variable lists it in `overrides`);
-  `variable.resetOverride {variable, mode?}` goes back to the inherited value (every mode when
-  `mode` is left out). Variables of its own come from `variable.create`. Modes, and the names of
-  inheriting variables, come from the library collection (renaming, adding or deleting them is
-  refused); accepting library updates brings new values (overrides stay), renames and new
-  variables. A variable the library adds to the extended collection is an update of its own
-  (`library.updates` lists it without an `id`, it has no copy yet). A library collection that is
-  itself an extended collection can be extended again: the chain follows as each file accepts
-  its library's updates. A collection of this file extends too:
-  `variable.extendCollection {collection, name?}` → `{id}` does the same with a collection of this
-  file (an extended one included), and the extension follows its edits at once (values, new
-  variables and modes, renames). The Variables editor offers Extend collection on a collection's
-  row (this file's or a library's) and marks overridden values, with a reset button.
+- **Library variables**: a file holds read-only copies of the library variables and collections
+  its library components and styles (their bound variables, aliases and explicit modes) brought along.
+  The copies render without the library file. Editing the copies (library components, styles,
+  variables or collections) is refused; edit the library file and publish. Binding, aliasing or
+  setting the mode of a library variable by hand left with the variables editor (#16).
+- **Extended collections** a file holds (a collection that extends another, its own or a library
+  copy: the same modes and one inheriting variable per variable of it, with values it overrides
+  per mode in `overrides`) follow what they extend: accepting library updates brings new values
+  (overrides stay), renames and new variables, and a variable the library adds to the extended
+  collection is an update of its own (`library.updates` lists it without an `id`, it has no copy
+  yet). A library collection that is itself an extended collection follows down the chain as each
+  file accepts its library's updates. Making or editing an extension left with the variables
+  editor (#16).
 - **Update**: `library.updates` lists the components, styles, variable collections and variables
   with a newer published version; `library.acceptUpdates {ids? (library ids)}` pulls them in,
   keeping instance overrides; bound layers, aliases and explicit modes follow the updated values.
@@ -926,7 +904,7 @@ most when it can't be reached).
   kept there as a new file first and the result has its `file`, `edit` and `view` links. A view
   link is refused. The document itself doesn't change (nothing to undo).
 - `library.add {path: <share link>}` enables it (a view link is enough); then `library.place`,
-  `library.applyStyle`, `library.bindVariable`… work as for library files. `library.list` and
+  `library.applyStyle`… work as for library files. `library.list` and
   `library.updates` ask the server for a newer version first (`"server": true` in the listing);
   `library.acceptUpdates` takes it, overrides kept. The app's own background checks ask only about
   team libraries added (`library.add`) or checked (`library.check {library?}`) on this computer,
@@ -1117,38 +1095,17 @@ refused.
 The files of other design apps (`.fig`, FigJam `.jam`, `.sketch`, `.penpot`, REST API file JSON and
 its local variables JSON) are neither opened nor written.
 
-### Exporting variables
+Strokes take colour styles like fills: `style.apply {style, target: "stroke"}` links a colour
+style to the strokes (`styles.stroke`; edits of the style follow, `style.detach {which: "stroke"}`
+keeps the colour). Setting one side's weight with `node.set` (`strokeTopWeight`,
+`strokeRightWeight`, `strokeBottomWeight`, `strokeLeftWeight`) turns on individual strokes, the
+other sides at the weight.
 
-`variable.export {collections?, format?, path?}` writes this file's collections (default: all but
-library copies) as CSS custom properties (`format: "css"`, the default: the default
-mode on `:root`, each other mode on `[data-<collection>="<mode>"]`, aliases as `var(--name)`, colour
-calculations as the colour they show in that mode (other collections in their default modes), numbers
-in px unless the layers bound to them, their scopes or the variables aliasing them make them an
-opacity or a font weight, so `border-radius: var(--radius)` reads `12px`) or as
-Dart constants for Flutter (`format: "dart"`: an `abstract final class` per collection and mode, the
-default mode's named after the collection and the others after the collection and the mode, with a
-`static const` `Color`, `double`, `String` or `bool` per variable; names become camelCase Dart
-identifiers kept apart, aliases are resolved to their value in that mode), and
-returns `{text}` (or writes `path` and returns `{path}`); `format: "tailwind"` writes a Tailwind CSS
-v4 stylesheet: `@import "tailwindcss";` and an `@theme static` block (every token is emitted, also
-those only read through `var()`) named by namespace (`--color-*`, `--radius-*`, `--text-*`,
-`--spacing-*`, `--font-*`; a number's namespace and unit come from what layers bind it to), other
-modes on `[data-<collection>="<mode>"]`. The Variables editor's Export… button does the same through a file
-dialog.
-
-Strokes take colour styles and variables like fills: `style.apply {style, target: "stroke"}` links
-a colour style to the strokes (`styles.stroke`; edits of the style follow, `style.detach {which:
-"stroke"}` keeps the colour), and `variable.bind` binds `strokeWeight` and each side's weight on its
-own (`strokeTopWeight`, `strokeRightWeight`, `strokeBottomWeight`, `strokeLeftWeight`; binding or
-setting one side with `node.set` turns on individual strokes, the other sides at the weight) to
-number variables scoped for stroke weights.
-
-`variable.bind` also binds gradient stops (`fills/<i>/stops/<j>/color`, `strokes/<i>/stops/<j>/color`;
-the binding follows its stop when an earlier stop is removed and its paint when the list is
-reordered) and variant properties of instances (`componentProperties/<property>` with a string
-variable: the instance shows the variant its value names; a value naming no variant changes
-nothing). The colour picker binds the selected stop; the Design panel's variant dropdowns take a
-string variable.
+A file's bindings of `strokeWeight` and each side's weight, of gradient stops
+(`fills/<i>/stops/<j>/color`, `strokes/<i>/stops/<j>/color`) and of variant properties of
+instances (`componentProperties/<property>`, a string variable: the instance shows the variant its
+value names; a value naming no variant changes nothing) still apply. A stop's binding follows its
+stop when an earlier stop is removed and its paint when the list is reordered.
 
 ### Comments
 
@@ -1598,14 +1555,13 @@ app sets it.
 variant, boolean, text (and instance-swap) property values on a copy and returns its properties with
 their values, its size and, with `path`, a PNG of it. The document doesn't change.
 
-`style.bind {style, field, variable?}` binds a variable inside a shared style (no `variable`:
-unbinds): `fill` or `fills/<i>/color` and `fills/<i>/stops/<j>/color` on a paint style,
-`effects/<i>/<color|radius|spread|offsetX|offsetY|startRadius>` on an effect style,
-`layoutGrids/<i>/<size|count|gutter|offset>` on a grid style, `fontSize`, `lineHeight`,
-`letterSpacing`, `fontWeight` (numbers; a weight picks the family's face nearest it and sets the
-`wght` axis of a variable font), `fontFamily`, `fontStyle` (strings; a bound weight and a bound style
-name replace each other) on a text style. Each layer using the style shows the
-field in its own modes and stays linked; `style.list` gives a style's `bound` map.
+A shared style a file binds to variables (its `bound` map in `style.list`: a paint style's
+`fill`, `fills/<i>/color` and `fills/<i>/stops/<j>/color`, an effect style's
+`effects/<i>/<color|radius|spread|offsetX|offsetY|startRadius>`, a grid style's
+`layoutGrids/<i>/<size|count|gutter|offset>`, a text style's `fontSize`, `lineHeight`,
+`letterSpacing`, `fontWeight` (a weight picks the family's face nearest it and sets the `wght` axis
+of a variable font), `fontFamily`, `fontStyle`) shows each field in the modes of every layer
+using it, and the layers stay linked. Binding a style's field left with the variables editor (#16).
 
 `effect.add {ids?, type? | effect?}` adds an effect (`dropShadow`, `innerShadow`, `layerBlur`,
 `backgroundBlur`, `noise`, `texture`, `glass`) with its defaults, or the full `effect` object;
@@ -1674,12 +1630,6 @@ Pass the returned target list to:
 - `selection.applyColorStyle {targets, style}` to apply a document paint style. As with `style.apply`,
   this replaces the matching node's entire fill/stroke list and links the style. Text ranges copy
   resolved paints and keep their typography, without a paint-style link.
-- `selection.bindColorVariable {targets, variable}` to bind a document color variable (id or name)
-  to those solid fill and stroke slots, as `variable.bind` does with `fills/<i>/color` or
-  `strokes/<i>/color`. A color style on the list and an earlier binding of the slot are removed.
-  Text ranges with fills of their own take the variable's value in the layer's modes, without a
-  binding. Gradients and other variable types are refused; scopes only filter what the Selection
-  colors menu offers, as for `variable.bind`.
 - `selection.detachColor {targets}` to unlink the color style and the color variable of those
   slots, keeping their values.
 
@@ -1701,19 +1651,17 @@ first, the last one is on top (the Design panel lists them the other way round, 
   empty strip left of its fields); a line shows where it lands.
 - **Variable bindings follow their items** when a list is reordered or an item removed
   (`fill.remove`, `stroke.remove`, `effect.remove`, `grid.remove`); a removed item's bindings go
-  with it. Binding fields (`variable.bind {field}`): `fill` / `stroke` (the first paint's colour) or
+  with it. The binding keys a file uses: `fill` / `stroke` (the first paint's colour) or
   `fills/<i>/color` / `strokes/<i>/color`, `effects/<i>/<offsetX|offsetY|radius|startRadius|spread|color>`,
   `layoutGrids/<i>/<size|count|gutter|offset>` (number variables; count is kept to 1–1000, size and
   gutter are never negative). Moving a bound paint rewrites its key (`fill` becomes `fills/2/color`).
-- **Instance properties:** `variable.bind {ids: [instance], field: "componentProperties/<name>",
-  variable}` drives a boolean property from a boolean variable and a text property from a string
-  variable (other types are refused); the value follows the variable's modes like any binding, the
-  binding follows renames of the property, and deleting the property, resetting the instance or
-  detaching it drops it. The instance's properties panel offers the same with its variable button.
+- **Instance properties** a file binds (`componentProperties/<name>`: a boolean property to a
+  boolean variable, a text property to a string variable) follow the variable's modes like any
+  binding; the binding follows renames of the property, and deleting the property, resetting the
+  instance or detaching it drops it.
 
 ```json
 {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"run_command","arguments":{"command":"fill.move","params":{"ids":[2],"from":0,"to":2}}}}
-{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"run_command","arguments":{"command":"variable.bind","params":{"ids":[5],"field":"layoutGrids/0/gutter","variable":"gutter"}}}}
 ```
 
 ### Ruler guides
@@ -1775,8 +1723,8 @@ turned off 0°.
   halfway round a ring) drags out to make a ring, and into the gap to show the other part.
   `shift: true` snaps angles to 15° steps and the ratio to 5% steps. Each drag is one undo step
   and writes `node.set`'s `arcStart` / `arcSweep` (degrees) and `arcInner` (0–0.99). The Design
-  panel's Arc fields (Start °, Sweep %, Ratio %) write the same keys; number variables bound to
-  `arcSweep` and `arcInner` (`variable.bind`) hold percentages, as the fields show them, and ones
+  panel's Arc fields (Start °, Sweep %, Ratio %) write the same keys; number variables a file binds to
+  `arcSweep` and `arcInner` hold percentages, as the fields show them, and ones
   bound to `arcStart` degrees.
   `tool.overlay.arc` holds the readout while dragging (`{handle, label: "Sweep 75%", at}`), and
   `tool.overlay.arc_hover` holds the handle under the pointer.
@@ -1920,7 +1868,7 @@ the two can be mixed. Names are any non-empty string and must be unique within t
 
 `"field"` takes something other than the `id`: a key of the result (`{"$ref": "card", "field":
 "name"}`) or a path into it, with `/` between the parts and list items by zero-based index, the way
-`variable.bind` names `fills/0/color`. `edit.duplicate` returns `{"ids": [...]}`, so its first copy is
+a paint binding names `fills/0/color`. `edit.duplicate` returns `{"ids": [...]}`, so its first copy is
 `ids/0`:
 
 ```json

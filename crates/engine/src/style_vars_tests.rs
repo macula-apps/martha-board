@@ -1,12 +1,13 @@
-//! Variables bound inside shared styles: `style.bind`, what each style type takes, a layer using
-//! the style showing it resolved in its own modes (and staying linked), the style's own value in
-//! the default modes, variables and modes changing afterwards, styles made from bound layers,
-//! undo, the REST and `.fig` mappings, junk.
+//! Variables bound inside shared styles, as a file holds them (`style.bind` left with the variables
+//! editor, #16): a layer using the style showing it resolved in its own modes (and staying linked),
+//! the style's own value in the default modes, variables and modes changing afterwards, styles made
+//! from bound layers, and weights.
 
 use serde_json::{Value, json};
 
+use crate::Session;
 use crate::params::id_of;
-use crate::{EngineError, Session};
+use crate::test_variables as tv;
 use figcraft_doc::{Node, NodeId, StyleKind};
 
 fn id(v: Value) -> NodeId {
@@ -35,10 +36,10 @@ fn style_fill(s: &Session, sid: &str) -> String {
 /// A Theme collection (Light, Dark) with a colour `bg` (white, black) and numbers `size` (16, 20)
 /// and `blur` (4, 12).
 fn theme(s: &mut Session) {
-    run(s, "variable.createCollection", json!({"name": "Theme", "modes": ["Light", "Dark"]}));
-    run(s, "variable.create", json!({"collection": "Theme", "name": "bg", "type": "color", "values": {"Light": "#FFFFFF", "Dark": "#000000"}}));
-    run(s, "variable.create", json!({"collection": "Theme", "name": "size", "type": "number", "values": {"Light": 16, "Dark": 20}}));
-    run(s, "variable.create", json!({"collection": "Theme", "name": "blur", "type": "number", "values": {"Light": 4, "Dark": 12}}));
+    tv::collection(s, "Theme", &["Light", "Dark"]);
+    tv::variable(s, "Theme", "bg", "color", &[json!("#FFFFFF"), json!("#000000")]);
+    tv::variable(s, "Theme", "size", "number", &[json!(16), json!(20)]);
+    tv::variable(s, "Theme", "blur", "number", &[json!(4), json!(12)]);
 }
 
 /// Two frames (the second set to Dark), a red rectangle in each, and a paint style "Surface"
@@ -47,7 +48,7 @@ fn two_modes(s: &mut Session) -> (NodeId, NodeId, NodeId, NodeId, String) {
     theme(s);
     let frame = |s: &mut Session, x: f64| id(run(s, "frame.create", json!({"x": x, "y": 0, "width": 100, "height": 100})));
     let (light, dark) = (frame(s, 0.0), frame(s, 200.0));
-    run(s, "variable.setMode", json!({"ids": [dark], "collection": "Theme", "mode": "Dark"}));
+    tv::mode(s, dark, "Theme", "Dark");
     let rect = |s: &mut Session, f: NodeId| {
         id(run(s, "shape.rectangle", json!({"parent": f, "x": 10, "y": 10, "width": 40, "height": 40, "props": {"fill": "#FF0000"}})))
     };
@@ -61,7 +62,7 @@ fn two_modes(s: &mut Session) -> (NodeId, NodeId, NodeId, NodeId, String) {
 fn a_bound_paint_style_shows_in_each_layers_mode() {
     let mut s = Session::new();
     let (_, dark, a, b, sid) = two_modes(&mut s);
-    run(&mut s, "style.bind", json!({"style": sid, "field": "fill", "variable": "bg"}));
+    tv::bind_style(&mut s, &sid, "fill", "bg");
     // The layer in the Light frame is white, the one in the Dark frame black; both stay linked.
     assert_eq!((fill(&s, a), fill(&s, b)), ("#FFFFFF".to_string(), "#000000".to_string()));
     assert_eq!((node(&s, a).styles.fill, node(&s, b).styles.fill), (Some(sid.clone()), Some(sid.clone())));
@@ -70,27 +71,23 @@ fn a_bound_paint_style_shows_in_each_layers_mode() {
     let st = s.doc().unwrap().style(&sid).unwrap().clone();
     assert_eq!(st.bound.keys().collect::<Vec<_>>(), ["fills/0/color"]);
     // The variable's value changes: every user follows, in its mode.
-    run(&mut s, "variable.set", json!({"variable": "bg", "mode": "Dark", "value": "#112233"}));
+    tv::set(&mut s, "bg", "Dark", json!("#112233"));
     assert_eq!((fill(&s, a), fill(&s, b)), ("#FFFFFF".to_string(), "#112233".to_string()));
     // A frame's mode changes: the layers in it follow, still linked.
-    run(&mut s, "variable.setMode", json!({"ids": [dark], "collection": "Theme", "mode": "Light"}));
+    tv::mode(&mut s, dark, "Theme", "Light");
     assert_eq!((fill(&s, b), node(&s, b).styles.fill), ("#FFFFFF".to_string(), Some(sid.clone())));
-    run(&mut s, "edit.undo", json!({}));
+    tv::mode(&mut s, dark, "Theme", "Dark");
     assert_eq!(fill(&s, b), "#112233");
     // A layer moved into the other frame takes that frame's mode.
     run(&mut s, "node.reparent", json!({"id": a, "parent": dark}));
     assert_eq!((fill(&s, a), node(&s, a).styles.fill), ("#112233".to_string(), Some(sid.clone())));
-    // Unbound: the style and its users keep the value they showed last by default.
-    run(&mut s, "style.bind", json!({"style": sid, "field": "fills/0/color"}));
-    assert!(s.doc().unwrap().style(&sid).unwrap().bound.is_empty());
-    assert_eq!((style_fill(&s, &sid), fill(&s, a), fill(&s, b)), ("#FFFFFF".to_string(), "#FFFFFF".to_string(), "#FFFFFF".to_string()));
 }
 
 #[test]
 fn editing_a_bound_style_or_its_users() {
     let mut s = Session::new();
     let (_, _, a, b, sid) = two_modes(&mut s);
-    run(&mut s, "style.bind", json!({"style": sid, "field": "fill", "variable": "bg"}));
+    tv::bind_style(&mut s, &sid, "fill", "bg");
     // An edit of the layer's own fill still unlinks it (the documented rule for styled properties).
     run(&mut s, "node.set", json!({"id": b, "props": {"fill": "#00FF00"}}));
     assert_eq!((fill(&s, b), node(&s, b).styles.fill), ("#00FF00".to_string(), None));
@@ -111,7 +108,7 @@ fn effect_grid_and_text_styles_take_variables_too() {
     run(&mut s, "effect.add", json!({"ids": [a], "type": "layerBlur"}));
     let fx = run(&mut s, "style.create", json!({"type": "effect", "name": "Soft", "from": a}))["id"].as_str().unwrap().to_string();
     run(&mut s, "style.apply", json!({"ids": [b], "style": fx}));
-    run(&mut s, "style.bind", json!({"style": fx, "field": "effects/0/radius", "variable": "blur"}));
+    tv::bind_style(&mut s, &fx, "effects/0/radius", "blur");
     let radius = |s: &Session, n: NodeId| node(s, n).effects[0].blur().unwrap().radius;
     assert_eq!((radius(&s, a), radius(&s, b)), (4.0, 12.0));
     assert_eq!((node(&s, a).styles.effect.is_some(), node(&s, b).styles.effect.is_some()), (true, true));
@@ -120,18 +117,18 @@ fn effect_grid_and_text_styles_take_variables_too() {
     run(&mut s, "grid.add", json!({"ids": [light]}));
     let grid = run(&mut s, "style.create", json!({"type": "grid", "name": "Base", "from": light}))["id"].as_str().unwrap().to_string();
     run(&mut s, "style.apply", json!({"ids": [dark], "style": grid}));
-    run(&mut s, "style.bind", json!({"style": grid, "field": "layoutGrids/0/size", "variable": "size"}));
+    tv::bind_style(&mut s, &grid, "layoutGrids/0/size", "size");
     assert_eq!((node(&s, light).grids[0].size, node(&s, dark).grids[0].size), (16.0, 20.0));
     // Text: the font size, for chars linked to the style.
     let text = |s: &mut Session, f: NodeId| id(run(s, "text.create", json!({"text": "Hello", "x": 0, "y": 60, "parent": f})));
     let (t1, t2) = (text(&mut s, light), text(&mut s, dark));
     let body = run(&mut s, "style.create", json!({"type": "text", "name": "Body", "from": t1}))["id"].as_str().unwrap().to_string();
     run(&mut s, "style.apply", json!({"ids": [t2], "style": body}));
-    run(&mut s, "style.bind", json!({"style": body, "field": "fontSize", "variable": "size"}));
+    tv::bind_style(&mut s, &body, "fontSize", "size");
     let size = |s: &Session, n: NodeId| node(s, n).kind.text().unwrap().style.font_size;
     assert_eq!((size(&s, t1), size(&s, t2)), (16.0, 20.0));
     assert_eq!((node(&s, t1).styles.text.clone(), node(&s, t2).styles.text.clone()), (Some(body.clone()), Some(body.clone())));
-    run(&mut s, "variable.set", json!({"variable": "size", "mode": "Dark", "value": 28}));
+    tv::set(&mut s, "size", "Dark", json!(28));
     assert_eq!((size(&s, t2), node(&s, t2).styles.text.clone(), node(&s, dark).grids[0].size), (28.0, Some(body), 28.0));
 }
 
@@ -141,87 +138,13 @@ fn a_style_made_from_a_bound_layer_keeps_the_binding() {
     theme(&mut s);
     let r =
         id(run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 40, "height": 40, "props": {"fill": "#FF0000", "strokes": ["#00FF00"]}})));
-    run(&mut s, "variable.bind", json!({"ids": [r], "field": "stroke", "variable": "bg"}));
+    tv::bind(&mut s, &[r], "stroke", "bg");
     let sid = run(&mut s, "style.create", json!({"type": "stroke", "name": "Edge", "from": r}))["id"].as_str().unwrap().to_string();
     let st = s.doc().unwrap().style(&sid).unwrap().clone();
     assert_eq!(st.bound.keys().collect::<Vec<_>>(), ["fills/0/color"], "a paint style's paints are its fills");
     // The layer's own binding gave way to the style's.
     let n = node(&s, r);
     assert!(n.bound.is_empty() && n.styles.stroke == Some(sid) && n.strokes[0].solid_color().unwrap().to_css_hex().to_uppercase() == "#FFFFFF");
-}
-
-#[test]
-fn what_a_style_cannot_bind_is_refused() {
-    let mut s = Session::new();
-    let (_, _, a, _, sid) = two_modes(&mut s);
-    // (field, variable, what the message says)
-    for (field, var, says) in [
-        ("fill", "size", "takes a color variable"),
-        ("fills/3/color", "bg", "no field"),
-        ("effects/0/radius", "blur", "no field"),
-        ("fontSize", "size", "no field"),
-        ("fontWeight", "bg", "no field"),
-        ("opacity", "size", "no field"),
-        ("fill", "nope", "no such variable"),
-    ] {
-        let e = s.execute("style.bind", &json!({"style": sid, "field": field, "variable": var})).unwrap_err().to_string();
-        assert!(e.contains(says), "{field} ← {var}: {e}");
-    }
-    assert!(s.execute("style.bind", &json!({"style": "nope", "field": "fill", "variable": "bg"})).is_err());
-    assert!(s.doc().unwrap().style(&sid).unwrap().bound.is_empty());
-    assert_eq!(fill(&s, a), "#FF0000");
-    // Junk never takes the engine down.
-    for j in [json!(null), json!(true), json!(-1), json!([1]), json!({"a": 1}), json!("x".repeat(5000)), json!("fills/99999999999999999999/color")] {
-        for p in [
-            json!({"style": j, "field": "fill"}),
-            json!({"style": sid, "field": j, "variable": "bg"}),
-            json!({"style": sid, "field": "fill", "variable": j}),
-        ] {
-            let r = s.execute("style.bind", &p);
-            assert!(!matches!(r, Err(EngineError::Internal { .. })), "{p}: {r:?}");
-        }
-    }
-}
-
-#[test]
-fn style_fields_offer_their_properties_scopes() {
-    let mut s = Session::new();
-    let (_, _, a, _, sid) = two_modes(&mut s);
-    run(&mut s, "effect.add", json!({"ids": [a], "type": "dropShadow"}));
-    let fx = run(&mut s, "style.create", json!({"type": "effect", "name": "Drop", "from": a}))["id"].as_str().unwrap().to_string();
-    let light = node(&s, a).parent.unwrap();
-    run(&mut s, "grid.add", json!({"ids": [light]}));
-    let grid = run(&mut s, "style.create", json!({"type": "grid", "name": "Base", "from": light}))["id"].as_str().unwrap().to_string();
-    let body = run(&mut s, "style.create", json!({"type": "text", "name": "Body", "value": {"fontFamily": "Inter", "fontSize": 14}}))["id"]
-        .as_str()
-        .unwrap()
-        .to_string();
-    let doc = s.doc().unwrap();
-    let scopes = |st: &str, key: &str| crate::style_vars::field_scopes(&doc.style(st).unwrap().kind, key);
-    let fills: &[&str] = &["FRAME_FILL", "SHAPE_FILL", "TEXT_FILL", "STROKE_COLOR"];
-    for (st, key, want) in [
-        (&sid, "fill", Some(fills)),
-        (&sid, "fills/0/color", Some(fills)),
-        (&fx, "effects/0/color", Some(&["EFFECT_COLOR"][..])),
-        (&fx, "effects/0/radius", Some(&["EFFECT_FLOAT"][..])),
-        (&fx, "effects/0/offsetX", Some(&["EFFECT_FLOAT"][..])),
-        (&body, "fontSize", Some(&["FONT_SIZE"][..])),
-        (&body, "lineHeight", Some(&["LINE_HEIGHT"][..])),
-        (&body, "letterSpacing", Some(&["LETTER_SPACING"][..])),
-        (&body, "fontFamily", Some(&["FONT_FAMILY"][..])),
-        (&body, "fontStyle", Some(&["FONT_STYLE"][..])),
-        (&body, "fontWeight", Some(&["FONT_WEIGHT"][..])),
-        // Grid fields take any number variable, as on layers; fields a style lacks take none.
-        (&grid, "layoutGrids/0/size", None),
-        (&sid, "fills/3/color", None),
-        (&body, "opacity", None),
-    ] {
-        assert_eq!(scopes(st, key), want, "{st} {key}");
-    }
-    // As on layers, scopes limit pickers only: an out-of-scope variable still binds.
-    run(&mut s, "variable.update", json!({"variable": "size", "scopes": ["CORNER_RADIUS"]}));
-    run(&mut s, "style.bind", json!({"style": body, "field": "fontSize", "variable": "size"}));
-    assert!(s.doc().unwrap().style(&body).unwrap().bound.contains_key("fontSize"));
 }
 
 /// A text style "Body" (made from a layer, or from `value`) used by a layer in the Light frame
@@ -248,22 +171,20 @@ fn text_of(s: &Session, n: NodeId) -> figcraft_doc::TextStyle {
 fn a_number_weight_picks_the_face_and_the_wght_axis() {
     let mut s = Session::new();
     let (t1, t2, body) = body_style(&mut s, None);
-    run(&mut s, "variable.create", json!({"collection": "Theme", "name": "weight", "type": "number", "values": {"Light": 700, "Dark": 400}}));
-    run(&mut s, "style.bind", json!({"style": body, "field": "fontWeight", "variable": "weight"}));
+    tv::variable(&mut s, "Theme", "weight", "number", &[json!(700), json!(400)]);
+    tv::bind_style(&mut s, &body, "fontWeight", "weight");
     let face = |s: &Session, n: NodeId| {
         let t = text_of(s, n);
         (t.font_style, t.variations.get("wght").copied())
     };
     assert_eq!(face(&s, t1), ("Bold".to_string(), Some(700.0)));
     assert_eq!(face(&s, t2), ("Regular".to_string(), Some(400.0)));
-    run(&mut s, "variable.set", json!({"variable": "weight", "mode": "Dark", "value": 650}));
+    tv::set(&mut s, "weight", "Dark", json!(650));
     assert_eq!(face(&s, t2), ("Bold".to_string(), Some(650.0)));
-    let e = s.execute("style.bind", &json!({"style": body, "field": "fontWeight", "variable": "bg"})).unwrap_err().to_string();
-    assert!(e.contains("takes a number variable"), "{e}");
-    // A style name bound afterwards replaces the number binding.
-    run(&mut s, "variable.createCollection", json!({"name": "Names", "modes": ["Only"]}));
-    run(&mut s, "variable.create", json!({"collection": "Names", "name": "face", "type": "string", "values": {"Only": "Light"}}));
-    run(&mut s, "style.bind", json!({"style": body, "field": "fontStyle", "variable": "face"}));
+    // A style name bound instead of the number (a style binds one of the two).
+    tv::collection(&mut s, "Names", &["Only"]);
+    tv::variable(&mut s, "Names", "face", "string", &[json!("Light")]);
+    tv::bind_style(&mut s, &body, "fontStyle", "face");
     let bound = s.doc().unwrap().style(&body).unwrap().bound.clone();
     assert!(bound.contains_key("fontStyle") && !bound.contains_key("fontWeight"), "{bound:?}");
     // The name replaces the number's weight: no stale `wght` axis keeps drawing 700.
@@ -275,14 +196,14 @@ fn a_number_weight_picks_the_face_and_the_wght_axis() {
 fn junk_weight_values_clamp_to_the_lightest_and_heaviest_face() {
     let mut s = Session::new();
     let (t1, _, body) = body_style(&mut s, None);
-    run(&mut s, "variable.create", json!({"collection": "Theme", "name": "weight", "type": "number", "values": {"Light": -50, "Dark": 5000}}));
-    run(&mut s, "style.bind", json!({"style": body, "field": "fontWeight", "variable": "weight"}));
+    tv::variable(&mut s, "Theme", "weight", "number", &[json!(-50), json!(5000)]);
+    tv::bind_style(&mut s, &body, "fontWeight", "weight");
     let face = |s: &Session| {
         let t = text_of(s, t1);
         (t.font_style, t.variations.get("wght").copied())
     };
     assert_eq!(face(&s), ("Thin".to_string(), Some(1.0)));
-    run(&mut s, "variable.set", json!({"variable": "weight", "mode": "Light", "value": 5000}));
+    tv::set(&mut s, "weight", "Light", json!(5000));
     assert_eq!(face(&s), ("Black".to_string(), Some(1000.0)));
 }
 
@@ -290,9 +211,9 @@ fn junk_weight_values_clamp_to_the_lightest_and_heaviest_face() {
 fn font_weight_wins_over_font_style_when_a_file_carries_both() {
     let mut s = Session::new();
     let (t1, _, body) = body_style(&mut s, None);
-    run(&mut s, "variable.create", json!({"collection": "Theme", "name": "weight", "type": "number", "values": {"Light": 700, "Dark": 400}}));
-    run(&mut s, "variable.createCollection", json!({"name": "Names", "modes": ["Only"]}));
-    run(&mut s, "variable.create", json!({"collection": "Names", "name": "face", "type": "string", "values": {"Only": "Light"}}));
+    tv::variable(&mut s, "Theme", "weight", "number", &[json!(700), json!(400)]);
+    tv::collection(&mut s, "Names", &["Only"]);
+    tv::variable(&mut s, "Names", "face", "string", &[json!("Light")]);
     let doc = s.doc_mut().unwrap();
     let (w, f) = (doc.variables.get("weight").unwrap().id.clone(), doc.variables.get("face").unwrap().id.clone());
     let st = doc.styles.iter_mut().find(|x| x.id == body).unwrap();
@@ -307,8 +228,8 @@ fn font_weight_wins_over_font_style_when_a_file_carries_both() {
 fn a_number_bound_to_a_percent_line_height_applies_as_pixels() {
     let mut s = Session::new();
     let (t1, _, body) = body_style(&mut s, Some(json!({"fontSize": 24, "lineHeight": "150%"})));
-    run(&mut s, "variable.create", json!({"collection": "Theme", "name": "lh", "type": "number", "values": {"Light": 150, "Dark": 36}}));
-    run(&mut s, "style.bind", json!({"style": body, "field": "lineHeight", "variable": "lh"}));
+    tv::variable(&mut s, "Theme", "lh", "number", &[json!(150), json!(36)]);
+    tv::bind_style(&mut s, &body, "lineHeight", "lh");
     let lh = |s: &Session| match &s.doc().unwrap().style(&body).unwrap().kind {
         StyleKind::Text { style, .. } => style.line_height,
         k => panic!("{k:?}"),
@@ -316,6 +237,6 @@ fn a_number_bound_to_a_percent_line_height_applies_as_pixels() {
     assert_eq!(lh(&s), figcraft_doc::LineHeight::Pixels(150.0));
     assert_eq!(text_of(&s, t1).line_height, figcraft_doc::LineHeight::Pixels(150.0));
     assert_eq!(node(&s, t1).height, 150.0);
-    run(&mut s, "variable.set", json!({"variable": "lh", "mode": "Light", "value": 36}));
+    tv::set(&mut s, "lh", "Light", json!(36));
     assert_eq!((lh(&s), node(&s, t1).height), (figcraft_doc::LineHeight::Pixels(36.0), 36.0));
 }

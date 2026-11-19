@@ -10,7 +10,7 @@ use std::sync::Arc;
 use egui::{Align2, Color32, CornerRadius, Id, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use figcraft_doc::{
     DecorationLength, Document, LeadingTrim, LetterSpacing, LineHeight, ListStyle, NodeId, NodeKind, TextAlignH, TextAlignV, TextAutoResize,
-    TextCase, TextData, TextDecoration, TextDirection, TextStyle, VariableType, trim_num,
+    TextCase, TextData, TextDecoration, TextDirection, TextStyle, trim_num,
 };
 use serde_json::{Value, json};
 
@@ -103,15 +103,10 @@ pub fn typography(app: &mut FigApp, ui: &mut Ui, doc: &Document, sel: &[NodeId])
     let styles = target_styles(doc, &ids, range);
     let apply_style = |app: &mut FigApp, key: &str, v: Value| commit_text(app, &ids, range, json!({ key: v }));
 
-    let hdr =
-        widgets::section_header(ui, tr("Typography"), &[(Icon::Variable, tr("Apply variable to text")), (Icon::Styles, tr("Text styles"))], false);
+    let hdr = widgets::section_header(ui, tr("Typography"), &[(Icon::Styles, tr("Text styles"))], false);
     if hdr == Some(0) {
-        crate::variable_ui::open_at_pointer(ui, &ids, "characters", VariableType::String);
-    }
-    if hdr == Some(1) {
         crate::style_picker::open(app, ui, &ids, crate::style_picker::StyleSlot::Text);
     }
-    crate::variable_ui::bound_row(app, ui, &ids, "characters", VariableType::String, Lead::Icon(Icon::Text, tr("Text")), f32::INFINITY);
     // A text style: its chip stands for the font rows (they show again when the chars differ).
     crate::style_picker::chip(app, ui, doc, &ids, crate::style_picker::StyleSlot::Text);
     if !matches!(crate::style_picker::text_link(app, doc, &ids), Some(Some(_))) {
@@ -208,7 +203,7 @@ pub(crate) fn field_row<R>(ui: &mut Ui, label: &str, add: impl FnOnce(&mut Ui, f
 }
 
 #[cfg(test)]
-mod variable_tests {
+mod settings_tests {
     use egui::{Event, Modifiers, PointerButton, Pos2, RawInput};
     use figcraft_doc::WrapStyle;
     use figcraft_engine::Session;
@@ -216,9 +211,7 @@ mod variable_tests {
     use super::*;
     use crate::NoServices;
 
-    /// The Typography section and the variable picker, drawn for a selected text layer (Inter
-    /// Regular) in a file with the string variables "Heading font" and "Heading weight" and the
-    /// number variable "Heading size".
+    /// The Typography section, drawn for a selected text layer (Inter Regular).
     struct Panel {
         app: FigApp,
         ctx: egui::Context,
@@ -232,12 +225,6 @@ mod variable_tests {
         fn new() -> Self {
             let mut s = Session::new();
             let text = NodeId(s.execute("text.create", &json!({"text": "Title"})).unwrap()["id"].as_u64().unwrap());
-            s.execute("variable.createCollection", &json!({"name": "Type", "modes": ["Base"]})).unwrap();
-            for (name, ty, value) in
-                [("Heading font", "string", json!("Inter")), ("Heading weight", "string", json!("Bold")), ("Heading size", "number", json!(32))]
-            {
-                s.execute("variable.create", &json!({"collection": "Type", "name": name, "type": ty, "values": {"Base": value}})).unwrap();
-            }
             s.execute("select.set", &json!({ "ids": [text] })).unwrap();
             let mut p = Self { app: FigApp::new(s, Box::new(NoServices)), ctx: egui::Context::default(), time: 0.0, text, nodes: Vec::new() };
             p.ctx.enable_accesskit();
@@ -270,7 +257,6 @@ mod variable_tests {
                 let doc = ds.doc.clone();
                 let sel = ds.selection.clone();
                 typography(&mut self.app, ui, &doc, &sel);
-                crate::variable_ui::picker(&mut self.app, ui.ctx());
             });
             out.textures_delta.clear();
             if let Some(update) = out.platform_output.accesskit_update.take() {
@@ -291,72 +277,6 @@ mod variable_tests {
             }
             self.frame(vec![])
         }
-
-        /// The name of the variable `field` of the text layer is bound to.
-        fn bound_to(&self, field: &str) -> Option<String> {
-            let doc = self.app.session.doc().unwrap();
-            doc.node(self.text).unwrap().bound.get(field).and_then(|v| doc.variables.get_by_id(v)).map(|v| v.name.clone())
-        }
-    }
-
-    fn at(texts: &[(String, Pos2)], s: &str) -> Pos2 {
-        texts
-            .iter()
-            .find(|(t, _)| t == s)
-            .map(|(_, p)| *p)
-            .unwrap_or_else(|| panic!("no text {s:?} in {:?}", texts.iter().map(|t| &t.0).collect::<Vec<_>>()))
-    }
-
-    fn shows(texts: &[(String, Pos2)], s: &str) -> bool {
-        texts.iter().any(|(t, _)| t == s)
-    }
-
-    #[test]
-    fn font_family_and_style_menus_start_with_apply_variable() {
-        let mut p = Panel::new();
-        for (field, shown, name) in [("fontStyle", "Regular", "Heading weight"), ("fontFamily", "Inter", "Heading font")] {
-            let texts = p.frame(vec![]);
-            let texts = p.click(at(&texts, shown));
-            let texts = p.click(at(&texts, "Apply variable"));
-            assert!(crate::variable_ui::picker_open(&p.ctx), "{field}: the variable picker opens");
-            assert!(shows(&texts, "Heading font") && shows(&texts, "Heading weight"), "{field} offers string variables");
-            assert!(!shows(&texts, "Heading size"), "{field} offers no number variables");
-            p.click(at(&texts, name));
-            assert_eq!(p.bound_to(field).as_deref(), Some(name));
-        }
-        assert!(p.app.ui.last_error.is_none(), "{:?}", p.app.ui.last_error);
-    }
-
-    /// Asserts bound font family and style chips replace the dropdowns, a selected text range
-    /// offers no variable binding, and detaching restores the last values.
-    #[test]
-    fn bound_font_family_and_style_show_their_variables_and_detach() {
-        let mut p = Panel::new();
-        let ids = vec![p.text];
-        for (field, var) in [("fontFamily", "Heading font"), ("fontStyle", "Heading weight")] {
-            p.app.run("variable.bind", json!({"ids": ids, "field": field, "variable": var}));
-        }
-        let texts = p.frame(vec![]);
-        assert!(shows(&texts, "Heading font") && shows(&texts, "Heading weight"), "the chips are drawn in place of the dropdowns");
-        assert!(!shows(&texts, "Inter"), "the family dropdown is not drawn");
-        // While characters are selected in the text, the dropdowns show the values, with no Apply variable.
-        figcraft_engine::textedit::begin(&mut p.app.session, p.text, Some(1), false).unwrap();
-        figcraft_engine::textedit::set_caret(&mut p.app.session, 3, true).unwrap();
-        let texts = p.frame(vec![]);
-        let texts = p.click(at(&texts, "Inter"));
-        assert!(!shows(&texts, "Apply variable"), "a selected range takes a font, not a variable");
-        p.frame(vec![Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE }]);
-        figcraft_engine::textedit::end(&mut p.app.session).unwrap();
-        p.frame(vec![]);
-        for field in ["fontFamily", "fontStyle"] {
-            let rect = p.ctx.read_response(Id::unique(("bound_chip", field, &ids[..])).with("bound")).expect("the chip").rect;
-            // The chip's detach button sits at its right end.
-            p.click(Pos2::new(rect.max.x - 11.0, rect.center().y));
-            assert_eq!(p.bound_to(field), None, "{field} is detached");
-        }
-        let texts = p.frame(vec![]);
-        assert!(shows(&texts, "Inter") && shows(&texts, "Bold"), "the dropdowns show the last values");
-        assert!(p.app.ui.last_error.is_none(), "{:?}", p.app.ui.last_error);
     }
 
     /// The centre of the AccessKit node labelled `label` (a button, say).

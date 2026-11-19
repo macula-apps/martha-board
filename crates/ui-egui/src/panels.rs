@@ -12,6 +12,5 @@ pub mod section_panel;
 pub mod selection_colors;
 pub mod shortcuts_panel;
 pub mod typography;
-pub mod variable_ui;
 pub mod vector_panel;
 pub mod versions;

@@ -79,7 +79,7 @@ pub fn node_icon(doc: &Document, id: NodeId) -> Icon {
     }
 }
 
-/// The slim icon rail at the far left: main menu, File, Assets, Variables.
+/// The slim icon rail at the far left: main menu, File, Assets.
 pub fn rail(app: &mut FigApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let r = ui.max_rect();
@@ -100,16 +100,13 @@ pub fn rail(app: &mut FigApp, ui: &mut Ui) {
     y += 44.0;
     ui.painter().line_segment([pos2(r.min.x + 18.0, y), pos2(r.max.x - 18.0, y)], Stroke::new(1.0, t.border));
     y += 12.0;
-    let items =
-        [(Icon::Page, tr("File"), Some(LeftTab::File)), (Icon::Assets, tr("Assets"), Some(LeftTab::Assets)), (Icon::Styles, tr("Variables"), None)];
+    let items = [(Icon::Page, tr("File"), LeftTab::File), (Icon::Assets, tr("Assets"), LeftTab::Assets)];
     for (icon, label, tab) in items {
         let ir = Rect::from_center_size(pos2(r.center().x, y + 18.0), vec2(40.0, 36.0));
         let hit = Rect::from_min_max(pos2(r.min.x, y), pos2(r.max.x, y + 56.0));
         let resp = ui.interact(hit, ui.scope_id().with(("rail", label)), Sense::click()).tip(label);
-        let active = tab.is_some_and(|tb| tb == app.ui.left_tab && !app.ui.left_collapsed && !app.ui.versions.open);
-        if tab.is_some() {
-            a11y::tab(&resp, label, active);
-        }
+        let active = tab == app.ui.left_tab && !app.ui.left_collapsed && !app.ui.versions.open;
+        a11y::tab(&resp, label, active);
         if active {
             ui.painter().rect_filled(ir, CornerRadius::same(6), t.selected_row);
         } else if resp.hovered() {
@@ -119,21 +116,14 @@ pub fn rail(app: &mut FigApp, ui: &mut Ui) {
         let shown = crate::widgets::elide_font(ui, label, (r.width() - 6.0).max(0.0), regular(10.0));
         ui.painter().text(pos2(r.center().x, y + 46.0), Align2::CENTER_CENTER, shown, regular(10.0), t.text);
         if resp.clicked() {
-            match tab {
-                Some(tb) => {
-                    // Leaving the version history shows the tab rather than collapsing it.
-                    if active {
-                        app.ui.close_left_panel();
-                    } else {
-                        app.ui.left_tab = tb;
-                        app.ui.open_left_panel();
-                    }
-                    app.ui.versions = Default::default();
-                }
-                None => {
-                    app.ui.variables.get_or_insert_with(Default::default);
-                }
+            // Leaving the version history shows the tab rather than collapsing it.
+            if active {
+                app.ui.close_left_panel();
+            } else {
+                app.ui.left_tab = tab;
+                app.ui.open_left_panel();
             }
+            app.ui.versions = Default::default();
         }
         y += 68.0;
     }

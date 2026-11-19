@@ -214,3 +214,46 @@ fn building_stays_within_its_time_budget() {
         assert!(took < std::time::Duration::from_secs(3), "{} took {took:?}", t.id);
     }
 }
+
+/// FNV-1a, 64 bits: a short, dependency-free fingerprint of saved bytes.
+fn fingerprint(bytes: &[u8]) -> String {
+    let hash = bytes.iter().fold(0xcbf2_9ce4_8422_2325_u64, |h, b| (h ^ u64::from(*b)).wrapping_mul(0x0100_0000_01b3));
+    format!("{hash:016x} {}", bytes.len())
+}
+
+/// The document as saved (`document.json`), with each layer's `width`, `height` and `transform`
+/// set to null: those come from measuring text, which differs between machines' fonts (CI measures
+/// with craft-fonts, a desktop with its system fonts). Everything else stays.
+fn without_measured_geometry(doc: &Document) -> String {
+    let mut v = figcraft_format::to_json(doc).unwrap();
+    for node in v["nodes"].as_object_mut().unwrap().values_mut() {
+        for key in ["width", "height", "transform"] {
+            if let Some(field) = node.get_mut(key) {
+                *field = Value::Null;
+            }
+        }
+    }
+    v.to_string()
+}
+
+/// Each template's document, as [`without_measured_geometry`] gives it, fingerprinted on the code
+/// before the variables editor and its commands left (#16): the template kit now writes the
+/// variables, bindings and modes itself and must build the same documents.
+const BUILT_BEFORE_VARIABLES_LEFT: [(&str, &str); 8] = [
+    ("mobile-app", "e870a76945858414 167516"),
+    ("landing-page", "1380abfcd3c10c7b 147880"),
+    ("dashboard", "5caca541c7eb234d 142418"),
+    ("design-system", "ad9b5b2780505ddf 162451"),
+    ("wireframe-kit", "6ba572cd39398556 133680"),
+    ("social-posts", "1a9487e3ad6c76f8 70966"),
+    ("slides", "8528d0a69b687538 73158"),
+    ("icon-set", "7ceb6c4c78375ac7 100378"),
+];
+
+#[test]
+fn every_template_builds_what_it_built_before_variables_left() {
+    assert_eq!(TEMPLATES.iter().map(|t| t.id).collect::<Vec<_>>(), BUILT_BEFORE_VARIABLES_LEFT.map(|(id, _)| id));
+    for (id, before) in BUILT_BEFORE_VARIABLES_LEFT {
+        assert_eq!(fingerprint(without_measured_geometry(&built(id)).as_bytes()), before, "{id}");
+    }
+}

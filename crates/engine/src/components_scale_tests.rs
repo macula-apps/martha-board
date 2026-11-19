@@ -11,6 +11,7 @@ use serde_json::{Value, json};
 use crate::Session;
 use crate::components::*;
 use crate::synthetic_ds::*;
+use crate::test_variables as tv;
 
 /// Instances in the test file (debug builds: the bench uses 2,000 with the full design system).
 const COUNT: usize = 120;
@@ -166,7 +167,8 @@ fn main_edits(doc: &Document, ds: &DesignSystem) -> Vec<(&'static str, Value)> {
     let body = find_path(doc, card, &["Body"]).unwrap();
     let nav = doc.node(ds.nav).unwrap().children[0];
     vec![
-        ("node.set", json!({"ids": [glyph], "props": {"boundVariables": {"fill": null}, "fill": "#ff0000"}})),
+        // A new fill detaches the glyph's bound colour.
+        ("node.set", json!({"ids": [glyph], "props": {"fill": "#ff0000"}})),
         ("node.set", json!({"ids": [glyph], "props": {"cornerRadius": 3, "opacity": 0.8}})),
         ("node.set", json!({"ids": [glyph], "props": {"width": 18, "height": 18}})),
         ("node.set", json!({"ids": [glyph], "props": {"x": 2, "y": 3}})),
@@ -415,7 +417,7 @@ fn switching_a_screen_theme_records_no_overrides() {
         .find(|n| n.name.starts_with("Screen ") && matches!(n.kind, NodeKind::Frame) && n.var_modes.is_empty() && !n.children.is_empty())
         .map(|n| n.id)
         .unwrap();
-    ex(&mut s, "variable.setMode", json!({"ids": [light_screen], "collection": ds.theme, "mode": ds.dark}));
+    tv::mode(&mut s, light_screen, &ds.theme, &ds.dark);
     let doc = s.doc().unwrap();
     healthy(doc);
     let now = overrides(doc);
@@ -478,12 +480,11 @@ fn library_updates_reach_consumers_with_every_override_kept() {
     let (mut lib_s, ds, mut s, local, _) = library_setup(&path);
     let before = overrides(s.doc().unwrap());
     assert!(before.len() > 50);
-    // The library changes deep mains: the icon's glyph colour (unbinding it), a button label's
+    // The library changes deep mains: the icon's glyph colour (detaching its variable), a button label's
     // size, a new layer in the icon.
     let doc = lib_s.doc().unwrap();
     let glyph = doc.node(ds.icons[0]).unwrap().children[0];
     let label = find_path(doc, doc.node(ds.button).unwrap().children[0], &["Label"]).unwrap();
-    ex(&mut lib_s, "variable.bind", json!({"ids": [glyph], "field": "fill", "variable": null}));
     ex(&mut lib_s, "node.set", json!({"ids": [glyph], "props": {"fill": "#ff0000"}}));
     ex(&mut lib_s, "node.set", json!({"ids": [label], "props": {"fontSize": 16}}));
     ex(&mut lib_s, "shape.rectangle", json!({"x": 1, "y": 1, "width": 3, "height": 3, "parent": ds.icons[0], "props": {"name": "Dot"}}));
@@ -596,19 +597,19 @@ fn pasting_an_instance_of_an_unpublished_component_into_another_file_leaves_its_
 /// (chip, icon instance in the main, the colour variable's light and dark hex).
 fn bound_chip(s: &mut Session) -> (NodeId, NodeId) {
     let id = |v: Value| crate::params::id_of(&v["id"]).unwrap();
-    ex(s, "variable.createCollection", json!({"name": "Theme", "modes": ["Light", "Dark"]}));
-    ex(s, "variable.create", json!({"collection": "Theme", "name": "Chip", "type": "color", "value": "#112233"}));
-    ex(s, "variable.set", json!({"variable": "Chip", "mode": "Dark", "value": "#aabbcc"}));
-    ex(s, "variable.create", json!({"collection": "Theme", "name": "Round", "type": "number", "value": 4}));
-    ex(s, "variable.set", json!({"variable": "Round", "mode": "Dark", "value": 9}));
+    tv::collection(s, "Theme", &["Light", "Dark"]);
+    tv::variable(s, "Theme", "Chip", "color", &[json!("#112233")]);
+    tv::set(s, "Chip", "Dark", json!("#aabbcc"));
+    tv::variable(s, "Theme", "Round", "number", &[json!(4)]);
+    tv::set(s, "Round", "Dark", json!(9));
     let dot = id(ex(s, "frame.create", json!({"x": 0, "y": 300, "width": 10, "height": 10, "name": "Dot"})));
     let dot = id(ex(s, "component.create", json!({"ids": [dot]})));
     let ring = id(ex(s, "frame.create", json!({"x": 40, "y": 300, "width": 10, "height": 10, "name": "Ring"})));
     ex(s, "component.create", json!({"ids": [ring]}));
     let f = id(ex(s, "frame.create", json!({"x": 0, "y": 0, "width": 80, "height": 30, "name": "Chip"})));
     let bg = id(ex(s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 80, "height": 30, "parent": f, "props": {"name": "Bg"}})));
-    ex(s, "variable.bind", json!({"ids": [bg], "field": "fill", "variable": "Chip"}));
-    ex(s, "variable.bind", json!({"ids": [bg], "field": "cornerRadius", "variable": "Round"}));
+    tv::bind(s, &[bg], "fill", "Chip");
+    tv::bind(s, &[bg], "cornerRadius", "Round");
     let icon = id(ex(s, "instance.create", json!({"component": dot, "x": 5, "y": 5, "parent": f})));
     ex(s, "node.set", json!({"ids": [icon], "props": {"name": "Icon"}}));
     let chip = id(ex(s, "component.create", json!({"ids": [f]})));
@@ -623,13 +624,12 @@ fn variables_on_instance_layers_are_no_overrides_and_detached_ones_stay_overridd
     let i = crate::params::id_of(&ex(&mut s, "instance.create", json!({"component": chip, "x": 200, "y": 0}))["id"]).unwrap();
     let doc = s.doc().unwrap();
     let bg = find_path(doc, i, &["Bg"]).unwrap();
-    ex(&mut s, "variable.setMode", json!({"ids": [i], "collection": "Theme", "mode": "Dark"}));
+    tv::mode(&mut s, i, "Theme", "Dark");
     let n = s.doc().unwrap().node(bg).unwrap().clone();
     assert_eq!(n.fills[0].solid_color().unwrap().to_hex(), "AABBCC");
     assert_eq!(n.corners.radii, [9.0; 4]);
     assert!(n.overrides.is_empty(), "values from variables aren't overrides: {:?}", n.overrides);
-    // Detach the colour on the instance and pick another: an override that survives main edits.
-    ex(&mut s, "variable.bind", json!({"ids": [bg], "field": "fill", "variable": null}));
+    // Another colour on the instance detaches it: an override that survives main edits.
     ex(&mut s, "node.set", json!({"ids": [bg], "props": {"fill": "#ff00ff"}}));
     assert!(s.doc().unwrap().node(bg).unwrap().overrides.contains("fills"));
     let main_bg = find_path(s.doc().unwrap(), chip, &["Bg"]).unwrap();
@@ -769,7 +769,7 @@ fn a_fill_set_on_a_bound_instance_layer_detaches_it_as_an_override() {
     assert!(n.overrides.contains("fills"));
     let main_bg = find_path(s.doc().unwrap(), chip, &["Bg"]).unwrap();
     ex(&mut s, "node.set", json!({"ids": [main_bg], "props": {"height": 28}}));
-    ex(&mut s, "variable.set", json!({"variable": "Chip", "value": "#445566"}));
+    tv::set_default(&mut s, "Chip", json!("#445566"));
     let doc = s.doc().unwrap();
     healthy(doc);
     assert_eq!(doc.node(bg).unwrap().fills[0].solid_color().unwrap().to_hex(), "FF00FF");

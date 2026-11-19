@@ -3,7 +3,7 @@
 //! `{"$step": n}` stands for the `id` in the result of step `n` (zero-based), and `{"$ref": "name"}`
 //! for the `id` in the result of the step that called itself `name` with `"as": "name"`. Either
 //! takes a `field`, a key of that result or a slash path into it (`ids/0`, `map/3`, `bounds/x`), the
-//! way `variable.bind` names `fills/0/color`. The CLI's script runner resolves its steps the same way.
+//! way a paint binding names `fills/0/color`. The CLI's script runner resolves its steps the same way.
 
 use std::collections::{HashMap, HashSet};
 

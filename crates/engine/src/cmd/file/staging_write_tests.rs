@@ -1,4 +1,4 @@
-use super::*;
+use super::load::write;
 
 fn dir(name: &str) -> std::path::PathBuf {
     let d = std::env::temp_dir().join(format!("figcraft-engine-staging-{name}-{}", std::process::id()));
