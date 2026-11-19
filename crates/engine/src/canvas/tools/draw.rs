@@ -1,8 +1,31 @@
 use super::handles::SNAP_PX;
-use super::pen::take_enclosed;
 use super::{
-    Affine, Cursor, Gesture, Node, NodeId, NodeKind, Point, PointerEvent, Rect, Result, Session, StrokeCap, Targets, ToolId, Vec2, frame_at, textedit,
+    Affine, Cursor, Document, Gesture, Node, NodeId, NodeKind, Point, PointerEvent, Rect, Result, Session, StrokeCap, Targets, ToolId, Vec2,
+    frame_at, textedit,
 };
+
+/// A frame or section drawn around layers takes those of its siblings that lie fully inside it
+/// (visible and unlocked ones, in their order; a frame never takes a section). Not in auto layout,
+/// where the new frame is one more item of the flow.
+fn take_enclosed(doc: &mut Document, drawn: NodeId) -> Result<()> {
+    let Some(n) = doc.node(drawn) else { return Ok(()) };
+    let section = matches!(n.kind, NodeKind::Section { .. });
+    let (Some(parent), Some(area)) = (n.parent.and_then(|p| doc.node(p)), doc.world_bounds(drawn)) else { return Ok(()) };
+    if parent.layout.is_some() {
+        return Ok(());
+    }
+    let inside: Vec<NodeId> = parent
+        .children
+        .iter()
+        .copied()
+        .filter(|c| *c != drawn && doc.node(*c).is_some_and(|k| k.visible && !k.locked && (section || !matches!(k.kind, NodeKind::Section { .. }))))
+        .filter(|c| doc.world_bounds(*c).is_some_and(|b| area.contains(b.origin()) && area.contains(Point::new(b.x1, b.y1))))
+        .collect();
+    for c in inside {
+        doc.reparent(c, drawn, None)?;
+    }
+    Ok(())
+}
 
 impl Session {
     pub(super) fn draw_down(&mut self, ev: &PointerEvent) -> Result<()> {
@@ -221,27 +244,41 @@ impl Session {
                     self.tool.tool = t;
                 }
             }
-            Gesture::Pencil { mut points, mut pressure } => {
+            Gesture::Pencil { mut points } => {
                 self.tool.overlay.pen.clear();
-                self.tool.overlay.pen_color = None;
                 // The stroke ends where the button came up, even without a move to get there.
                 if points.last().is_none_or(|l| (*l - ev.p()).hypot() > 0.5 / ev.zoom.max(1e-6)) {
                     points.push(ev.p());
-                    pressure.push(ev.pressure);
                 }
-                self.pencil_finish(&points, &pressure)?;
+                self.ink_up(&points)?;
             }
             Gesture::Connect { from, start } => self.connect_up(ev, from, start)?,
             Gesture::Erase { .. } => self.erase_up()?,
             Gesture::Reattach { id, from, start } => self.reattach_up(ev, id, from, start)?,
             Gesture::Reshape { id, portion, start } => self.reshape_up(ev, id, portion, start)?,
             Gesture::TextSelect { .. } | Gesture::TextBox { .. } | Gesture::Marquee { .. } | Gesture::None => {}
-            Gesture::PenDrag { .. } | Gesture::ShapeBuild { .. } | Gesture::Origin => {}
-            Gesture::Vector(_) => self.commit_interaction()?,
+            Gesture::Origin => {}
         }
         if let Ok(ds) = self.ds_mut() {
             ds.revision += 1;
         }
         Ok(())
+    }
+
+    /// A finished marker or highlighter stroke (page points): a curve fitted through the samples,
+    /// kept from shooting past them where the stroke turns back or runs nearly straight (#1741).
+    fn ink_up(&mut self, points: &[Point]) -> Result<()> {
+        if points.len() < 2 {
+            return Ok(());
+        }
+        let mut poly = figcraft_geom::BezPath::new();
+        for (k, p) in points.iter().enumerate() {
+            if k == 0 {
+                poly.move_to(*p);
+            } else {
+                poly.line_to(*p);
+            }
+        }
+        self.ink_finish(&figcraft_geom::simplify_path(&poly, 0.75).to_svg())
     }
 }

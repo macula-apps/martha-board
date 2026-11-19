@@ -213,22 +213,6 @@ fn hand(p: &P) {
     p.path(&h, false);
 }
 
-/// A curve with a smooth point and its handle line.
-fn bend(p: &P) {
-    let pts: Vec<(f32, f32)> = (0..=16)
-        .map(|i| {
-            let t = i as f32 / 16.0;
-            let u = 1.0 - t;
-            (u * u * 2.5 + 2.0 * u * t * 8.0 + t * t * 13.5, u * u * 13.5 + 2.0 * u * t * 1.5 + t * t * 13.5)
-        })
-        .collect();
-    p.path(&pts, false);
-    p.line(3.0, 7.5, 13.0, 7.5);
-    p.dot(3.0, 7.5, 1.3);
-    p.dot(13.0, 7.5, 1.3);
-    p.fill_rect(7.0, 6.0, 9.0, 9.0, 0.0);
-}
-
 /// A five-pointed star, filled.
 fn star(p: &P) {
     let pts: Vec<(f32, f32)> = (0..10)
@@ -327,25 +311,6 @@ fn draw(p: &P, icon: Icon) {
             p.poly(&[(13.5, 2.5), (5.0, 8.0), (8.0, 11.0)], true);
             p.fill(&capsule((2.8, 13.2), (5.9, 10.1), 1.3));
         }
-        Bend => {
-            bend(p);
-        }
-        PaintBucket => {
-            p.poly(&[(2.5, 8.0), (7.5, 3.0), (12.5, 8.0), (7.5, 13.0)], true);
-            p.fill(&[(2.5, 8.0), (12.5, 8.0), (7.5, 13.0)]);
-            p.line(7.5, 3.0, 5.0, 0.5);
-            p.dot(13.5, 11.5, 1.5);
-        }
-        Lasso => {
-            p.path(&arc_pts(8.5, 6.5, 5.0, 0.0, TAU).map(|(x, y)| (x, 6.5 + (y - 6.5) * 0.7)).collect::<Vec<_>>(), true);
-            p.path(&[(5.0, 9.3), (4.5, 11.5), (6.0, 12.5), (4.5, 14.5)], false);
-        }
-        Cut => {
-            p.circle(4.5, 11.5, 2.0);
-            p.circle(11.5, 11.5, 2.0);
-            p.line(6.0, 10.0, 11.5, 2.5);
-            p.line(10.0, 10.0, 4.5, 2.5);
-        }
         Crop => {
             // Two right angles overlapping into a frame, each running past the other's corner.
             p.poly(&[(4.5, 1.5), (4.5, 11.5), (14.5, 11.5)], false);
@@ -369,10 +334,6 @@ fn draw(p: &P, icon: Icon) {
             p.poly(&[(8.0, 2.0), (12.5, 8.5), (10.5, 13.5), (5.5, 13.5), (3.5, 8.5)], true);
             p.line(8.0, 2.0, 8.0, 7.0);
             p.dot(8.0, 8.8, 1.2);
-        }
-        Pencil => {
-            p.poly(&[(2.5, 13.5), (3.2, 10.3), (10.5, 3.0), (13.0, 5.5), (5.7, 12.8)], true);
-            p.line(9.0, 4.5, 11.5, 7.0);
         }
         Text => {
             // Inset like the Frame mark, so its long strokes don't outweigh the outlines (#737).
@@ -740,7 +701,6 @@ fn draw(p: &P, icon: Icon) {
             p.head((7.5, 2.0), -FRAC_PI_2, 3.5);
             p.poly(&[(2.5, 8.5), (2.5, 13.5), (12.5, 13.5), (12.5, 8.5)], false);
         }
-        StrokeIcon => p.rect(2.5, 2.5, 13.5, 13.5, 2.0),
         Fill => p.fill_rect(2.0, 2.0, 14.0, 14.0, 2.0),
         GradientLinear => {
             p.rect(2.5, 2.5, 13.5, 13.5, 2.0);
@@ -851,37 +811,11 @@ fn draw(p: &P, icon: Icon) {
             p.line(7.5, 4.0, 7.5, 8.0);
             p.line(7.5, 7.5, 10.0, 10.0);
         }
-        ShapeBuilder | ShapeBuilderRemove => {
-            // Two overlapping rings; their shared lens filled (merge) or crossed out (remove).
-            let (r, d) = (4.5f32, 2.0f32);
-            let a = (d / r).acos();
-            p.circle(8.0 - d, 8.0, r);
-            p.circle(8.0 + d, 8.0, r);
-            if icon == ShapeBuilder {
-                let lens: Vec<(f32, f32)> = arc_pts(8.0 - d, 8.0, r, -a, a).chain(arc_pts(8.0 + d, 8.0, r, PI - a, PI + a)).collect();
-                p.fill(&lens);
-            } else {
-                p.line(6.2, 9.8, 9.8, 6.2);
-            }
-        }
         Eraser => {
             // A tilted block with a band near its tip, over a short trace line.
             p.poly(&[(2.5, 10.0), (9.5, 3.0), (13.5, 7.0), (7.0, 13.5), (6.0, 13.5)], true);
             p.line(5.5, 7.0, 9.5, 11.0);
             p.line(7.0, 13.5, 14.0, 13.5);
-        }
-        VariableWidth => {
-            // A lens-shaped stroke, thin at both ends, and a width handle on either side of its
-            // widest point.
-            let edge = |i: i32, side: f32| {
-                let f = i as f32 / 12.0;
-                (2.0 + 11.0 * f, 7.5 + side * 3.0 * (PI * f).sin())
-            };
-            let lens: Vec<(f32, f32)> = (0..=12).map(|i| edge(i, -1.0)).chain((0..=12).rev().map(|i| edge(i, 1.0))).collect();
-            p.fill(&lens);
-            p.line(7.5, 2.0, 7.5, 13.0);
-            p.dot(7.5, 2.0, 1.5);
-            p.dot(7.5, 13.0, 1.5);
         }
         Variable => {
             // A hexagon with a dot: an original mark for "bind a value".

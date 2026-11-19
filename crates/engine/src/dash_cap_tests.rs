@@ -8,7 +8,7 @@ use figcraft_doc::{NodeId, StrokeCap};
 
 /// A 200-long vector with a dashed 10 px black stroke.
 fn line(s: &mut Session) -> NodeId {
-    let v = id_of(&s.execute("vector.create", &json!({"path": "M0 0 L200 0", "x": 0, "y": 0})).unwrap()["id"]).unwrap();
+    let v = id_of(&s.execute("node.create", &json!({"type": "vector", "path": "M0 0 L200 0", "x": 0, "y": 0})).unwrap()["id"]).unwrap();
     s.execute("node.set", &json!({"id": v, "props": {"strokes": ["#000000"], "strokeWeight": 10, "strokeAlign": "center", "dashes": [20, 20]}}))
         .unwrap();
     v

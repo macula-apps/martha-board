@@ -1,5 +1,5 @@
 use super::view_state::ViewState;
-use super::{Arc, BTreeMap, BTreeSet, Deserialize, Document, NodeId, Serialize, cmd, file_access, guides, rotation_origin, vectoredit};
+use super::{Arc, BTreeMap, BTreeSet, Deserialize, Document, NodeId, Serialize, cmd, file_access, guides, rotation_origin};
 
 /// One undo step.
 #[derive(Clone, Debug)]
@@ -79,8 +79,6 @@ pub struct DocState {
     pub text_edit: Option<TextEdit>,
     /// Hovered node (canvas hover outline).
     pub hover: Option<NodeId>,
-    /// Vector edit mode: the vector being edited, its selected points and the edit tool.
-    pub vector_edit: Option<vectoredit::VectorEdit>,
     pub uid: u64,
     /// The file's version history, oldest first (saved in the `.figcraft` file; not undoable).
     pub versions: Vec<figcraft_format::Version>,
@@ -163,7 +161,6 @@ impl DocState {
             interaction: None,
             text_edit: None,
             hover: None,
-            vector_edit: None,
             uid: NEXT_UID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             versions: Vec::new(),
             branches: Vec::new(),
@@ -276,7 +273,6 @@ impl DocState {
             .or_else(|| self.doc.first_page())
             .unwrap_or(self.page);
         self.text_edit = None;
-        self.vector_edit = None;
         self.interaction = None;
         self.revision += 1;
     }
@@ -288,7 +284,6 @@ impl DocState {
         self.selection = p.selection;
         self.page = p.page;
         self.text_edit = None;
-        self.vector_edit = None;
         self.interaction = None;
         self.clean_selection();
         self.revision += 1;
@@ -348,10 +343,6 @@ impl DocState {
             && !doc.contains(te.id)
         {
             self.text_edit = None;
-        }
-        // Vector edit mode ends when its layer is gone (or no longer a vector, e.g. undone).
-        if self.vector_edit.as_mut().is_some_and(|ve| doc.page_of(ve.id) != Some(page) || !ve.clamp_doc(&doc)) {
-            self.vector_edit = None;
         }
         // A moved rotation origin lasts as long as its selection.
         if self.rotation_origin.as_ref().is_some_and(|o| o.ids != self.selection) {

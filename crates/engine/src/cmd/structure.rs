@@ -1,22 +1,19 @@
-//! Structure: groups, frames, masks, boolean groups, flatten, outline stroke, auto layout, pages.
+//! Structure: groups, frames, sections, masks, auto layout, pages.
 
-use figcraft_color::{Color, Paint};
-use figcraft_doc::{
-    AutoLayout, BoolOp, Corners, Document, LayoutMode, Node, NodeId, NodeKind, Region, RegionPaintSpace, Segment, Sizing, StrokeAlign, StrokeJoin,
-    StrokeProps, VectorNetwork, WindingRule, proto,
-};
-use figcraft_geom::{Affine, BezPath, Rect, Shape};
+use figcraft_color::Paint;
+use figcraft_doc::{AutoLayout, Corners, Document, LayoutMode, Node, NodeId, NodeKind, Sizing, proto};
+use figcraft_geom::{Affine, Rect};
 use serde_json::{Value, json};
 
 use super::edit::{roots, z_sorted};
 use super::{CommandSpec, ok};
 
 mod suggest;
-use crate::params::{f64_of, get, id_of, num_or, req_id, req_index, req_num, req_targets, string, targets};
+use crate::params::{id_of, num_or, req_id, req_targets, string, targets};
 use crate::{EngineError, Result, Session, bad, spec};
 
-/// The layer structure commands: group, frame, mask, boolean operations, flatten, auto layout
-/// add/remove, move to page and vector path edits.
+/// The layer structure commands: group, frame, section, mask, auto layout add/remove, move to page
+/// and rasterize.
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         spec!("object.group", "Group selection", "{ids?, name?}", true, |s, p| wrap(s, p, "object.group", Wrap::Group)),
@@ -65,13 +62,6 @@ pub fn specs() -> Vec<CommandSpec> {
             }
             ok()
         }),
-        spec!("bool.union", "Union selection", BOOL_PARAMS, true, |s, p| crate::booleans::apply(s, "bool.union", p, BoolOp::Union)),
-        spec!("bool.subtract", "Subtract selection", BOOL_PARAMS, true, |s, p| crate::booleans::apply(s, "bool.subtract", p, BoolOp::Subtract)),
-        spec!("bool.intersect", "Intersect selection", BOOL_PARAMS, true, |s, p| crate::booleans::apply(s, "bool.intersect", p, BoolOp::Intersect)),
-        spec!("bool.exclude", "Exclude selection", BOOL_PARAMS, true, |s, p| crate::booleans::apply(s, "bool.exclude", p, BoolOp::Exclude)),
-        spec!("bool.flatten", "Flatten boolean", "{ids?}", true, flatten),
-        spec!("vector.flatten", "Flatten", "{ids?}", true, flatten),
-        spec!("vector.outlineStroke", "Outline stroke", "{ids?}", true, outline_stroke),
         spec!("layout.add", "Add auto layout", "{ids?, direction? (horizontal|vertical|grid)}", true, layout_add),
         spec!("layout.remove", "Remove auto layout", "{ids?}", true, |s, p| {
             for i in req_targets("layout.remove", s, p)? {
@@ -132,39 +122,6 @@ pub fn specs() -> Vec<CommandSpec> {
             ok()
         }),
         spec!("object.rasterize", "Rasterize selection", "{ids?, scale? (default 2)}", true, rasterize),
-        spec!("vector.reverse", "Reverse path direction", "{ids?}", true, |s, p| {
-            for i in req_targets("vector.reverse", s, p)? {
-                if let NodeKind::Vector { network } = &mut s.doc_mut()?.get_mut(i)?.kind {
-                    for seg in &mut network.segments {
-                        std::mem::swap(&mut seg.a, &mut seg.b);
-                        std::mem::swap(&mut seg.ta, &mut seg.tb);
-                    }
-                }
-            }
-            ok()
-        }),
-        spec!(
-            "vector.fillRule",
-            "Set fill rule",
-            "{ids? | id?, region? (a filled area of a vector; every area when left out), rule: nonZero|evenOdd}",
-            true,
-            fill_rule
-        ),
-        spec!(
-            "vector.reverseLoop",
-            "Reverse loop",
-            "{ids? | id?, region, loop} (a loop of a filled area; its direction flips, which changes how the area fills)",
-            true,
-            reverse_loop
-        ),
-        spec!("vector.simplify", "Simplify vector", "{ids?, tolerance?}", true, simplify),
-        spec!("vector.offset", "Offset path", "{ids?, offset}", true, offset_path),
-        spec!("vector.join", "Join selection", "{ids?} (in vector edit mode: joins the selected points)", true, |s, p| {
-            crate::vectoredit::join_in_edit_mode(s, false).unwrap_or_else(|| join(s, p))
-        }),
-        spec!("vector.smoothJoin", "Smooth join selection", "{ids?} (in vector edit mode: joins the selected points smoothly)", true, |s, p| {
-            crate::vectoredit::join_in_edit_mode(s, true).unwrap_or_else(|| join(s, p))
-        }),
     ]
 }
 
@@ -172,19 +129,10 @@ enum Wrap {
     Group,
     Frame,
     Section,
-    Bool(BoolOp),
 }
 
 /// Room a section made around layers leaves on each side.
 const SECTION_PAD: f64 = 40.0;
-
-/// What the boolean commands do with what they're given.
-const BOOL_PARAMS: &str = "{ids?} — layers inside boolean groups: sets their own operation (how each combines with the operands below it); one boolean group: sets its operation (every operand follows it); otherwise wraps the layers in a new boolean group";
-
-/// Wrap the selection in a new boolean group doing `op`.
-pub(crate) fn wrap_boolean(s: &mut Session, p: &Value, cmd: &str, op: BoolOp) -> Result<Value> {
-    wrap(s, p, cmd, Wrap::Bool(op))
-}
 
 /// Wrap the selection in a new container at the topmost selected layer's place. Errors name `cmd`,
 /// the command that asked.
@@ -215,26 +163,14 @@ fn wrap(s: &mut Session, p: &Value, cmd: &str, w: Wrap) -> Result<Value> {
         Wrap::Group => (NodeKind::Group, "Group"),
         Wrap::Frame => (NodeKind::Frame, "Frame"),
         Wrap::Section => (NodeKind::Section { contents_hidden: false }, "Section"),
-        Wrap::Bool(op) => (NodeKind::BooleanOp { op: *op }, op.label()),
     };
-    let name = string(p, "name").unwrap_or_else(|| if matches!(w, Wrap::Bool(_)) { base.to_string() } else { doc.next_name(base) });
+    let name = string(p, "name").unwrap_or_else(|| doc.next_name(base));
     let gid = doc.alloc_id();
     let mut g = match w {
         Wrap::Section => Node::new_section(gid, name, local.width(), local.height()),
         _ => Node::new(gid, kind, name, local.width(), local.height()),
     };
     g.transform = Affine::translate((local.x0, local.y0));
-    if let Wrap::Bool(op) = w {
-        // A boolean group looks like its top layer; a subtraction like the bottom one it cuts.
-        let source = if op == BoolOp::Subtract { ids.first() } else { ids.last() };
-        if let Some(first) = source.and_then(|i| doc.node(*i)) {
-            g.fills = if first.fills.is_empty() { vec![Paint::solid(Color::DEFAULT_SHAPE)] } else { first.fills.clone() };
-            g.strokes = first.strokes.clone();
-            g.stroke = first.stroke.clone();
-            g.effects = first.effects.clone();
-        }
-        g.blend = figcraft_color::BlendMode::Normal;
-    }
     if let Wrap::Frame = w {
         g.clip = true;
     }
@@ -399,239 +335,6 @@ fn mask(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(r)
 }
 
-/// The outline of a node in its parent's space (shapes, text, booleans, groups).
-pub fn outline_in_parent(doc: &Document, id: NodeId) -> Option<BezPath> {
-    let n = doc.node(id)?;
-    let (mut p, _) = figcraft_render::subtree_outline(doc, n, 0)?;
-    p.apply_affine(n.transform);
-    Some(p)
-}
-
-fn flatten(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids = req_targets("vector.flatten", s, p)?;
-    let doc = s.doc_mut()?;
-    let ids = z_sorted(doc, &roots(doc, &ids));
-    let top = *ids.last().ok_or_else(|| bad("vector.flatten", "nothing selected"))?;
-    let parent = doc.get(top)?.parent.ok_or_else(|| bad("vector.flatten", "can't flatten a page"))?;
-    let index = doc.index_in_parent(top).map(|i| i + 1);
-    let pw = doc.world_transform(parent);
-    let first = ids.first().and_then(|i| doc.node(*i)).cloned();
-    let fallback_fills = first
-        .as_ref()
-        .filter(|node| matches!(node.kind, NodeKind::Group | NodeKind::Line) && node.fills.is_empty())
-        .map(|_| vec![Paint::solid(Color::DEFAULT_SHAPE)]);
-    let output_fills = first
-        .as_ref()
-        .map(|node| {
-            if matches!(node.kind, NodeKind::Group | NodeKind::Line) && node.fills.is_empty() {
-                fallback_fills.clone().unwrap_or_default()
-            } else {
-                node.fills.clone()
-            }
-        })
-        .unwrap_or_default();
-    let mut net = VectorNetwork::default();
-    for id in &ids {
-        collect_flatten_parts(doc, *id, pw, fallback_fills.as_deref(), &output_fills, &mut net, 0)?;
-    }
-    let Some(bb) = net.bounds() else {
-        return Err(EngineError::Disabled("vector.flatten".into(), "nothing to flatten".into()));
-    };
-    net.translate(-bb.x0, -bb.y0);
-    let vid = doc.alloc_id();
-    let name = first.as_ref().map(|f| f.name.clone()).unwrap_or_else(|| "Vector".into());
-    let mut v = Node::new(vid, NodeKind::Vector { network: net }, name, bb.width(), bb.height());
-    v.transform = Affine::translate((bb.x0, bb.y0));
-    if let Some(f) = first {
-        v.fills = output_fills;
-        v.strokes = f.strokes.clone();
-        v.stroke = StrokeProps { align: StrokeAlign::Center, ..f.stroke.clone() };
-        v.effects = f.effects.clone();
-        v.opacity = f.opacity;
-        v.blend = if matches!(f.blend, figcraft_color::BlendMode::PassThrough) { figcraft_color::BlendMode::Normal } else { f.blend };
-    }
-    doc.insert(v, parent, index)?;
-    for i in &ids {
-        doc.remove(*i)?;
-    }
-    s.set_selection(vec![vid]);
-    Ok(json!({"id": vid}))
-}
-
-fn collect_flatten_parts(
-    doc: &Document,
-    id: NodeId,
-    parent_world: Affine,
-    fallback_fills: Option<&[Paint]>,
-    output_fills: &[Paint],
-    net: &mut VectorNetwork,
-    depth: usize,
-) -> Result<()> {
-    if depth > 64 {
-        return Err(bad("vector.flatten", "group nesting exceeds 64"));
-    }
-    let Some(node) = doc.node(id) else { return Ok(()) };
-    if matches!(node.kind, NodeKind::Group | NodeKind::Frame | NodeKind::Component { .. } | NodeKind::Instance { .. }) && !node.children.is_empty() {
-        // Match subtree_outline: a nonempty frame contributes its own visible fill, then
-        // visible descendants in stacking order. Child clipping remains the container's outline rule.
-        if node.kind.is_frame_like()
-            && node.fills.iter().any(|paint| paint.visible)
-            && let Some(path) = figcraft_doc::geometry::shape_path(node)
-        {
-            let frame = VectorNetwork::from_path(&path);
-            let into_parent = parent_world.inverse() * doc.world_transform(id);
-            append_flatten_part(node, fallback_fills, output_fills, into_parent, frame, net);
-        }
-        for child in &node.children {
-            if !doc.node(*child).is_some_and(|child| child.visible) {
-                continue;
-            }
-            collect_flatten_parts(doc, *child, parent_world, fallback_fills, output_fills, net, depth + 1)?;
-        }
-        return Ok(());
-    }
-    let part = match &node.kind {
-        NodeKind::Vector { network } => {
-            // Rounded points bake into the path (the arc's end points joined by curves), drawn the way
-            // the layer draws them, so the shape looks the same and the box fits the real geometry.
-            let mut part = figcraft_doc::geometry::drawn_network(network, node.corners.smoothing).into_owned();
-            if !part.regions.is_empty() && part.regions.iter().all(|region| region.fills.is_none() && region.paint_space.is_none()) {
-                let winding = if part.regions.iter().any(|region| region.winding == WindingRule::EvenOdd) {
-                    WindingRule::EvenOdd
-                } else {
-                    WindingRule::NonZero
-                };
-                let loops = std::mem::take(&mut part.regions).into_iter().flat_map(|region| region.loops).collect();
-                part.regions = vec![Region { loops, winding, ..Default::default() }];
-            }
-            part
-        }
-        _ => {
-            let Some(part) = outline_part(doc, node)? else { return Ok(()) };
-            part
-        }
-    };
-    let into_parent = parent_world.inverse() * doc.world_transform(id);
-    append_flatten_part(node, fallback_fills, output_fills, into_parent, part, net);
-    Ok(())
-}
-
-/// What a layer other than a vector or a container flattens into: its outline (`None`: it has
-/// none). A boolean group has no outline only past the path operations' caps; flattening it would
-/// drop it, so that is refused.
-fn outline_part(doc: &Document, node: &Node) -> Result<Option<VectorNetwork>> {
-    let Some((path, rule)) = figcraft_render::node_outline(doc, node) else {
-        if matches!(node.kind, NodeKind::BooleanOp { .. }) {
-            return Err(bad("vector.flatten", figcraft_pathops::PathOpsError::TooComplex.to_string()));
-        }
-        return Ok(None);
-    };
-    let mut part = VectorNetwork::from_path(&path);
-    for region in &mut part.regions {
-        if rule == figcraft_render::FillRule::EvenOdd {
-            region.winding = WindingRule::EvenOdd;
-        }
-    }
-    Ok(Some(part))
-}
-
-fn append_flatten_part(
-    node: &Node,
-    fallback_fills: Option<&[Paint]>,
-    output_fills: &[Paint],
-    into_parent: Affine,
-    mut part: VectorNetwork,
-    net: &mut VectorNetwork,
-) {
-    for region in &mut part.regions {
-        let (width, height, paint_transform) = region.paint_frame(node.width, node.height);
-        if region.fills.is_none() {
-            let effective = if node.fills.is_empty() { fallback_fills.unwrap_or(&node.fills) } else { &node.fills };
-            if effective != output_fills {
-                region.fills = Some(effective.to_vec());
-            }
-        }
-        region.paint_space = Some(RegionPaintSpace { width, height, transform: paint_transform });
-    }
-    let vertices: Vec<usize> = (0..part.vertices.len()).collect();
-    crate::vectoredit::ops::transform_vertices(&mut part, &vertices, into_parent);
-    let (nv, ns) = (net.vertices.len(), net.segments.len());
-    net.vertices.extend(part.vertices);
-    net.segments.extend(part.segments.into_iter().map(|segment| Segment { a: segment.a + nv, b: segment.b + nv, ..segment }));
-    net.regions.extend(
-        part.regions.into_iter().map(|region| Region {
-            loops: region.loops.into_iter().map(|lp| lp.into_iter().map(|segment| segment + ns).collect()).collect(),
-            ..region
-        }),
-    );
-}
-
-fn outline_stroke(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids = req_targets("vector.outlineStroke", s, p)?;
-    let mut out = Vec::new();
-    for i in ids {
-        let doc = s.doc_mut()?;
-        let n = doc.get(i)?.clone();
-        if !n.has_visible_stroke() {
-            continue;
-        }
-        let closed = figcraft_doc::geometry::is_closed(&n);
-        let Some((area, rule)) = (match &n.kind {
-            NodeKind::Text(_) => figcraft_render::node_outline(doc, &n)
-                .map(|(p, _)| (figcraft_render::draw::stroke_area(&n, &p, closed), figcraft_render::FillRule::Winding)),
-            _ => figcraft_render::stroke_fill(doc, &n),
-        }) else {
-            continue;
-        };
-        let mut path = (*area).clone();
-        // Simplify non-zero strokes into even-odd contours. Inside/outside rings already use
-        // even-odd: interpreting their same-direction contours as non-zero would fill the hole.
-        if rule == figcraft_render::FillRule::Winding
-            && let Ok(u) = figcraft_pathops::simplify(&path)
-        {
-            path = u;
-        }
-        let bb = path.bounding_box();
-        path.apply_affine(Affine::translate((-bb.x0, -bb.y0)));
-        let mut net = VectorNetwork::from_path(&path);
-        for r in &mut net.regions {
-            r.winding = WindingRule::EvenOdd;
-        }
-        let parent = n.parent.ok_or_else(|| bad("vector.outlineStroke", "page"))?;
-        let idx = doc.index_in_parent(i);
-        let vid = doc.alloc_id();
-        let mut v = Node::new(vid, NodeKind::Vector { network: net }, n.name.clone(), bb.width(), bb.height());
-        v.transform = n.transform * Affine::translate((bb.x0, bb.y0));
-        // The stroke's paints (and its colour style) fill the outline.
-        v.fills = n.strokes.clone();
-        v.strokes.clear();
-        v.styles.fill = n.styles.stroke;
-        let region_fill = matches!(&n.kind, NodeKind::Vector { network } if network.regions.iter().any(|r| r.fills.as_ref().is_some_and(|fills| fills.iter().any(|f| f.visible))));
-        if (n.fills.iter().any(|f| f.visible) || region_fill) && closed {
-            // Keep the fill as its own layer under the outline, grouped.
-            doc.insert(v, parent, idx.map(|x| x + 1))?;
-            let fill_id = i;
-            {
-                let f = doc.get_mut(fill_id)?;
-                f.strokes.clear();
-            }
-            let r = wrap(s, &json!({"ids": [fill_id, vid], "name": n.name}), "vector.outlineStroke", Wrap::Group)?;
-            if let Some(g) = id_of(&r["id"]) {
-                out.push(g);
-            }
-            continue;
-        }
-        // Standing in for the layer, the outline keeps how it is drawn and placed.
-        (v.opacity, v.blend, v.effects, v.styles.effect) = (n.opacity, n.blend, n.effects.clone(), n.styles.effect);
-        (v.constraints, v.child_layout, v.visible, v.locked) = (n.constraints, n.child_layout.clone(), n.visible, n.locked);
-        doc.insert(v, parent, idx.map(|x| x + 1))?;
-        doc.remove(i)?;
-        out.push(vid);
-    }
-    s.set_selection(out.clone());
-    Ok(json!({"ids": out}))
-}
-
 /// Infer direction, gap and padding from visible, non-absolute children, matching the layout flow.
 fn infer_layout(doc: &Document, frame: NodeId) -> AutoLayout {
     let Some(f) = doc.node(frame) else { return AutoLayout::default() };
@@ -778,223 +481,6 @@ fn rasterize(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"ids": out}))
 }
 
-fn simplify(s: &mut Session, p: &Value) -> Result<Value> {
-    let tol = num_or(p, "tolerance", 0.5).max(0.01);
-    for i in req_targets("vector.simplify", s, p)? {
-        let doc = s.doc_mut()?;
-        let n = doc.get_mut(i)?;
-        let smoothing = n.corners.smoothing;
-        if let NodeKind::Vector { network } = &mut n.kind {
-            let source = network.clone();
-            // The regions as the layer draws them: rounded points with the layer's corner smoothing.
-            let drawn = figcraft_doc::geometry::drawn_network(&source, smoothing);
-            let mut net = VectorNetwork::default();
-            let legacy = source.regions.iter().all(|region| region.fills.is_none() && region.paint_space.is_none());
-            if legacy && !source.regions.is_empty() {
-                let winding = if source.regions.iter().any(|region| region.winding == WindingRule::EvenOdd) {
-                    WindingRule::EvenOdd
-                } else {
-                    WindingRule::NonZero
-                };
-                let path = drawn.fill_path();
-                let path = figcraft_geom::simplify_path(&path, tol);
-                let (path, output_winding) = match figcraft_pathops::simplify_with_rule(&path, winding == WindingRule::EvenOdd) {
-                    Ok(path) => (path, WindingRule::EvenOdd),
-                    Err(_) => (path, winding),
-                };
-                let combined = Region { winding: output_winding, ..Default::default() };
-                append_region_path(&mut net, &path, &combined, output_winding);
-            } else {
-                for (index, region) in source.regions.iter().enumerate() {
-                    let Some(path) = drawn.region_path(index) else { continue };
-                    let path = figcraft_geom::simplify_path(&path, tol);
-                    let path = figcraft_pathops::simplify_with_rule(&path, region.winding == WindingRule::EvenOdd).unwrap_or(path);
-                    append_region_path(&mut net, &path, region, region.winding);
-                }
-            }
-            if !source.regions.is_empty() {
-                let mut used = vec![false; source.segments.len()];
-                for segment in source.regions.iter().flat_map(|region| region.loops.iter().flatten()) {
-                    if let Some(used) = used.get_mut(*segment) {
-                        *used = true;
-                    }
-                }
-                let mut open = source.clone();
-                open.segments = source.segments.iter().enumerate().filter_map(|(index, segment)| (!used[index]).then_some(*segment)).collect();
-                open.regions.clear();
-                if !open.segments.is_empty() {
-                    let path = open.stroke_path();
-                    let simplified = figcraft_geom::simplify_path(&path, tol);
-                    let mut loose = VectorNetwork::from_path(&simplified);
-                    loose.regions.clear();
-                    append_network(&mut net, loose);
-                }
-            }
-            if source.regions.is_empty() {
-                let path = source.stroke_path();
-                let simplified = figcraft_geom::simplify_path(&path, tol);
-                net = VectorNetwork::from_path(&simplified);
-                net.regions.clear();
-            }
-            *network = net;
-        }
-    }
-    ok()
-}
-
-fn offset_path(s: &mut Session, p: &Value) -> Result<Value> {
-    let d = req_num("vector.offset", p, "offset")?;
-    for i in req_targets("vector.offset", s, p)? {
-        let doc = s.doc_mut()?;
-        let n = doc.get(i)?.clone();
-        // A vector can't hold children: leave containers (frames, groups, instances) alone.
-        if !n.children.is_empty() {
-            continue;
-        }
-        if d == 0.0 {
-            continue;
-        }
-        let props = StrokeProps { weight: d.abs() * 2.0, join: StrokeJoin::Round, align: StrokeAlign::Center, ..Default::default() };
-        let NodeKind::Vector { network: source } = &n.kind else {
-            let Some((path, _)) = figcraft_render::node_outline(doc, &n) else { continue };
-            let ring = figcraft_pathops::stroke_center(&path, d.abs() * 2.0, &props);
-            let result = if d >= 0.0 {
-                figcraft_pathops::boolean(&[path, ring], BoolOp::Union)
-            } else {
-                figcraft_pathops::boolean(&[path, ring], BoolOp::Subtract)
-            }
-            .map_err(|error| bad("vector.offset", error.to_string()))?;
-            let mut result = result;
-            let bounds = result.bounding_box();
-            result.apply_affine(Affine::translate((-bounds.x0, -bounds.y0)));
-            let node = doc.get_mut(i)?;
-            node.kind = NodeKind::Vector { network: VectorNetwork::from_path(&result) };
-            node.transform *= Affine::translate((bounds.x0, bounds.y0));
-            node.width = bounds.width();
-            node.height = bounds.height();
-            continue;
-        };
-        let mut net = VectorNetwork::default();
-        let legacy = source.regions.iter().all(|region| region.fills.is_none() && region.paint_space.is_none());
-        if source.regions.is_empty() {
-            let Some((path, _)) = figcraft_render::node_outline(doc, &n) else { continue };
-            let ring = figcraft_pathops::stroke_center(&path, d.abs() * 2.0, &props);
-            let mut res = if d >= 0.0 {
-                figcraft_pathops::boolean(&[path.clone(), ring], BoolOp::Union)
-            } else {
-                figcraft_pathops::boolean(&[path.clone(), ring], BoolOp::Subtract)
-            }
-            .map_err(|error| bad("vector.offset", error.to_string()))?;
-            let bb = res.bounding_box();
-            res.apply_affine(Affine::translate((-bb.x0, -bb.y0)));
-            let nm = doc.get_mut(i)?;
-            nm.kind = NodeKind::Vector { network: VectorNetwork::from_path(&res) };
-            nm.transform *= Affine::translate((bb.x0, bb.y0));
-            nm.width = bb.width();
-            nm.height = bb.height();
-            continue;
-        }
-        // The regions as the layer draws them: rounded points with the layer's corner smoothing.
-        let drawn = figcraft_doc::geometry::drawn_network(source, n.corners.smoothing);
-        if legacy {
-            let path = drawn.fill_path();
-            let even_odd = source.regions.iter().any(|region| region.winding == WindingRule::EvenOdd);
-            let path = figcraft_pathops::simplify_with_rule(&path, even_odd).map_err(|error| bad("vector.offset", error.to_string()))?;
-            let ring = figcraft_pathops::stroke_center(&path, d.abs() * 2.0, &props);
-            let result = if d >= 0.0 {
-                figcraft_pathops::boolean(&[path.clone(), ring], BoolOp::Union)
-            } else {
-                figcraft_pathops::boolean(&[path, ring], BoolOp::Subtract)
-            }
-            .map_err(|error| bad("vector.offset", error.to_string()))?;
-            let mut part = VectorNetwork::from_path(&result);
-            let (paint_width, paint_height, paint_transform) = source.regions[0].paint_frame(n.width, n.height);
-            for region in &mut part.regions {
-                region.winding = WindingRule::EvenOdd;
-                region.fills = source.regions[0].fills.clone();
-                region.paint_space = Some(RegionPaintSpace { width: paint_width, height: paint_height, transform: paint_transform });
-            }
-            append_network(&mut net, part);
-        } else {
-            for (index, region) in source.regions.iter().enumerate() {
-                let Some(path) = drawn.region_path(index) else { continue };
-                let mut paint_region = region.clone();
-                let (paint_width, paint_height, paint_transform) = region.paint_frame(n.width, n.height);
-                paint_region.paint_space = Some(RegionPaintSpace { width: paint_width, height: paint_height, transform: paint_transform });
-                let path = figcraft_pathops::simplify_with_rule(&path, region.winding == WindingRule::EvenOdd)
-                    .map_err(|error| bad("vector.offset", error.to_string()))?;
-                let ring = figcraft_pathops::stroke_center(&path, d.abs() * 2.0, &props);
-                let res = if d >= 0.0 {
-                    figcraft_pathops::boolean(&[path.clone(), ring], BoolOp::Union)
-                } else {
-                    figcraft_pathops::boolean(&[path.clone(), ring], BoolOp::Subtract)
-                }
-                .map_err(|error| bad("vector.offset", error.to_string()))?;
-                // A collapsed negative offset removes this region, while other source regions stay.
-                if res.elements().is_empty() {
-                    continue;
-                }
-                append_region_path(&mut net, &res, &paint_region, WindingRule::EvenOdd);
-            }
-        }
-        let Some(bb) = net.bounds() else {
-            let nm = doc.get_mut(i)?;
-            nm.kind = NodeKind::Vector { network: net };
-            nm.width = 0.0;
-            nm.height = 0.0;
-            continue;
-        };
-        net.translate(-bb.x0, -bb.y0);
-        let nm = doc.get_mut(i)?;
-        nm.kind = NodeKind::Vector { network: net };
-        nm.transform *= Affine::translate((bb.x0, bb.y0));
-        nm.width = bb.width();
-        nm.height = bb.height();
-    }
-    ok()
-}
-
-fn append_region_path(net: &mut VectorNetwork, path: &BezPath, source: &Region, winding: WindingRule) {
-    let mut part = VectorNetwork::from_path(path);
-    for region in &mut part.regions {
-        region.winding = winding;
-        region.fills = source.fills.clone();
-        region.paint_space = source.paint_space;
-    }
-    append_network(net, part);
-}
-
-fn append_network(net: &mut VectorNetwork, part: VectorNetwork) {
-    let (nv, ns) = (net.vertices.len(), net.segments.len());
-    net.vertices.extend(part.vertices);
-    net.segments.extend(part.segments.into_iter().map(|s| Segment { a: s.a + nv, b: s.b + nv, ..s }));
-    net.regions.extend(
-        part.regions.into_iter().map(|r| Region { loops: r.loops.into_iter().map(|l| l.into_iter().map(|s| s + ns).collect()).collect(), ..r }),
-    );
-}
-
-/// Join open vectors whose end points touch into one vector.
-fn join(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids = req_targets("vector.join", s, p)?;
-    if ids.len() < 2 {
-        // Close a single open path.
-        if let Some(i) = ids.first() {
-            let n = s.doc_mut()?.get_mut(*i)?;
-            if let NodeKind::Vector { network } = &mut n.kind
-                && network.regions.is_empty()
-                && network.vertices.len() > 2
-            {
-                let last = network.vertices.len() - 1;
-                network.segments.push(Segment::line(last, 0));
-                let all: Vec<usize> = (0..network.segments.len()).collect();
-                network.regions.push(Region { loops: vec![all], winding: WindingRule::NonZero, fills: None, paint_space: None });
-            }
-        }
-        return ok();
-    }
-    flatten(s, &json!({"ids": ids}))
-}
-
 /// Fit containers to their visible children's bounds, keeping the children where they are on the
 /// page (auto layout frames hug instead); rotated containers fit in their own axes.
 fn resize_to_fit(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1040,147 +526,4 @@ fn resize_to_fit(s: &mut Session, p: &Value) -> Result<Value> {
         fitted.push(id);
     }
     Ok(json!({"ids": fitted}))
-}
-
-/// The vector network of `id`, when it is a vector layer.
-fn network_mut(doc: &mut Document, id: NodeId) -> Option<&mut VectorNetwork> {
-    match &mut doc.get_mut(id).ok()?.kind {
-        NodeKind::Vector { network } => Some(network),
-        _ => None,
-    }
-}
-
-/// The id a fill rule is written as.
-fn rule_id(rule: WindingRule) -> &'static str {
-    match rule {
-        WindingRule::NonZero => "nonZero",
-        WindingRule::EvenOdd => "evenOdd",
-    }
-}
-
-/// `region` as an index: absent (or null) means every area.
-fn area_index(cmd: &str, p: &Value) -> Result<Option<usize>> {
-    match get(p, "region") {
-        None | Some(Value::Null) => Ok(None),
-        Some(v) => {
-            let k = f64_of(v).ok_or_else(|| bad(cmd, "`region` must be a number"))?;
-            if !(0.0..1e9).contains(&k) || k.fract() != 0.0 {
-                return Err(bad(cmd, "`region` out of range"));
-            }
-            Ok(Some(k as usize))
-        }
-    }
-}
-
-/// Segments another one- or two-segment loop lists: a short loop takes its direction from the ends
-/// its segments are stored with, so re-storing one of those would turn that loop round too. A loop
-/// of three or more segments is left out: its ring is walked in list order, which the stored ends
-/// don't decide.
-fn short_loop_segments(net: &VectorNetwork, skip: (usize, usize)) -> std::collections::HashSet<usize> {
-    let mut out = std::collections::HashSet::new();
-    for (r, region) in net.regions.iter().enumerate() {
-        for (l, lp) in region.loops.iter().enumerate() {
-            if (r, l) != skip && lp.len() <= 2 {
-                out.extend(lp.iter().copied());
-            }
-        }
-    }
-    out
-}
-
-fn fill_rule(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids = req_targets("vector.fillRule", s, p)?;
-    let rule = match string(p, "rule").as_deref().map(str::trim) {
-        Some("evenOdd" | "evenodd" | "EVENODD") => WindingRule::EvenOdd,
-        Some("nonZero" | "nonzero" | "NONZERO") => WindingRule::NonZero,
-        _ => return Err(bad("vector.fillRule", "`rule` is nonZero or evenOdd")),
-    };
-    let only = area_index("vector.fillRule", p)?;
-    let doc = s.doc_mut()?;
-    let mut count = 0usize;
-    for id in ids {
-        let Some(net) = network_mut(doc, id) else { continue };
-        match only {
-            Some(r) => {
-                if let Some(region) = net.regions.get_mut(r) {
-                    region.winding = rule;
-                    count += 1;
-                }
-            }
-            None => {
-                for region in &mut net.regions {
-                    region.winding = rule;
-                    count += 1;
-                }
-            }
-        }
-    }
-    if count == 0 {
-        return Err(EngineError::Disabled("vector.fillRule".into(), "no filled area to set (select a vector)".into()));
-    }
-    Ok(json!({"regions": count, "rule": rule_id(rule)}))
-}
-
-/// One loop of a vector, worked out but not yet written back: its segments in the new order and,
-/// for a loop of one or two segments, the one to store the other way.
-struct LoopFlip {
-    id: NodeId,
-    turned: Vec<usize>,
-    store: Option<usize>,
-}
-
-/// Turn one loop of a filled area round: its segments are walked the other way, so the area it
-/// bounds counts the other way in the winding (which turns a hole into a filled part and back).
-///
-/// How a loop is walked depends on how many segments it has:
-/// - three or more: the order they are listed in, each segment turned to continue from the point
-///   reached. Reversing the list is therefore enough, and the stored ends are left alone (a shared
-///   segment's ends belong to its neighbour too);
-/// - two: the same ring either way round, so one of the two has to be stored the other way instead;
-/// - one: only its stored ends say which way it runs, so they are swapped.
-///
-/// A short loop can only turn round by re-storing a segment, which is refused when another short
-/// loop lists that segment too: it would turn that area round as well.
-fn reverse_loop(s: &mut Session, p: &Value) -> Result<Value> {
-    let cmd = "vector.reverseLoop";
-    let ids = req_targets(cmd, s, p)?;
-    let region = req_index(cmd, p, "region")?;
-    let index = req_index(cmd, p, "loop")?;
-    let doc = s.doc_mut()?;
-    // Work every loop out before touching the document: one that can't turn round refuses the call
-    // and the others stay as they were.
-    let mut flips: Vec<LoopFlip> = Vec::new();
-    for id in ids {
-        let Some(NodeKind::Vector { network }) = doc.node(id).map(|n| &n.kind) else { continue };
-        let Some(loop_) = network.regions.get(region).and_then(|r| r.loops.get(index)) else { continue };
-        if loop_.is_empty() {
-            continue;
-        }
-        let mut store = None;
-        if loop_.len() <= 2 {
-            let busy = short_loop_segments(network, (region, index));
-            let Some(pick) = loop_.iter().copied().filter(|s| !busy.contains(s)).min() else {
-                return Err(EngineError::Disabled(
-                    cmd.into(),
-                    "the loop shares its segments with another one- or two-segment loop, so turning it round would turn that one round too".into(),
-                ));
-            };
-            store = Some(pick);
-        }
-        flips.push(LoopFlip { id, turned: loop_.iter().rev().copied().collect(), store });
-    }
-    if flips.is_empty() {
-        return Err(EngineError::Disabled(cmd.into(), "no such loop (select a vector with filled areas)".into()));
-    }
-    for LoopFlip { id, turned, store } in flips {
-        let Some(net) = network_mut(doc, id) else { continue };
-        if let Some(seg) = store.and_then(|i| net.segments.get_mut(i)) {
-            std::mem::swap(&mut seg.a, &mut seg.b);
-            std::mem::swap(&mut seg.ta, &mut seg.tb);
-        }
-        if let Some(l) = net.regions.get_mut(region).and_then(|r| r.loops.get_mut(index)) {
-            *l = turned;
-        }
-    }
-    Ok(json!({"reversed": true}))
 }

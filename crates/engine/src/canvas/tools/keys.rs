@@ -1,21 +1,13 @@
 use super::{Document, Gesture, NodeId, Overlay, Point, PointerEvent, PointerKind, Result, Session, ShapeHandle, ToolId, json, textedit};
 
 impl Session {
-    /// Keys the current mode handles before menu shortcuts (vector edit mode's tools and point
-    /// keys, Enter to finish the shape builder). Returns whether the key was used.
+    /// Keys the current mode handles before menu shortcuts (a selected ruler guide's). Returns
+    /// whether the key was used.
     pub fn tool_key(&mut self, name: &str, shift: bool, alt: bool, cmd: bool) -> Result<bool> {
-        // Enter while the pen draws ends the path and edits it with the Move tool (#1430).
-        if name == "Enter" && !alt && !cmd && self.tool.pen.is_some() {
-            self.pen_enter()?;
-            return Ok(true);
+        if alt || cmd {
+            return Ok(false);
         }
-        if self.ds().is_ok_and(|d| d.vector_edit.is_some()) {
-            return crate::vectoredit::key(self, name, shift, alt, cmd);
-        }
-        if !alt && !cmd && self.guide_key(name, shift)? {
-            return Ok(true);
-        }
-        crate::shapebuilder::key(self, name)
+        self.guide_key(name, shift)
     }
 
     /// Keys for a selected ruler guide: Delete removes it, arrows across it nudge it (Shift: the big
@@ -92,14 +84,11 @@ impl Session {
         r
     }
 
-    /// Keyboard Escape: cancel gestures, finish pens, leave text editing, then deselect.
+    /// Keyboard Escape: cancel gestures, leave text editing, then deselect.
     pub fn escape(&mut self) -> Result<()> {
         // Following someone in a live session: Escape stops that first.
         if self.live_unfollow() {
             return Ok(());
-        }
-        if self.tool.pen.is_some() {
-            return self.pen_end();
         }
         if self.tool.busy() {
             self.tool.gesture = Gesture::None;
@@ -122,9 +111,6 @@ impl Session {
         if self.ds()?.text_edit.is_some() {
             return textedit::end(self);
         }
-        if self.ds()?.vector_edit.is_some() {
-            return crate::vectoredit::escape(self);
-        }
         if self.tool.tool != ToolId::Move {
             self.set_tool(ToolId::Move);
             return Ok(());
@@ -136,12 +122,10 @@ impl Session {
     }
 
     /// Whether the Move tool shows arc and shape handles now (not while another gesture runs, nor
-    /// in vector or text edit mode).
+    /// in text edit mode).
     pub(super) fn arc_handles_shown(&self) -> bool {
         let arc_drag = matches!(self.tool.gesture, Gesture::Arc { .. } | Gesture::Shape { .. });
-        self.tool.tool == ToolId::Move
-            && (arc_drag || !self.tool.busy())
-            && self.ds().is_ok_and(|ds| ds.vector_edit.is_none() && ds.text_edit.is_none())
+        self.tool.tool == ToolId::Move && (arc_drag || !self.tool.busy()) && self.ds().is_ok_and(|ds| ds.text_edit.is_none())
     }
 
     /// The selected ellipse's arc handles as the canvas shows them at the current zoom.

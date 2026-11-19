@@ -1,12 +1,12 @@
 //! The cursor each tool asks for (`tool.overlay.cursor`), by tool, modifier and what the pointer
 //! is over: tables of tool × modifiers × hover target → cursor, the cursors of gestures under way
-//! (panning, duplicating, rotating) and of vector edit mode.
+//! (panning, duplicating, rotating).
 
 use serde_json::{Value, json};
 
 use crate::Session;
 use crate::params::id_of;
-use crate::tools::{Cursor, PenCursor, PointerEvent, PointerKind, ToolId};
+use crate::tools::{Cursor, PointerEvent, PointerKind, ToolId};
 use figcraft_doc::NodeId;
 
 fn ex(s: &mut Session, cmd: &str, p: Value) -> Value {
@@ -26,7 +26,6 @@ struct Mods {
 
 const NONE: Mods = Mods { shift: false, alt: false, cmd: false };
 const ALT: Mods = Mods { shift: false, alt: true, cmd: false };
-const CMD: Mods = Mods { shift: false, alt: false, cmd: true };
 
 fn ev(kind: PointerKind, (x, y): (f64, f64), m: Mods) -> PointerEvent {
     PointerEvent { shift: m.shift, alt: m.alt, cmd: m.cmd, ..PointerEvent::at(kind, x, y, 1.0) }
@@ -98,14 +97,12 @@ fn each_tool_has_its_cursor_by_modifier_and_what_is_under_the_pointer() {
         (ToolId::Ellipse, NONE, EMPTY, Crosshair, "ellipse"),
         (ToolId::Polygon, NONE, EMPTY, Crosshair, "polygon"),
         (ToolId::Star, NONE, EMPTY, Crosshair, "star"),
-        (ToolId::Pencil, NONE, EMPTY, Crosshair, "pencil"),
         (ToolId::Text, NONE, EMPTY, Crosshair, "the Text tool makes a text where it is pressed"),
         (ToolId::Text, NONE, ON_SQUARE, Crosshair, "over a shape too"),
         (ToolId::Text, NONE, ON_TEXT, Text, "the I-beam over a text: a click edits it there"),
         (ToolId::TextOnPath, NONE, EMPTY, Default, "text on a path: a click on empty canvas does nothing"),
         (ToolId::TextOnPath, NONE, ON_SQUARE, Default, "nor inside a shape, away from its path"),
         (ToolId::TextOnPath, NONE, ON_SQUARE_EDGE, Text, "the I-beam over a shape's path: a click puts text on it"),
-        (ToolId::Pen, NONE, EMPTY, Pen(PenCursor::New), "the pen: a new point"),
         (ToolId::Comment, NONE, EMPTY, Comment, "the comment pin"),
         (ToolId::Eyedropper, NONE, ON_SQUARE, Eyedropper, "the eyedropper"),
     ];
@@ -117,7 +114,7 @@ fn each_tool_has_its_cursor_by_modifier_and_what_is_under_the_pointer() {
     }
     // Every tool has a row above.
     for t in ToolId::ALL {
-        assert!(matches!(t.cursor(), Default | Crosshair | Grab | Pen(_) | Comment | Eyedropper), "{t:?}");
+        assert!(matches!(t.cursor(), Default | Crosshair | Grab | Comment | Eyedropper), "{t:?}");
     }
 }
 
@@ -192,85 +189,4 @@ fn gestures_show_what_they_are_doing() {
     assert_eq!(hover(&mut s, EMPTY, NONE), Cursor::Default);
     ex(&mut s, "text.edit.end", json!({}));
     assert_eq!(hover(&mut s, ON_TEXT, NONE), Cursor::Default, "editing over: the arrow");
-}
-
-#[test]
-fn a_pen_click_that_wobbles_a_pixel_is_still_a_click() {
-    let mut s = Session::new();
-    s.set_tool(ToolId::Pen);
-    // A real click: the mouse moves a pixel or two between press and release.
-    s.pointer(&ev(PointerKind::Down, (100.0, 100.0), NONE)).unwrap();
-    s.pointer(&ev(PointerKind::Move, (102.0, 101.0), NONE)).unwrap();
-    s.pointer(&ev(PointerKind::Up, (102.0, 101.0), NONE)).unwrap();
-    let out = s.tool.pen.as_ref().and_then(|p| p.points.first()).map(|(_, _, o)| *o);
-    assert_eq!(out.map(|o| o.hypot()), Some(0.0), "no handle pulled out");
-    assert!(s.tool.overlay.pen_handles.is_empty());
-    // Past the slop it is a drag: the handle follows the pointer from where it was pressed.
-    s.pointer(&ev(PointerKind::Down, (200.0, 100.0), NONE)).unwrap();
-    s.pointer(&ev(PointerKind::Move, (204.0, 100.0), NONE)).unwrap();
-    let out = s.tool.pen.as_ref().and_then(|p| p.points.last()).map(|(_, _, o)| (o.x, o.y));
-    assert_eq!(out, Some((4.0, 0.0)));
-}
-
-#[test]
-fn the_pen_shows_what_a_click_would_do() {
-    // The Pen tool drawing a new path: three points, then over each of them.
-    let mut s = Session::new();
-    s.set_tool(ToolId::Pen);
-    for at in [(100.0, 100.0), (200.0, 100.0), (200.0, 200.0)] {
-        s.pointer(&ev(PointerKind::Down, at, NONE)).unwrap();
-        s.pointer(&ev(PointerKind::Up, at, NONE)).unwrap();
-    }
-    let rows = [
-        ((300.0, 300.0), PenCursor::New, "empty canvas: a new point"),
-        ((101.0, 101.0), PenCursor::Close, "its first point: closes the path"),
-        ((200.0, 101.0), PenCursor::Close, "another of its points: connects to it and ends the path"),
-        ((200.0, 200.0), PenCursor::New, "its last point: nothing to connect"),
-    ];
-    for (at, want, why) in rows {
-        assert_eq!(hover(&mut s, at, NONE), Cursor::Pen(want), "{why}");
-    }
-    s.escape().unwrap();
-    // With an open path selected, its end points go on with it.
-    let path = id(&ex(&mut s, "vector.create", json!({"points": [[400, 100], [500, 100], [500, 200]], "closed": false})));
-    ex(&mut s, "select.set", json!({"ids": [path]}));
-    s.set_tool(ToolId::Pen);
-    assert_eq!(hover(&mut s, (500.0, 200.0), NONE), Cursor::Pen(PenCursor::Close), "an end point of the selected open path");
-    assert_eq!(hover(&mut s, (500.0, 100.0), NONE), Cursor::Pen(PenCursor::New), "its middle point isn't an end");
-}
-
-#[test]
-fn vector_edit_mode_shows_each_tool_and_modifier() {
-    let mut s = Session::new();
-    let path = id(&ex(&mut s, "vector.create", json!({"points": [[100, 100], [300, 100], [300, 300]], "closed": false})));
-    ex(&mut s, "vector.edit.begin", json!({"id": path}));
-    let (point, segment, midpoint, empty) = ((300.0, 100.0), (150.0, 100.0), (200.0, 100.0), (200.0, 250.0));
-    use Cursor::*;
-    // (vector tool, modifiers, where, cursor, why)
-    type Row = (&'static str, Mods, (f64, f64), Cursor, &'static str);
-    let rows: Vec<Row> = vec![
-        ("move", NONE, point, Default, "the arrow over a point"),
-        ("move", NONE, segment, Default, "the arrow over a segment"),
-        ("move", NONE, midpoint, Pen(PenCursor::Add), "the arrow over a segment's midpoint: adds a point there"),
-        ("move", NONE, empty, Default, "the arrow elsewhere"),
-        ("move", ALT, segment, Pen(PenCursor::Add), "Alt over a segment adds a point there"),
-        ("move", ALT, point, Default, "Alt over a point adds nothing"),
-        ("move", CMD, segment, Pen(PenCursor::Bend), "Cmd/Ctrl bends the segment"),
-        ("move", CMD, point, Pen(PenCursor::Bend), "Cmd/Ctrl bends the point's handles"),
-        ("move", CMD, empty, Crosshair, "Cmd/Ctrl over nothing"),
-        ("pen", NONE, empty, Pen(PenCursor::New), "the pen: a new point"),
-        ("pen", NONE, point, Pen(PenCursor::Close), "the pen over a point: connects to it or goes on from it"),
-        ("pen", NONE, segment, Pen(PenCursor::Add), "the pen over a segment: adds a point"),
-        ("bend", NONE, segment, Pen(PenCursor::Bend), "the Bend tool"),
-        ("bend", NONE, empty, Pen(PenCursor::Bend), "the Bend tool anywhere"),
-        ("paint", NONE, empty, Crosshair, "paint bucket"),
-        ("lasso", NONE, empty, Crosshair, "lasso"),
-        ("cut", NONE, segment, Crosshair, "cut"),
-        ("eraser", NONE, empty, Crosshair, "eraser (its brush is drawn around the pointer)"),
-        ("width", NONE, segment, Crosshair, "variable width"),
-    ];
-    for (tool, m, at, want, why) in rows {
-        ex(&mut s, "vector.edit.tool", json!({"tool": tool}));
-        assert_eq!(hover(&mut s, at, m), want, "{tool} at {at:?}: {why}");
-    }
 }

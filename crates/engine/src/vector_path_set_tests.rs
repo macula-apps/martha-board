@@ -25,7 +25,10 @@ fn vector(s: &mut Session, p: Value) -> NodeId {
 }
 
 fn net(s: &Session, v: NodeId) -> VectorNetwork {
-    crate::vectoredit::network(s.doc().unwrap(), v).unwrap().clone()
+    match &s.doc().unwrap().node(v).unwrap().kind {
+        NodeKind::Vector { network } => network.clone(),
+        k => panic!("not a vector: {k:?}"),
+    }
 }
 
 /// The layer's x, y, width and height as `get_node` reports them.
@@ -186,7 +189,7 @@ fn a_boolean_operand_takes_a_new_path_and_the_group_follows() {
     let mut s = Session::new();
     let a = vector(&mut s, json!({"path": "M0 0 L40 0 L40 40 L0 40 Z"}));
     let b = vector(&mut s, json!({"path": "M0 0 L40 0 L40 40 L0 40 Z", "x": 20, "y": 20}));
-    let g = id(&ex(&mut s, "bool.union", json!({"ids": [a, b]})));
+    let g = crate::test_helpers::bool_group(&mut s, &[a, b], figcraft_doc::BoolOp::Union);
     assert_eq!(s.doc().unwrap().node(b).unwrap().parent, Some(g));
     ex(&mut s, "node.set", json!({"ids": [b], "props": {"path": "M0 0 L100 0 L100 100 L0 100 Z"}}));
     let bounds = s.doc().unwrap().world_bounds(g).unwrap();
@@ -229,17 +232,4 @@ fn junk_paths_never_panic() {
             }
         }
     }
-}
-
-#[test]
-fn a_new_path_while_editing_drops_points_that_are_gone() {
-    let mut s = Session::new();
-    let v = vector(&mut s, json!({"path": "M0 0 L10 0 L10 10 L0 10 Z"}));
-    ex(&mut s, "vector.edit.begin", json!({"id": v}));
-    ex(&mut s, "vector.edit.selectAll", json!({}));
-    ex(&mut s, "node.set", json!({"ids": [v], "props": {"path": "M0 0 L20 0"}}));
-    let ve = s.ds().unwrap().vector_edit.clone().expect("still editing");
-    let n = net(&s, v);
-    assert!(ve.vertices.iter().all(|i| *i < n.vertices.len()) && ve.segments.iter().all(|i| *i < n.segments.len()), "{ve:?}");
-    ex(&mut s, "vector.edit.state", json!({}));
 }

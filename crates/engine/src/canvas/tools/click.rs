@@ -5,10 +5,10 @@ use super::{
 };
 
 impl Session {
-    /// Handle a double-click gesture: finish a pen path, rename labels,
+    /// Handle a double-click gesture: rename labels,
     /// cancel an in-progress move/resize/draw/marquee, handle board double-clicks, enter text
-    /// editing (select-all on entry, word-select inside the running edit), enter vector editing
-    /// for selected shapes, and step groups/frames one level deeper.
+    /// editing (select-all on entry, word-select inside the running edit), and step
+    /// groups/frames one level deeper.
     /// A double-click on `leaf` that a board object takes (typing into a sticky or a shape on a
     /// board). Whether it was taken.
     fn object_double_click(&mut self, doc: &Document, leaf: NodeId, sel: &[NodeId]) -> Result<bool> {
@@ -41,9 +41,6 @@ impl Session {
     pub(super) fn double_click(&mut self, ev: &PointerEvent) -> Result<()> {
         let ds = self.ds()?;
         let (doc, sel, page) = (ds.doc.clone(), ds.selection.clone(), ds.page);
-        if self.tool.tool == ToolId::Pen {
-            return self.pen_double_click(ev);
-        }
         // A frame's or section's name label: rename it there (the canvas puts a field over it).
         // The second press began a move: undo it.
         if matches!(self.tool.tool, ToolId::Move | ToolId::Scale)
@@ -72,18 +69,7 @@ impl Session {
         if matches!(self.tool.tool, ToolId::Move | ToolId::Scale) && !(ev.shift || ev.cmd) && self.edge_double_click(&doc, &sel, ev)? {
             return Ok(());
         }
-        let hit_here = self.hit(&doc, page, ev.p(), ev.tol() * 2.0);
-        // A double-click anywhere on the one selected shape edits its points, like Enter: also
-        // inside a hollow (unfilled) closed shape, where the hit test finds nothing under the
-        // pointer (an open path or a line has no inside: only its stroke counts).
-        if let [id] = sel[..]
-            && doc.node(id).is_some_and(|n| n.kind.is_shape() && figcraft_doc::geometry::is_closed(n))
-            && doc.world_bounds(id).is_some_and(|b| b.contains(ev.p()))
-            && hit_here.is_none_or(|h| h == id || doc.is_ancestor(id, h))
-        {
-            return crate::vectoredit::begin_many(self, &[id]);
-        }
-        let Some(leaf) = hit_here else { return Ok(()) };
+        let Some(leaf) = self.hit(&doc, page, ev.p(), ev.tol() * 2.0) else { return Ok(()) };
         if self.object_double_click(&doc, leaf, &sel)? {
             return Ok(());
         }
@@ -104,16 +90,6 @@ impl Session {
                 textedit::key(self, "SelectAll", false, false, false)?;
             }
             return Ok(());
-        }
-        // Shapes and vectors: enter vector edit mode (every selected shape, the clicked one active).
-        // A shape clicked on its own edits even when the click that selects it and the double-click
-        // arrived in one frame (a press and a release the canvas took together), so no selection was
-        // made yet; another layer's shapes are reached one level at a time, as below.
-        if doc.node(target).is_some_and(|n| n.kind.is_shape()) && (sel.contains(&target) || select_target(&doc, leaf, &sel, false) == target) {
-            let mut ids = if sel.contains(&target) { crate::vectoredit::enter_targets(&doc, &sel).unwrap_or_default() } else { vec![target] };
-            ids.retain(|i| *i != target);
-            ids.insert(0, target);
-            return crate::vectoredit::begin_many(self, &ids);
         }
         // Groups, frames and boolean groups: select one level deeper (the layer under the pointer).
         let deeper = figcraft_doc::geometry::enter_target(&doc, leaf, &sel);

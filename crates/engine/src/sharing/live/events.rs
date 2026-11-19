@@ -82,9 +82,6 @@ impl Session {
         if ds.text_edit.as_ref().is_some_and(|t| !ds.doc.contains(t.id)) {
             ds.text_edit = None;
         }
-        if ds.vector_edit.as_ref().is_some_and(|v| !ds.doc.contains(v.id)) {
-            ds.vector_edit = None;
-        }
         ds.clean_selection();
         ds.revision += 1;
     }

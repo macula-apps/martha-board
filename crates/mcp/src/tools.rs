@@ -334,13 +334,11 @@ fn tools() -> Vec<Value> {
                     "y": num("Page y"),
                     "to": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2, "description": "Drag end [x, y] (page)"},
                     "steps": int("Intermediate move events for drag (default 8)"),
-                    "tool": {"type": "string", "description": "Tool to choose first: move|scale|hand|frame|section|slice|rectangle|line|arrow|ellipse|polygon|star|pen|pencil|text|comment"},
+                    "tool": {"type": "string", "description": "Tool to choose first: move|scale|hand|frame|section|slice|rectangle|line|arrow|ellipse|polygon|star|text|comment"},
                     "shift": boolean("Shift held"),
                     "alt": boolean("Alt/Option held"),
                     "cmd": boolean("Cmd (macOS) / Ctrl held"),
                     "ctrl": boolean("Ctrl held (the Control key on macOS)"),
-                    "pressure": num("Pen pressure 0-1 (the Pencil records it as the stroke's width profile; a drag starts with it)"),
-                    "pressureTo": num("Pen pressure 0-1 at a drag's end (interpolated along it)"),
                 }),
                 &["x", "y"],
             ),
@@ -1182,11 +1180,6 @@ fn pointer(b: &mut dyn Backend, a: &Map<String, Value>) -> Result<ToolResult, St
     }
     if let Some(s) = n_arg(a, "steps")? {
         p.insert("steps".into(), json!(s.clamp(1.0, 200.0) as u64));
-    }
-    for k in ["pressure", "pressureTo"] {
-        if let Some(v) = n_arg(a, k)? {
-            p.insert(k.into(), json!(v.clamp(0.0, 1.0)));
-        }
     }
     mods(a, &mut p)?;
     b.call("ui.pointer", Value::Object(p)).map(|v| ToolResult::json(&v))

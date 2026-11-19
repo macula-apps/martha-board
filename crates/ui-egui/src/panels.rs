@@ -11,5 +11,4 @@ pub mod selection_colors;
 pub mod shortcuts_panel;
 pub mod thumbnails;
 pub mod typography;
-pub mod vector_panel;
 pub mod versions;

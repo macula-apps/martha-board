@@ -1,19 +1,17 @@
-use super::handles::{handle_at, label_at, locked_in, on_corner_square, resize_cursor, selected_end_at};
+use super::handles::{handle_at, label_at, locked_in, on_corner_square, resize_cursor};
 use super::{
-    Cursor, Document, Gesture, NodeId, NodeKind, Overlay, PenCursor, Point, PointerEvent, PointerKind, Rect, Result, Session, ToolId, at_45_degrees,
-    frame_at, json, select_target,
+    Cursor, Gesture, NodeId, NodeKind, Overlay, Point, PointerEvent, PointerKind, Rect, Result, Session, ToolId, frame_at, json, select_target,
 };
 
 impl Session {
     /// The pointer left the canvas: what hovering there showed goes (the distances Alt
-    /// measured and the box measured to, a vector region's highlight), unless a gesture holds it.
+    /// measured and the box measured to), unless a gesture holds it.
     pub fn pointer_left(&mut self) {
         if !self.tool.busy() {
             self.tool.overlay.guides.clear();
             self.tool.overlay.measure_box = None;
             self.tool.overlay.stamp_target = None;
         }
-        self.vector_pointer_left();
     }
 
     /// What a marquee starting at page point `p` selects inside: the top-level frame it starts in
@@ -42,12 +40,6 @@ impl Session {
     }
 
     pub fn set_tool(&mut self, t: ToolId) {
-        if self.tool.tool == ToolId::Pen && t != ToolId::Pen {
-            let _ = self.pen_finish();
-        }
-        if !matches!(t, ToolId::Move | ToolId::Scale | ToolId::Hand) && self.ds().is_ok_and(|d| d.vector_edit.is_some()) {
-            let _ = crate::vectoredit::end(self);
-        }
         // The placement crosshair goes with a change of tool, not with the same tool chosen again.
         if self.tool.tool != t {
             self.tool.place_at = None;
@@ -56,14 +48,7 @@ impl Session {
         self.tool.gesture = Gesture::None;
         self.tool.pick_only = false;
         // The tool's cursor shows before the pointer moves.
-        self.tool.overlay =
-            Overlay { builder_remove: self.tool.builder_remove && t == ToolId::ShapeBuilder, cursor: t.cursor(), ..Overlay::default() };
-        self.tool.shape_builder = None;
-        if t == ToolId::ShapeBuilder {
-            // Regions show straight away, before the pointer moves.
-            let sel = self.selection();
-            let _ = crate::shapebuilder::arrangement(self, &sel);
-        }
+        self.tool.overlay = Overlay { cursor: t.cursor(), ..Overlay::default() };
         if let Ok(ds) = self.ds_mut() {
             if !matches!(t, ToolId::Text | ToolId::TextOnPath | ToolId::Move) {
                 ds.text_edit = None;
@@ -89,12 +74,6 @@ impl Session {
         if edits && self.origin_pointer(ev)? {
             return Ok(());
         }
-        if edits && self.ds().is_ok_and(|d| d.vector_edit.is_some()) && self.vector_pointer(ev)? {
-            return Ok(());
-        }
-        if tool == ToolId::ShapeBuilder {
-            return self.shape_builder_pointer(ev);
-        }
         match ev.kind {
             PointerKind::Hover => self.hover(ev),
             PointerKind::Down => match tool {
@@ -115,13 +94,6 @@ impl Session {
                 }
                 ToolId::Text => self.text_down(ev),
                 ToolId::TextOnPath => self.text_on_path_down(ev),
-                ToolId::Pen => self.pen_down(ev),
-                ToolId::Pencil => {
-                    // The preview draws in the colour the stroke will have (#1741).
-                    self.tool.overlay.pen_color = self.pencil_color_at(ev.p()).ok();
-                    self.tool.gesture = Gesture::Pencil { points: vec![ev.p()], pressure: vec![ev.pressure] };
-                    Ok(())
-                }
                 ToolId::Comment => {
                     self.request_ui("comment.new", json!({"x": ev.x, "y": ev.y}));
                     Ok(())
@@ -225,18 +197,6 @@ impl Session {
         }
         self.tool.overlay.measure_box = measure_box;
         self.tool.overlay.cursor = cursor;
-        if tool == ToolId::Pen {
-            // Where a click would land (snapped), with its guides.
-            let (to, g) = if ev.shift { (ev.p(), Vec::new()) } else { self.snap_pen_tool(ev)? };
-            guides = g;
-            self.tool.overlay.cursor = Cursor::Pen(self.pen_cursor(&doc, &sel, to, ev.zoom));
-            if let Some((last, _, out)) = self.tool.pen.as_ref().and_then(|pen| pen.points.last()) {
-                // With Shift the band ends where a click puts the point (#970).
-                let to = if ev.shift { at_45_degrees(*last, to) } else { to };
-                self.tool.overlay.rubber = Some([last.x, last.y, to.x, to.y]);
-                self.tool.overlay.rubber_handle = (out.hypot() > 0.0).then_some([last.x + out.x, last.y + out.y]);
-            }
-        }
         self.tool.overlay.guides = guides;
         if tool == ToolId::Connector {
             self.connector_hover(ev);
@@ -250,21 +210,5 @@ impl Session {
             ds.revision += 1;
         }
         Ok(())
-    }
-
-    /// What a click with the Pen tool at `p` (where it snaps) would do: close the path on its first
-    /// point, connect to another of its points, go on from a selected open path's end, or add a
-    /// new point (the same tests as [`Self::pen_down`]).
-    fn pen_cursor(&self, doc: &Document, sel: &[NodeId], p: Point, zoom: f64) -> PenCursor {
-        let near = |q: &Point| (*q - p).hypot() * zoom < 8.0;
-        let on_point = match &self.tool.pen {
-            None => selected_end_at(doc, sel, p, 8.0 / zoom.max(1e-6)).is_some(),
-            Some(pen) => {
-                let n = pen.points.len();
-                (n > 2 && pen.points.first().is_some_and(|(q, _, _)| near(q)))
-                    || (1..n.saturating_sub(1)).any(|k| pen.points.get(k).is_some_and(|(q, _, _)| near(q)))
-            }
-        };
-        if on_point { PenCursor::Close } else { PenCursor::New }
     }
 }

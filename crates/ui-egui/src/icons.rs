@@ -45,7 +45,6 @@ icons! {
     Star,
     Image,
     Pen,
-    Pencil,
     Text,
     TextOnPath,
     Comment,
@@ -65,10 +64,6 @@ icons! {
     ComponentSet,
     Group,
     Vector,
-    Bend,
-    PaintBucket,
-    Lasso,
-    Cut,
     Crop,
     Boolean,
     Page,
@@ -137,7 +132,6 @@ icons! {
     Opacity,
     Blend,
     Export,
-    StrokeIcon,
     Fill,
     /// Gradient kinds: a swatch outline holding a fade of that kind.
     GradientLinear,
@@ -168,12 +162,6 @@ icons! {
     Variable,
     Clock,
     Eraser,
-    /// Variable width: a stroke swelling in the middle with a width handle above and below.
-    VariableWidth,
-    /// Shape builder: merge regions (and the tool).
-    ShapeBuilder,
-    /// Shape builder: remove regions.
-    ShapeBuilderRemove,
     Swap,
     Link,
     Section2,

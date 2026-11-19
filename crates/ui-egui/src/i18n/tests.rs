@@ -129,7 +129,6 @@ const DATA_LABELS: &[&str] = &[
 fn dynamic_labels() -> Vec<&'static str> {
     use figcraft_engine::keymap::{GESTURES, Group};
     let mut v: Vec<&'static str> = figcraft_engine::ToolId::ALL.iter().map(|t| t.label()).collect();
-    v.extend(figcraft_engine::vectoredit::VTool::ALL.iter().map(|t| t.label()));
     // Board shapes and stamps (the board tools' flyouts and the contextual bar).
     v.extend(figcraft_doc::BoardShape::ALL.iter().map(|b| b.label()));
     v.extend(figcraft_doc::Stamp::ALL.iter().map(|b| b.label()));

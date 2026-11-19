@@ -244,17 +244,10 @@ fn a_drag_whose_gesture_was_committed_under_the_button_shows_no_message() {
     assert!(u.app.ui.toast.is_none(), "no message: {:?}", u.app.ui.toast);
 }
 
-/// The first paint, an image, of `id`'s fills (`fills`) or strokes, or of region `region` of a vector.
-fn image_at(u: &Ui, id: NodeId, fills: bool, region: Option<usize>) -> figcraft_color::ImagePaint {
+/// The first paint, an image, of `id`'s fills (`fills`) or strokes.
+fn image_at(u: &Ui, id: NodeId, fills: bool) -> figcraft_color::ImagePaint {
     let n = u.app.session.doc().unwrap().node(id).unwrap();
-    let list = match region {
-        Some(r) => match &n.kind {
-            figcraft_doc::NodeKind::Vector { network } => network.regions[r].fills.clone().unwrap(),
-            _ => panic!("not a vector"),
-        },
-        None if fills => n.fills.clone(),
-        None => n.strokes.clone(),
-    };
+    let list = if fills { n.fills.clone() } else { n.strokes.clone() };
     match &list[0].kind {
         PaintKind::Image(img) => img.clone(),
         k => panic!("not an image: {k:?}"),
@@ -285,7 +278,7 @@ fn crop_in_the_colour_picker_only_sets_the_mode_where_crop_image_does_not_apply(
     let paint = picture(&u, layer);
     u.app.run("stroke.add", json!({"ids": [layer], "paint": paint}));
     crop_only_sets_the_mode(&mut u, PickerTarget::Paint { fills: false, index: 0, ids: vec![layer] }, "a stroke");
-    assert_eq!(image_at(&u, layer, false, None).scale_mode, ImageScaleMode::Crop);
+    assert_eq!(image_at(&u, layer, false).scale_mode, ImageScaleMode::Crop);
     assert_eq!(mode(&u, layer), (ImageScaleMode::Fill, None), "the fill is untouched");
 
     // Two image layers at once: both take the mode.
@@ -296,23 +289,6 @@ fn crop_in_the_colour_picker_only_sets_the_mode_where_crop_image_does_not_apply(
     crop_only_sets_the_mode(&mut u, PickerTarget::Paint { fills: true, index: 0, ids: vec![layer, rect] }, "two layers");
     assert_eq!(mode(&u, layer).0, ImageScaleMode::Crop);
     assert_eq!(mode(&u, rect).0, ImageScaleMode::Crop);
-
-    // A region's own image fill in vector edit mode: the region's mode is set, the layer's image
-    // fill is untouched.
-    let (u0, layer, _) = setup();
-    let paint = picture(&u0, layer);
-    let mut s = Session::new();
-    let vector = crate::region_fill_rows_tests::two_region_vector(&mut s);
-    // The layer's own fill is an image too, so cropping it instead would be possible, and wrong.
-    s.execute("fill.set", &json!({"ids": [vector.0], "index": 0, "paint": paint})).unwrap();
-    s.execute("vector.edit.begin", &json!({"id": vector.0})).unwrap();
-    s.execute("vector.edit.select", &json!({"regions": [1]})).unwrap();
-    s.execute("fill.set", &json!({"ids": [vector.0], "index": 0, "paint": paint})).unwrap();
-    let layer_fills = s.doc().unwrap().node(vector).unwrap().fills.clone();
-    let mut u = Ui::new(s);
-    crop_only_sets_the_mode(&mut u, PickerTarget::Paint { fills: true, index: 0, ids: vec![vector] }, "a region");
-    assert_eq!(image_at(&u, vector, true, Some(1)).scale_mode, ImageScaleMode::Crop);
-    assert_eq!(u.app.session.doc().unwrap().node(vector).unwrap().fills, layer_fills, "the layer's fills are untouched");
 
     // A fill that isn't an image, and targets that aren't a layer's paint, have no crop on the canvas.
     let (u, layer, rect) = setup();

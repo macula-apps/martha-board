@@ -4,7 +4,6 @@ use super::{Context, FigApp, Tokens, i18n, json, tr, window};
 #[derive(Clone, Debug, PartialEq)]
 pub enum MenuInput {
     Link(String),
-    Offset(f64),
     MoveToPage,
 }
 
@@ -15,7 +14,6 @@ pub(super) fn menu_input_dialog(app: &mut FigApp, ctx: &Context) {
     let t = Tokens::get(ctx);
     let title = match &input {
         MenuInput::Link(_) => i18n::command("text.link", "Create link"),
-        MenuInput::Offset(_) => i18n::command("vector.offset", "Offset path"),
         MenuInput::MoveToPage => i18n::command("object.moveToPage", "Move to page"),
     };
     let mut open = true;
@@ -30,19 +28,6 @@ pub(super) fn menu_input_dialog(app: &mut FigApp, ctx: &Context) {
                     let ok = !url.trim().is_empty();
                     if (crate::widgets::button(ui, tr("Done"), true, ok).clicked() || enter) && ok {
                         action = Some(("text.link", json!({"url": url.trim()})));
-                    }
-                });
-            }
-            MenuInput::Offset(offset) => {
-                ui.horizontal(|ui| {
-                    let id = egui::Id::unique("menu_input_offset");
-                    if let Some(crate::widgets::FieldEdit::Set(v) | crate::widgets::FieldEdit::Scrub(v, _)) =
-                        crate::widgets::number_field(ui, id, crate::widgets::Lead::None, Some(*offset), "", 120.0, 1.0)
-                    {
-                        *offset = v.clamp(-100_000.0, 100_000.0);
-                    }
-                    if crate::widgets::button(ui, tr("Offset"), true, true).clicked() {
-                        action = Some(("vector.offset", json!({"offset": *offset})));
                     }
                 });
             }

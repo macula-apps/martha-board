@@ -13,7 +13,7 @@ fn an_unknown_cap_lists_every_cap() {
     let names: Vec<String> = StrokeCap::ALL.iter().map(|c| serde_json::to_value(c).unwrap().as_str().unwrap().to_string()).collect();
     assert_eq!(STROKE_CAP_HELP.split('|').collect::<Vec<_>>(), names, "the list is every cap, in order");
     let mut s = Session::new();
-    let v = id_of(&s.execute("vector.create", &json!({"path": "M0 0 L200 0", "x": 0, "y": 0})).unwrap()["id"]).unwrap();
+    let v = id_of(&s.execute("node.create", &json!({"type": "vector", "path": "M0 0 L200 0", "x": 0, "y": 0})).unwrap()["id"]).unwrap();
     for key in ["strokeCap", "startCap", "endCap"] {
         for junk in [json!("butt"), json!(3), json!("")] {
             let e = s.execute("node.set", &json!({"id": v, "props": {key: junk}})).unwrap_err().to_string();

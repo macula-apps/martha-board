@@ -63,7 +63,7 @@ fn scene(s: &mut Session) -> Scene {
     let d = rect(s, 20.0, 20.0, Some(n));
     let e1 = rect(s, 20.0, 200.0, Some(f));
     let e2 = rect(s, 40.0, 200.0, Some(f));
-    let u = id(&ex(s, "bool.union", json!({"ids": [e1, e2]})));
+    let u = crate::test_helpers::bool_group(s, &[e1, e2], figcraft_doc::BoolOp::Union);
     let r = rect(s, 500.0, 0.0, None);
     let r2 = rect(s, 500.0, 100.0, None);
     let lk = rect(s, 500.0, 100.0, None);
@@ -215,34 +215,11 @@ fn double_click_enters_one_level() {
         s.pointer(&ev(PointerKind::DoubleClick, p.0, p.1, NONE)).unwrap();
         assert_eq!(s.selection(), after, "{why}");
     }
-    // A selected shape: vector edit mode.
+    // A selected shape stays selected as it is (no point editing, #32).
     ex(&mut s, "select.set", json!({"ids": [k.r]}));
     s.pointer(&ev(PointerKind::DoubleClick, 520.0, 20.0, NONE)).unwrap();
-    assert_eq!(s.ds().unwrap().vector_edit.as_ref().map(|v| v.id), Some(k.r), "double-click on a shape edits its points");
-}
-
-#[test]
-fn a_double_click_anywhere_on_the_selected_shape_edits_its_points() {
-    let mut s = Session::new();
-    let r = id(&ex(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 100, "height": 100})));
-    ex(&mut s, "node.set", json!({"ids": [r], "props": {"fills": []}}));
-    ex(&mut s, "stroke.add", json!({"ids": [r]}));
-    // Selected by its outline; the empty middle is no hit at all (the shape has no fill).
-    click(&mut s, 0.0, 50.0, NONE);
-    assert_eq!(s.selection(), vec![r]);
-    s.pointer(&ev(PointerKind::DoubleClick, 50.0, 50.0, NONE)).unwrap();
-    assert_eq!(s.ds().unwrap().vector_edit.as_ref().map(|v| v.id), Some(r), "a double-click on the shape edits its points");
-}
-
-#[test]
-fn a_double_click_on_an_unselected_shape_edits_it_without_a_selecting_click() {
-    let mut s = Session::new();
-    let r = id(&ex(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 100, "height": 100})));
-    ex(&mut s, "select.none", json!({}));
-    // The press and release of the click that selects it, and the double-click, came in one frame:
-    // only the double-click reached the tool, with nothing selected.
-    s.pointer(&ev(PointerKind::DoubleClick, 50.0, 50.0, NONE)).unwrap();
-    assert_eq!(s.ds().unwrap().vector_edit.as_ref().map(|v| v.id), Some(r));
+    assert_eq!(s.selection(), vec![k.r], "double-click on a shape keeps it selected");
+    assert!(s.ds().unwrap().text_edit.is_none());
 }
 
 #[test]

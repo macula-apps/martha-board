@@ -200,5 +200,6 @@ fn a_double_click_on_an_auto_layout_edge_hugs_and_with_alt_fills() {
     ex(&mut s, "select.set", json!({"ids": [r]}));
     double_click(&mut s, 99.0, 350.0, 0.0, 1.0);
     assert_eq!(sizing(&s, r), (Sizing::Fixed, Sizing::Fixed));
-    assert!(s.ds().unwrap().vector_edit.is_some(), "a shape's double-click still edits its points");
+    assert_eq!(s.selection(), vec![r], "a shape's double-click leaves it selected (no point editing, #32)");
+    assert!(matches!(s.doc().unwrap().node(r).unwrap().kind, figcraft_doc::NodeKind::Rectangle), "and a rectangle");
 }

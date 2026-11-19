@@ -50,9 +50,9 @@ impl DocState {
         self.moved_origin().or_else(|| box_points(&self.doc, &self.selection).map(|b| b[8]))
     }
 
-    /// The origin handle while it shows (page coordinates; not while editing text or points).
+    /// The origin handle while it shows (page coordinates; not while editing text).
     pub fn origin_handle(&self) -> Option<Point> {
-        self.current_origin().filter(|o| o.editing && self.text_edit.is_none() && self.vector_edit.is_none())?;
+        self.current_origin().filter(|o| o.editing && self.text_edit.is_none())?;
         self.origin_point()
     }
 

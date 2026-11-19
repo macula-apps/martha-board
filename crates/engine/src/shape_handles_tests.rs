@@ -99,11 +99,6 @@ fn handles_show_only_where_they_can_be_used() {
     s.execute("object.toggleLock", &json!({"ids": [big], "locked": true})).unwrap();
     assert!(handles(s.doc().unwrap(), &[big], 1.0).is_empty(), "locked layers have none");
     assert!(hit(s.doc().unwrap(), &[small], Point::new(f64::NAN, 0.0), 4.0).is_none());
-    // In vector edit mode the Move tool shows none.
-    let r = create(&mut s, "shape.rectangle", json!({"x": 0, "y": 200, "width": 100, "height": 100}));
-    assert_eq!(s.shape_handles().len(), 4);
-    s.execute("vector.edit.begin", &json!({"id": r})).unwrap();
-    assert!(s.shape_handles().is_empty(), "none while editing points");
 }
 
 fn count_of(s: &Session, id: NodeId) -> u32 {

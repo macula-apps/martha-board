@@ -685,6 +685,24 @@ fn apply_look(cmd: &str, doc: &mut Document, id: NodeId, k: &str, v: &Value) -> 
     Ok(true)
 }
 
+/// Re-fit vector `id`'s box to its network: the network moves to the box's origin and the layer's
+/// transform takes the offset, so the vector stays where it is on the page.
+fn refit(doc: &mut Document, id: NodeId) -> Result<()> {
+    let n = doc.get_mut(id)?;
+    let NodeKind::Vector { network } = &mut n.kind else { return Ok(()) };
+    let Some(b) = network.bounds() else { return Ok(()) };
+    if !(b.x0.is_finite() && b.y0.is_finite() && b.width().is_finite() && b.height().is_finite()) {
+        return Ok(());
+    }
+    if b.x0.abs() > 1e-9 || b.y0.abs() > 1e-9 {
+        network.translate(-b.x0, -b.y0);
+        n.transform *= Affine::translate((b.x0, b.y0));
+    }
+    n.width = b.width();
+    n.height = b.height();
+    Ok(())
+}
+
 /// The `corners` properties of `apply`; `false` when `k` is not one of them.
 fn apply_corners(cmd: &str, doc: &mut Document, id: NodeId, k: &str, v: &Value) -> Result<bool> {
     match k {
@@ -692,10 +710,10 @@ fn apply_corners(cmd: &str, doc: &mut Document, id: NodeId, k: &str, v: &Value) 
             let r = four(v).ok_or_else(|| bad(cmd, "cornerRadius: n or [tl,tr,br,bl]"))?.map(|x| x.max(0.0));
             let n = doc.get_mut(id)?;
             n.corners.radii = r;
-            // A vector's corner radius rounds every point (edit mode then sets them one by one).
+            // A vector's corner radius rounds every point.
             if let NodeKind::Vector { network } = &mut n.kind {
                 network.vertices.iter_mut().for_each(|p| p.radius = r[0]);
-                crate::vectoredit::refit(doc, id)?;
+                refit(doc, id)?;
             }
         }
         "topLeftRadius" | "topRightRadius" | "bottomRightRadius" | "bottomLeftRadius" => {

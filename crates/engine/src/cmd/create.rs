@@ -104,13 +104,6 @@ pub fn specs() -> Vec<CommandSpec> {
             |s, p| { create_kind(s, p, "text") }
         ),
         spec!(
-            "vector.create",
-            "Vector",
-            "{path (SVG path data) | points [[x,y],..], closed?, x?, y? (move the path's own origin: the layer's left/top is x/y plus the box's unscaled offset), width?, height? (scale the path; one keeps its proportion), parent?, index?, name?, props?, select? (default true)}",
-            true,
-            |s, p| create_kind(s, p, "vector")
-        ),
-        spec!(
             "image.place",
             "Place image",
             "{data (base64) | path, x?, y?, width?, height?, parent?, name? (default Image), target? (an existing layer: the image is added on top of its fills instead of making a layer), mode? (fill|fit|crop|tile)} → {id, image, width, height, imageProfile (its embedded colour profile; null: taken as sRGB)}",

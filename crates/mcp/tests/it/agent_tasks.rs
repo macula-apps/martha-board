@@ -124,34 +124,6 @@ fn task_group_align_distribute() {
     assert_eq!(c.page_children().len(), 1);
 }
 
-/// Task 7: boolean subtract (a ring), then flatten it to a vector.
-#[test]
-fn task_boolean_subtract_then_flatten() {
-    let mut c = Client::new();
-    let outer = c.create(json!({"type": "ellipse", "x": 0, "y": 0, "width": 100, "height": 100, "props": {"fill": "#000000"}}));
-    let inner = c.create(json!({"type": "ellipse", "x": 25, "y": 25, "width": 50, "height": 50}));
-    let bool_id = c.run("bool.subtract", json!({"ids": [outer, inner]}))["id"].clone();
-    let n = c.node(&bool_id);
-    assert_eq!(n["booleanOperation"].as_str().unwrap().to_lowercase(), "subtract", "{n}");
-    assert_eq!(n["children"].as_array().unwrap().len(), 2);
-    assert!(approx(&n["width"], 100.0));
-    let flat = c.run("bool.flatten", json!({"ids": [bool_id]}));
-    let vid = flat.get("id").cloned().or_else(|| flat["ids"].get(0).cloned()).unwrap();
-    let v = c.node(&vid);
-    assert_eq!(v["type"].as_str().unwrap().to_lowercase(), "vector", "{v}");
-    assert!(approx(&v["width"], 100.0) && approx(&v["height"], 100.0));
-    assert_eq!(c.page_children().len(), 1);
-    // The hole is really there: the centre pixel is transparent, the ring is painted.
-    let shot = c.call("export", json!({"ids": [vid], "format": "png"}));
-    use base64::Engine as _;
-    let bytes = base64::engine::general_purpose::STANDARD.decode(shot["content"][0]["data"].as_str().unwrap()).unwrap();
-    let (w, h) = figcraft_mcp::png_size(&bytes).unwrap();
-    assert!((100..=101).contains(&w) && (100..=101).contains(&h), "{w}x{h}");
-    let img = image::load_from_memory(&bytes).unwrap().to_rgba8();
-    assert_eq!(img.get_pixel(w / 2, h / 2)[3], 0, "the hole is transparent");
-    assert_eq!(img.get_pixel(w / 2, 10)[3], 255, "the ring is painted");
-}
-
 /// Task 8: export a frame as PNG at 2x (inline image and to a file) and as SVG.
 #[test]
 fn task_export_png_and_svg() {
@@ -236,23 +208,24 @@ fn task_draw_and_type_with_tools() {
     assert_eq!(c.page_children().len(), 0);
 }
 
-/// Keys in vector edit mode reach the edit tools first, as on the canvas (Delete took the whole
-/// layer and the tool letters were unknown).
+/// Enter on a selected shape no longer starts vector edit mode (it left, #32): the key does what
+/// the keymap binds Enter to, `select.children`, which on a shape keeps the selection and edits
+/// nothing.
 #[test]
-fn task_vector_edit_keys() {
+fn task_enter_on_a_shape_does_what_the_keymap_says() {
     let mut c = Client::new();
     let id = c.create(json!({"type": "rectangle", "x": 0, "y": 0, "width": 100, "height": 100}));
-    c.run("vector.edit.begin", json!({"id": id}));
-    c.ok("key", json!({"key": "X"}));
-    assert_eq!(c.run("vector.edit.state", json!({}))["tool"], "cut");
-    c.ok("key", json!({"key": "V"}));
-    c.run("vector.edit.select", json!({"vertices": [1]}));
-    c.ok("key", json!({"key": "Delete"}));
-    let state = c.run("vector.edit.state", json!({}));
-    assert_eq!(state["network"]["vertices"].as_array().map(Vec::len), Some(3), "Delete removed the point, not the layer");
-    c.ok("key", json!({"key": "Enter"}));
-    assert_eq!(c.page_children().len(), 1);
-    assert!(c.call("run_command", json!({"command": "vector.edit.state", "params": {}}))["isError"] == true, "Enter left edit mode");
+    c.ok("select", json!({"ids": [id]}));
+    let before = c.doc();
+    assert_eq!(c.ok("key", json!({"key": "Enter"})), json!({"command": "select.children", "tool": "move"}));
+    let after = c.doc();
+    assert_eq!(after["selection"], json!([id]), "the shape stays selected");
+    assert_eq!(after["history"], before["history"], "nothing was edited");
+    let kids = c.page_children();
+    assert_eq!(kids.len(), 1);
+    assert_eq!(kids[0]["type"].as_str().unwrap().to_lowercase(), "rectangle", "still a rectangle, not a vector");
+    let e = c.err("run_command", json!({"command": "vector.edit.begin", "params": {"id": id}}));
+    assert!(e.contains("vector.edit.begin"), "{e}");
 }
 
 #[test]

@@ -1,6 +1,6 @@
 use super::{
-    Affine, BTreeMap, Document, EngineError, ImageData, Node, NodeId, NodeKind, Result, Session, Value, bad, delete, get, id, json, num, ok,
-    req_targets, roots, targets, vector_clipboard, z_sorted,
+    Affine, BTreeMap, Document, EngineError, ImageData, Node, NodeId, NodeKind, Result, Session, Value, bad, delete, id, json, num, ok, req_targets,
+    roots, targets, z_sorted,
 };
 
 /// The copied form of the selection.
@@ -66,34 +66,13 @@ pub(super) fn collect_images(doc: &Document, nodes: &[Node], images: &mut BTreeM
     }
 }
 
-/// Whether the command names its layers (`ids` / `id`): it then acts on them even in vector edit mode.
-fn names_layers(p: &Value) -> bool {
-    get(p, "ids").is_some() || get(p, "id").is_some()
-}
-
 pub(super) fn copy(s: &mut Session, p: &Value) -> Result<Value> {
-    // In vector edit mode with points or segments selected, Copy takes just those (#1875).
-    if !names_layers(p)
-        && let Some(sel) = vector_clipboard::edit_selection(s)
-        && sel.any
-    {
-        // Only lone points selected: nothing to copy, and not the whole layer either.
-        return vector_clipboard::copy_selection(s, "edit.copy", sel);
-    }
     let ids = req_targets("edit.copy", s, p)?;
     copy_to_clipboard(s, "edit.copy", &ids)?;
     Ok(json!({"copied": s.clipboard.nodes.len()}))
 }
 
 pub(super) fn cut(s: &mut Session, p: &Value) -> Result<Value> {
-    // In vector edit mode with points or segments selected, Cut takes just those and stays in edit mode (#1875).
-    if !names_layers(p)
-        && let Some(sel) = vector_clipboard::edit_selection(s)
-        && sel.any
-    {
-        // Lone points with nothing to copy: `cut_selection` refuses, as Copy does.
-        return vector_clipboard::cut_selection(s, sel);
-    }
     let ids = req_targets("edit.cut", s, p)?;
     copy_to_clipboard(s, "edit.cut", &ids)?;
     let doc = s.doc()?;
@@ -166,10 +145,6 @@ fn unlink_left_behind<'a>(doc: &mut Document, copied: impl Iterator<Item = &'a N
 }
 
 pub(super) fn paste(s: &mut Session, p: &Value) -> Result<Value> {
-    // While editing a vector, the copied layers join its network (#1875); `parent` asks for layers.
-    if id(p, "parent").is_none() && s.ds()?.vector_edit.is_some() {
-        return vector_clipboard::paste_into_vector(s, p);
-    }
     let page = s.page()?;
     // Figma pastes into the selected frame (if one is selected), at the same position when it fits,
     // else in the frame's centre; otherwise in place on the page (or the viewport centre).
@@ -286,9 +261,9 @@ pub(super) fn copy_props_of(doc: &Document, id: NodeId) -> Value {
         "widthProfile": super::super::props::width_points_json(n.stroke.width_profile.as_ref()), "brush": n.stroke.brush,
         "effects": n.effects, "opacity": n.opacity, "blend": n.blend,
     });
-    // A vector rounds each anchor on its own (`vector.edit.cornerRadius` keeps the radii in the
-    // network's vertices, its layer corners stay empty): there is no style radius to carry, and
-    // pasting the empty one would flatten every anchor's radius.
+    // A vector rounds each anchor on its own (the radii are kept in the network's vertices, its
+    // layer corners stay empty): there is no style radius to carry, and pasting the empty one
+    // would flatten every anchor's radius.
     if !matches!(n.kind, NodeKind::Vector { .. }) {
         v["cornerRadius"] = json!(n.corners.radii);
         v["cornerSmoothing"] = json!(n.corners.smoothing);

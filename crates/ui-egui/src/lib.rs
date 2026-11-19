@@ -55,8 +55,6 @@ mod async_dialog_tests;
 #[cfg(test)]
 mod blend_preview_tests;
 #[cfg(test)]
-mod bool_menu_icon_tests;
-#[cfg(test)]
 mod branch_ui_tests;
 #[cfg(test)]
 mod canvas_double_click_tests;
@@ -84,6 +82,8 @@ mod corner_individual_tests;
 mod crop_image_tests;
 #[cfg(test)]
 mod cursors_tests;
+#[cfg(test)]
+mod cut_event_tests;
 #[cfg(test)]
 mod dash_pattern_tests;
 #[cfg(test)]
@@ -196,8 +196,6 @@ mod panels;
 #[cfg(test)]
 mod paste_image_tests;
 #[cfg(test)]
-mod pen_mode_tests;
-#[cfg(test)]
 mod perf_tests;
 #[cfg(test)]
 mod popover_tests;
@@ -208,8 +206,6 @@ mod property_menu_tests;
 mod property_rows;
 #[cfg(test)]
 mod property_rows_tests;
-#[cfg(test)]
-mod region_fill_rows_tests;
 #[cfg(test)]
 mod resources_tests;
 #[cfg(test)]
@@ -233,6 +229,8 @@ mod style_props_tests;
 #[cfg(test)]
 mod table_paste_tests;
 #[cfg(test)]
+mod test_booleans;
+#[cfg(test)]
 mod test_variables;
 #[cfg(test)]
 mod text_enter_tests;
@@ -248,16 +246,6 @@ mod titlebar_tests;
 mod ui_params_tests;
 #[cfg(test)]
 mod ui_scale_tests;
-#[cfg(test)]
-mod vector_align_tests;
-#[cfg(test)]
-mod vector_keys_tests;
-#[cfg(test)]
-mod vector_panel_tests;
-#[cfg(test)]
-mod vector_point_radius_tests;
-#[cfg(test)]
-mod vector_point_xy_tests;
 #[cfg(test)]
 mod vector_tail_ui_tests;
 #[cfg(test)]
@@ -306,7 +294,6 @@ pub use panels::selection_colors;
 pub use panels::shortcuts_panel;
 pub use panels::thumbnails;
 pub use panels::typography;
-pub use panels::vector_panel;
 pub use panels::versions;
 use widgets::board_picker;
 pub use widgets::colorpicker;

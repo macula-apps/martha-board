@@ -2,7 +2,6 @@ use serde_json::json;
 
 use super::*;
 use crate::test_variables as tv;
-use figcraft_doc::NodeKind;
 
 fn sess() -> Session {
     Session::new()
@@ -309,19 +308,6 @@ fn paste_over_puts_the_copies_just_above_the_selected_layer() {
 }
 
 #[test]
-fn boolean_and_flatten() {
-    let mut s = sess();
-    let a = id(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 20, "height": 20})).unwrap());
-    let b = id(&s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap());
-    let g = id(&s.execute("bool.union", &json!({"ids": [a, b]})).unwrap());
-    assert_eq!(s.doc().unwrap().node(g).unwrap().kind.type_name(), "BOOLEAN_OPERATION");
-    let v = id(&s.execute("vector.flatten", &json!({"ids": [g]})).unwrap());
-    let n = s.doc().unwrap().node(v).unwrap().clone();
-    assert_eq!(n.kind.type_name(), "VECTOR");
-    assert_eq!((n.width, n.height), (30.0, 30.0));
-}
-
-#[test]
 fn pointer_draw_move_resize() {
     let mut s = sess();
     s.set_tool(ToolId::Rectangle);
@@ -493,41 +479,6 @@ fn export_frames_to_pdf() {
     let empty = s.doc().unwrap().pages.last().copied().unwrap();
     assert!(s.execute("file.exportFramesPdf", &json!({"page": empty})).is_err());
     assert!(s.execute("file.exportFramesPdf", &json!({"page": a})).is_err());
-}
-
-#[test]
-fn vector_edit_mode() {
-    let mut s = sess();
-    let r = id(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 100})).unwrap());
-    s.execute("vector.edit.begin", &json!({"id": r})).unwrap();
-    assert_eq!(s.doc().unwrap().node(r).unwrap().kind.type_name(), "VECTOR");
-    // Move one corner out: the box grows.
-    s.execute("vector.edit.select", &json!({"vertices": [2]})).unwrap();
-    s.execute("vector.edit.moveVertices", &json!({"dx": 50, "dy": 50})).unwrap();
-    let b = s.doc().unwrap().world_bounds(r).unwrap();
-    assert_eq!((b.width(), b.height()), (150.0, 150.0));
-    // Add a point on segment 0 and delete-heal it.
-    let v = s.execute("vector.edit.addVertex", &json!({"segment": 0, "t": 0.5})).unwrap();
-    assert!(v["vertex"].as_u64().is_some());
-    let n0 = match &s.doc().unwrap().node(r).unwrap().kind {
-        NodeKind::Vector { network } => network.vertices.len(),
-        _ => 0,
-    };
-    s.execute("vector.deleteHeal", &json!({})).unwrap();
-    let n1 = match &s.doc().unwrap().node(r).unwrap().kind {
-        NodeKind::Vector { network } => (network.vertices.len(), network.regions.len()),
-        _ => (0, 0),
-    };
-    assert_eq!(n1, (n0 - 1, 1), "healed and still closed");
-    // Pointer: drag a vertex in edit mode.
-    let before = s.doc().unwrap().world_bounds(r).unwrap();
-    s.pointer(&PointerEvent::at(PointerKind::Down, 0.0, 0.0, 1.0)).unwrap();
-    s.pointer(&PointerEvent::at(PointerKind::Move, -20.0, 0.0, 1.0)).unwrap();
-    s.pointer(&PointerEvent::at(PointerKind::Up, -20.0, 0.0, 1.0)).unwrap();
-    let after = s.doc().unwrap().world_bounds(r).unwrap();
-    assert_eq!(after.x0, before.x0 - 20.0);
-    s.execute("vector.edit.end", &json!({})).unwrap();
-    assert!(s.ds().unwrap().vector_edit.is_none());
 }
 
 #[test]

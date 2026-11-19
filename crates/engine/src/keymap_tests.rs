@@ -113,7 +113,7 @@ fn lookups_on_every_platform() {
         assert_eq!(id_for(p, Context::Canvas, "A", mods(false, true, false, false)), Some("align.left"));
         assert_eq!(id_for(p, Context::Canvas, "Slash", mods(false, true, false, false)), Some("object.removeFill"));
         assert_eq!(id_for(p, Context::Canvas, "Questionmark", shift), Some("object.removeStroke"));
-        assert_eq!(id_for(p, Context::Canvas, "U", mods(true, true, false, false)), Some("bool.union"));
+        assert_eq!(id_for(p, Context::Canvas, "U", mods(true, true, false, false)), None, "Union left with the boolean commands (#32)");
         assert_eq!(id_for(p, Context::Canvas, "V", none), Some("tool.move"));
         // Cmd+K opens Actions on the canvas and makes a link while editing text.
         assert_eq!(id_for(p, Context::Canvas, "K", mods(false, false, true, false)), Some("app.actions"));
@@ -272,17 +272,6 @@ fn panel_toggles_request_the_ui() {
     s.ui_requests.clear();
     ex(&mut s, "view.leftSidebar", json!({}));
     assert!(s.ui_requests.iter().any(|r| r.kind == "panel.leftSidebar"));
-}
-
-#[test]
-fn vector_edit_paint_bucket_is_b() {
-    use crate::vectoredit::VTool;
-    let mut s = Session::new();
-    let r = rect(&mut s, 0.0, 0.0);
-    ex(&mut s, "vector.edit.begin", json!({"id": r}));
-    assert!(crate::vectoredit::key(&mut s, "B", false, false, false).unwrap());
-    assert_eq!(s.ds().unwrap().vector_edit.as_ref().unwrap().tool, VTool::Paint);
-    assert_eq!(VTool::Paint.shortcut(), "Shift+B");
 }
 
 #[test]

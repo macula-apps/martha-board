@@ -5,8 +5,8 @@ use std::sync::Arc;
 use egui::{Align2, Color32, CornerRadius, Id, Pos2, Rect, Sense, Stroke, Ui, pos2, vec2};
 use figcraft_color::{BlendMode, Paint, PaintKind};
 use figcraft_doc::{
-    Blur, BlurType, BoolOp, Brush, Document, Effect, EffectKind, Glass, GridAlign, GridKind, LayoutGrid, MAX_BLUR_RADIUS, MaskType, Node, NodeId,
-    NodeKind, Noise, NoiseMode, Shadow, StrokeAlign, StrokeCap, StrokeJoin, StrokeProps, Texture, WidthPoint, WidthPreset, WidthProfile,
+    Blur, BlurType, Brush, Document, Effect, EffectKind, Glass, GridAlign, GridKind, LayoutGrid, MAX_BLUR_RADIUS, MaskType, Node, NodeId, NodeKind,
+    Noise, NoiseMode, Shadow, StrokeAlign, StrokeCap, StrokeJoin, StrokeProps, Texture, WidthPoint, WidthPreset, WidthProfile,
 };
 use figcraft_engine::cmd::lists::{moved_index, removed_index};
 use serde_json::{Value, json};
@@ -31,10 +31,10 @@ use effects::{effects, grids};
 pub(crate) use menu::menu_row_width;
 #[cfg(test)]
 pub(crate) use menu::preview_blend;
-pub use menu::{blend_menu, context_popup, menu_check, menu_icon_item, menu_item, menu_item_beside_checks, menu_item_with, menu_popup, menu_row};
+pub use menu::{blend_menu, context_popup, menu_check, menu_item, menu_item_beside_checks, menu_item_with, menu_popup, menu_row};
 pub(crate) use menu::{block, menu_style, row};
 use paints::{appearance, paints};
-pub(crate) use stroke::{CAP_ART_W, cap_art, join_label};
+pub(crate) use stroke::{CAP_ART_W, cap_art};
 
 /// Common value of `f` across `ids` (None when mixed or empty).
 pub(crate) fn common<T: PartialEq + Clone>(doc: &Document, ids: &[NodeId], f: impl Fn(&Node) -> T) -> Option<T> {
@@ -219,7 +219,6 @@ fn design(app: &mut FigApp, ui: &mut Ui) {
     // is: they show the document it started from, so what they keep stays kept (#1571).
     let shown = crate::selection_cache::moved(ds).filter(|_| ds.text_preview.is_none()).map_or_else(|| doc.clone(), |(b, _)| b);
     let sel = ds.selection.clone();
-    let vector_edit = ds.vector_edit.clone();
     if sel.is_empty() {
         if app.session.tool.tool == figcraft_engine::ToolId::Scale {
             crate::scale_panel::note_no_selection(ui);
@@ -230,27 +229,16 @@ fn design(app: &mut FigApp, ui: &mut Ui) {
     crate::selection_cache::show(&shown, &sel);
     header(app, ui, &shown, &sel);
     widgets::separator(ui);
-    // Editing a vector with points selected, the points' fields stand in for the layer's position
-    // and dimensions.
-    let points_selected = vector_edit.as_ref().is_some_and(|ve| !ve.vertices.is_empty() || !ve.segments.is_empty());
-    let vector_edit_none = vector_edit.is_none();
-    match vector_edit {
-        Some(ve) => crate::vector_panel::points(app, ui, &shown, &ve),
-        None => {
-            crate::section_panel::section(app, ui, &shown, &sel);
-            if app.session.tool.tool == figcraft_engine::ToolId::Scale {
-                crate::scale_panel::section(app, ui, &shown, &sel);
-                widgets::separator(ui);
-            }
-            position(app, ui, &doc, &sel);
-        }
-    }
-    widgets::separator(ui);
-    if !points_selected {
-        crate::layout_panel::layout_section(app, ui, &shown, &sel);
+    crate::section_panel::section(app, ui, &shown, &sel);
+    if app.session.tool.tool == figcraft_engine::ToolId::Scale {
+        crate::scale_panel::section(app, ui, &shown, &sel);
         widgets::separator(ui);
     }
-    if vector_edit_none && arc_section(app, ui, &shown, &sel) || points_section(app, ui, &shown, &sel) {
+    position(app, ui, &doc, &sel);
+    widgets::separator(ui);
+    crate::layout_panel::layout_section(app, ui, &shown, &sel);
+    widgets::separator(ui);
+    if arc_section(app, ui, &shown, &sel) || points_section(app, ui, &shown, &sel) {
         widgets::separator(ui);
     }
     appearance(app, ui, &shown, &sel);
@@ -426,53 +414,16 @@ fn header(app: &mut FigApp, ui: &mut Ui, doc: &Document, sel: &[NodeId]) {
             });
         });
     }
-    // Quick actions on the right.
-    let mut x = r.max.x - 8.0;
-    let actions = [(Icon::Mask, tr("Use as mask"), "object.mask"), (Icon::Union, tr("Boolean groups"), "bool.union")];
-    // Layers in boolean groups, or one boolean group: the operation they use (checked in the menu).
-    let current = figcraft_engine::booleans::shown_op(doc, sel);
-    for (icon, label, cmd) in actions.into_iter().rev() {
-        let bw = 24.0;
-        let br = Rect::from_min_size(pos2(x - bw, r.center().y - 12.0), vec2(bw, 24.0));
-        let tip = if cmd == "bool.union" { label } else { crate::shortcuts::tip(label, cmd) };
-        let bresp = ui.interact(br, ui.scope_id().with(("qa", cmd)), Sense::click()).tip(tip);
-        if bresp.hovered() {
-            ui.painter().rect_filled(br, CornerRadius::same(5), t.hover);
-        }
-        // The boolean button shows the operation in use.
-        let icon = match (cmd, current) {
-            ("bool.union", Some(op)) => crate::layers::op_icon(op),
-            _ => icon,
-        };
-        icons::paint(ui.painter(), crate::widgets::icon_glyph_rect(br), icon, t.icon);
-        if cmd == "bool.union" {
-            menu_popup(&bresp).width(180.0).show(|ui| {
-                for (op, c) in [
-                    (BoolOp::Union, "bool.union"),
-                    (BoolOp::Subtract, "bool.subtract"),
-                    (BoolOp::Intersect, "bool.intersect"),
-                    (BoolOp::Exclude, "bool.exclude"),
-                ] {
-                    // Each entry leads with its operation's icon (the result it previews).
-                    let key = crate::shortcuts::shortcut(c).unwrap_or("");
-                    let icon = crate::layers::op_icon(op);
-                    let picked = menu_icon_item(ui, Some(icon), current.map(|cur| cur == op), tr(op.label()), key);
-                    if picked {
-                        app.run(c, json!({}));
-                        ui.close();
-                    }
-                }
-                let key = crate::shortcuts::shortcut("vector.flatten").unwrap_or("");
-                let flatten = menu_icon_item(ui, None, None, tr("Flatten"), key);
-                if flatten {
-                    app.run("vector.flatten", json!({}));
-                    ui.close();
-                }
-            });
-        } else if bresp.clicked() {
-            app.run(cmd, json!({}));
-        }
-        x -= bw + 2.0;
+    // The quick action on the right: Use as mask.
+    let (bw, cmd) = (24.0, "object.mask");
+    let br = Rect::from_min_size(pos2(r.max.x - 8.0 - bw, r.center().y - 12.0), vec2(bw, 24.0));
+    let bresp = ui.interact(br, ui.scope_id().with(("qa", cmd)), Sense::click()).tip(crate::shortcuts::tip(tr("Use as mask"), cmd));
+    if bresp.hovered() {
+        ui.painter().rect_filled(br, CornerRadius::same(5), t.hover);
+    }
+    icons::paint(ui.painter(), crate::widgets::icon_glyph_rect(br), Icon::Mask, t.icon);
+    if bresp.clicked() {
+        app.run(cmd, json!({}));
     }
 }
 
@@ -545,7 +496,7 @@ pub(crate) fn tidy_available(ctx: &egui::Context, doc: &Arc<Document>, sel: &[No
 fn position_fields(app: &mut FigApp, ui: &mut Ui, doc: &Arc<Document>, sel: &[NodeId]) {
     let pv = position_values(ui.ctx(), doc, sel);
     let col = widgets::col_width(ui.available_width());
-    align_row(app, ui, AlignTarget::Layers(sel), pv.can_align, pv.align_blocked, col);
+    align_row(app, ui, sel, pv.can_align, pv.align_blocked, col);
     position_row(app, ui, doc, sel, &pv, col);
     rotation_row(app, ui, doc, sel, pv.rot, col);
     if pv.in_frame {
@@ -553,24 +504,10 @@ fn position_fields(app: &mut FigApp, ui: &mut Ui, doc: &Arc<Document>, sel: &[No
     }
 }
 
-/// What the alignment row acts on.
-#[derive(Clone, Copy)]
-pub enum AlignTarget<'a> {
-    /// These layers (distribution and tidy up from three).
-    Layers(&'a [NodeId]),
-    /// The selected points in vector edit mode, this many of them (distribution from three, no
-    /// tidy up).
-    Points(usize),
-}
-
-/// Alignment, and distribution and tidy up for three or more layers (or the selected points).
-pub fn align_row(app: &mut FigApp, ui: &mut Ui, target: AlignTarget, can_align: bool, blocked: bool, col: f32) {
-    let (ids, count, points) = match target {
-        AlignTarget::Layers(sel) => (sel.to_vec(), sel.len(), false),
-        AlignTarget::Points(n) => (vec![], n, true),
-    };
-    // Points take the commands with no ids: they act on the selected points.
-    let params = || if points { json!({}) } else { json!({"ids": ids}) };
+/// Alignment, and distribution and tidy up for three or more layers.
+pub fn align_row(app: &mut FigApp, ui: &mut Ui, sel: &[NodeId], can_align: bool, blocked: bool, col: f32) {
+    let ids = sel.to_vec();
+    let params = || json!({"ids": ids});
     widgets::sublabels(ui, tr("Alignment"), None);
     row(ui, 32.0, |ui| {
         let cmds = ["align.left", "align.hcenter", "align.right", "align.top", "align.vcenter", "align.bottom"];
@@ -598,17 +535,17 @@ pub fn align_row(app: &mut FigApp, ui: &mut Ui, target: AlignTarget, can_align: 
         if let Some(i) = picked.inner {
             app.run(cmds[i], params());
         }
-        if count > 2 {
+        if ids.len() > 2 {
             let more = icons::button(ui, Icon::DistributeH, 24.0, false, tr("Distribute and tidy"));
             menu_popup(&more).show(|ui| {
-                let can_tidy = !points && app.session.ds().is_ok_and(|ds| tidy_available(ui.ctx(), &ds.doc, &ids));
+                let can_tidy = app.session.ds().is_ok_and(|ds| tidy_available(ui.ctx(), &ds.doc, &ids));
                 let tidy = (tr("Tidy up"), "arrange.tidy", can_tidy);
                 let entries = [
                     (tr("Distribute horizontal spacing"), "distribute.horizontal", true),
                     (tr("Distribute vertical spacing"), "distribute.vertical", true),
+                    tidy,
                 ];
-                // Points have no tidy up.
-                for (l, c, on) in entries.into_iter().chain((!points).then_some(tidy)) {
+                for (l, c, on) in entries {
                     let item = ui.add_enabled_ui(on, |ui| menu_item(ui, l, crate::shortcuts::shortcut(c).unwrap_or("")));
                     if !on {
                         item.response

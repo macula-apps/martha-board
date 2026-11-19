@@ -542,7 +542,7 @@ pub fn specs() -> Vec<CommandSpec> {
         spec!(
             "tool.set",
             "Choose tool",
-            "{tool: move|scale|hand|frame|section|slice|rectangle|line|arrow|ellipse|polygon|star|pen|pencil|text|comment|shapeBuilder | on boards: sticky|shape|connector|marker|highlighter|eraser|stamp}",
+            "{tool: move|scale|hand|frame|section|slice|rectangle|line|arrow|ellipse|polygon|star|text|comment | on boards: sticky|shape|connector|marker|highlighter|eraser|stamp}",
             false,
             |s, p| {
                 let t = req_string("tool.set", p, "tool")?;
@@ -605,20 +605,6 @@ pub fn specs() -> Vec<CommandSpec> {
             }
         ),
         spec!(
-            "tool.pencilBrush",
-            "Pencil brush",
-            "{preset? (taper|ink|ribbon|bristle|dots|stars|confetti|leaves | null: plain), spacing?, sizeJitter?, rotationJitter?, scatter?, seed?} (the brush new Pencil strokes get; omit `preset` to read it)",
-            false,
-            |s, p| {
-                // `null` (unlike a missing preset) clears the brush.
-                if let Some(v) = p.get("preset") {
-                    let v = if v.is_null() { Value::Null } else { p.clone() };
-                    s.tool.pencil_brush = super::props::brush_of(&v).ok_or_else(|| bad("tool.pencilBrush", super::props::BRUSH_HELP))?;
-                }
-                Ok(json!({"brush": s.tool.pencil_brush}))
-            }
-        ),
-        spec!(
             "tool.scaleAnchor",
             "Scale anchor",
             "{anchor?: tl|t|tr|l|c|r|bl|b|br} (the origin of the Scale tool's factor field: the point of the selection that stays put; defaults to c, handle drags pivot on the opposite handle whatever it is; omit to read it)",
@@ -645,8 +631,6 @@ pub fn specs() -> Vec<CommandSpec> {
         spec!("tool.ellipse", "Ellipse", "{}", false, |s, _| tool(s, ToolId::Ellipse)),
         spec!("tool.polygon", "Polygon", "{}", false, |s, _| tool(s, ToolId::Polygon)),
         spec!("tool.star", "Star", "{}", false, |s, _| tool(s, ToolId::Star)),
-        spec!("tool.pen", "Pen", "{}", false, |s, _| tool(s, ToolId::Pen)),
-        spec!("tool.pencil", "Pencil", "{}", false, |s, _| tool(s, ToolId::Pencil)),
         spec!("tool.text", "Text", "{}", false, |s, _| tool(s, ToolId::Text)),
         spec!("tool.textOnPath", "Text on a path", "{}  a click on a shape's or vector's path puts new text on it", false, |s, _| {
             tool(s, ToolId::TextOnPath)
@@ -654,7 +638,6 @@ pub fn specs() -> Vec<CommandSpec> {
         spec!("tool.comment", "Comment", "{}", false, |s, _| tool(s, ToolId::Comment)),
         // Shift+T: with a layer selected (or an `id`) the UI is asked for its note at once; in the
         // tool, a press on a layer selects it and asks (the engine never writes the note).
-        spec!("tool.shapeBuilder", "Shape builder", "{}", false, |s, _| tool(s, ToolId::ShapeBuilder)),
         // `apply: false` is for the UI colour picker: the eyedropper only samples (into
         // `ToolState::picked`) and the picker writes the colour to the paint it edits.
         spec!("edit.pickColor", "Pick color", "{apply?}", false, |s, p| {

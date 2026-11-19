@@ -271,9 +271,8 @@ pub fn input(app: &mut FigApp, ctx: &egui::Context, pos: Pos2) -> bool {
     if pos.x < r.min.x + RULER || pos.y < r.min.y + RULER {
         return true;
     }
-    // Existing guides move with the Move tool (not while editing text or a vector).
-    let idle =
-        app.session.tool.tool == figcraft_engine::ToolId::Move && app.session.ds().is_ok_and(|d| d.text_edit.is_none() && d.vector_edit.is_none());
+    // Existing guides move with the Move tool (not while editing text).
+    let idle = app.session.tool.tool == figcraft_engine::ToolId::Move && app.session.ds().is_ok_and(|d| d.text_edit.is_none());
     if idle && let Some(g) = guide_at(app, pos) {
         ctx.set_cursor_icon(cursor_across(app, &g, r));
         let page = app.session.ds().map(|d| d.page).ok();

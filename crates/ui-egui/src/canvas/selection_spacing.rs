@@ -185,7 +185,7 @@ fn available(app: &FigApp) -> bool {
     app.ui.picker.is_none()
         && app.session.tool.tool == figcraft_engine::ToolId::Move
         && !app.session.tool.busy()
-        && app.session.ds().is_ok_and(|d| d.text_edit.is_none() && d.vector_edit.is_none())
+        && app.session.ds().is_ok_and(|d| d.text_edit.is_none())
 }
 
 pub fn cancel(app: &mut FigApp, ctx: &egui::Context) -> bool {

@@ -31,9 +31,7 @@ fn preference_actions_open_preferences_without_changing_values() {
 #[test]
 fn menu_entries_collect_required_arguments_before_running() {
     let mut ui = Ui::new(Session::new());
-    for (id, expected) in
-        [("text.link", MenuInput::Link(String::new())), ("vector.offset", MenuInput::Offset(0.0)), ("object.moveToPage", MenuInput::MoveToPage)]
-    {
+    for (id, expected) in [("text.link", MenuInput::Link(String::new())), ("object.moveToPage", MenuInput::MoveToPage)] {
         ui.app.ui.menu_input = None;
         menus::invoke(&mut ui.app, id);
         assert_eq!(ui.app.ui.menu_input, Some(expected), "{id}");

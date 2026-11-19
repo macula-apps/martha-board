@@ -88,7 +88,7 @@ fn scene() -> (Session, NodeId) {
     s.execute("object.mask", &json!({"ids": [m, mr]})).unwrap();
     let b1 = shape(&mut s, "shape.rectangle", None, [20.0, 260.0, 50.0, 40.0], "#6060C0");
     let b2 = shape(&mut s, "shape.ellipse", None, [45.0, 270.0, 50.0, 40.0], "#6060C0");
-    s.execute("bool.union", &json!({"ids": [b1, b2]})).unwrap();
+    crate::test_helpers::bool_group(&mut s, &[b1, b2], figcraft_doc::BoolOp::Union);
     let al = id(s.execute("frame.create", &json!({"x": 130, "y": 250, "width": 220, "height": 70, "props": {"fill": "#FFE0B0"}})).unwrap());
     s.execute("node.set", &json!({"id": al, "layout": "horizontal", "gap": 8, "padding": 10})).unwrap();
     for c in ["#E03030", "#3070E0", "#A040C0"] {

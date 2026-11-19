@@ -387,7 +387,7 @@ a later step can use `{"$step": 0, "field": "ids/0"}` to target the first match.
 | `screenshot {ids?, scale?, maxSize?, window?}` | PNG of the page (with background) or of layers, scaled to fit `maxSize` (default 1600). `window: true` captures the app window in front when attached, a window id (see Windows below) that window. |
 | `open_file {path, reload?}` / `save_file {path?}` | Open `.figcraft`, `.json` (FigCraft JSON), `.svg` (see Importing SVG below) or an image; save as `.figcraft`. `open_file` returns `opened` (for a file opened anew, a `summary` of `name`, `pages`, `layers` and `images`, and `warnings` or `repairs`; a file that was already open gives its `index`, with `stale: true` when the file changed on disk since that tab read or saved it; `reload: true` reads it again into the tab, refused while the tab has unsaved changes) and the document's `document` outline. |
 | `undo` / `redo` | Step through history. |
-| `pointer {kind, x, y, to?, steps?, tool?, shift, alt, cmd, pressure?, pressureTo?}` | Mouse gestures in page coordinates with the current tool: `click`, `double`, `drag`, `down`, `move`, `up`, `hover`. A dragged layer drops into the frame or auto layout slot under the pointer, except one inside a group or a boolean group, which only moves. `pressure` (0–1) is pen pressure; a drag goes from `pressure` to `pressureTo` (see Brushes and pen pressure). |
+| `pointer {kind, x, y, to?, steps?, tool?, shift, alt, cmd}` | Mouse gestures in page coordinates with the current tool: `click`, `double`, `drag`, `down`, `move`, `up`, `hover`. A dragged layer drops into the frame or auto layout slot under the pointer, except one inside a group or a boolean group, which only moves. |
 | `key {key, shift, alt, cmd}` | A shortcut or key as if typed on the canvas (every default shortcut, tool keys, Escape, Delete, arrows, number keys for opacity, arrows that pan the view when nothing is selected; while editing text, the text shortcuts and then text editing keys). Keys are names like `A`, `0`, `Enter`, `ArrowLeft`, `=`, `/`, or egui's (`Plus`, `Questionmark`); `cmd` is Cmd on macOS and Ctrl elsewhere. |
 | `type_text {text, id?}` | Type into the text being edited, or replace the contents of text layer `id`. |
 | `inspect_ui {}` | Tool, view and status (and panels, timings and the app's `windows` when attached). |
@@ -677,84 +677,31 @@ on; `key` resolves keys the way the canvas does. Commands behind keys:
   the OS or browser language). The UI ships in English only (#34), so every other language shows
   English. Command ids, labels and every result stay English.
 
-### Editing vectors
+### Vector layers
 
-`vector.create {path | points}` makes the layer's box from the geometry; `width`/`height` scale
-the geometry to the size asked for (with both, each side independently; with one, the other keeps
-its proportion). A path or point set that draws nothing is refused instead of making an invisible
-0×0 layer, as is a size on an axis the geometry has none of (except 0, such as a horizontal line's
-height) and a size of 0 or less on an axis it has, which would flatten it.
+Vector editing left MarthaBoard (#32): there are no `vector.*`, `bool.*` or `shapeBuilder.*`
+commands, no vector edit mode and no Pen, Pencil or Shape builder tool. Vector and boolean layers a
+file holds still open, draw, select, move, resize, rotate, recolour, export and save, and
+`node.create {type: "vector", path | points}` still makes one.
+
+`node.create {type: "vector", path | points}` makes the layer's box from the geometry; `width`/`height`
+scale the geometry to the size asked for (with both, each side independently; with one, the other
+keeps its proportion). A path or point set that draws nothing is refused instead of making an
+invisible 0×0 layer, as is a size on an axis the geometry has none of (except 0, such as a
+horizontal line's height) and a size of 0 or less on an axis it has, which would flatten it.
 
 `node.set {path}` (or `set_properties`) replaces a vector's geometry with new SVG path data and
 keeps the layer: its id, name, place in the layer list, paints, effects, styles, variable bindings
-and constraints. The path is read as `vector.create` reads it, and `width`/`height` in the same call
+and constraints. The path is read as `node.create` reads it, and `width`/`height` in the same call
 scale it the same way. The path's own box goes at the layer's current x/y (rotation and flips
 stay); with `x`/`y` in the same call it goes at `x` + its left edge and `y` + its top, as
-`vector.create` places it. Points' own settings (per-point corner radius, caps, joins) go with the
+`node.create` places it. Points' own settings (per-point corner radius, caps, joins) go with the
 old geometry. On several layers, layers that aren't vectors are skipped with a warning; on a
-single one, or when none is a vector, the call is refused (convert shapes with
-`vector.edit.begin` or Flatten first). Undo brings the old path back.
-
-Vector edit mode is driven with `run_command` (or `pointer`/`key` for gestures):
-`vector.edit.begin {id? | ids?}` (default the selection; converts shapes to vectors; several layers
-are edited at once, the first active; `key` Enter with shapes selected does the same),
-`vector.edit.state` (page-space overlay of the active layer, its local network, each point's handle
-mirroring, the width points, `layers` (every edited layer, the active first), `others` (the other
-layers' selected points and segments) and `handles` (the selected Bezier handles as
-`[segment, start]`)), `vector.edit.tool {tool: move|pen|bend|paint|lasso|cut|eraser|width}`,
-`vector.edit.select {vertices?, segments?, handles?: [[segment, start], ...], id? (an edited layer,
-made active), add?}`, `vector.edit.selectAll` (every edited layer's points), `vector.edit.moveVertices`,
-`vector.edit.nudge`, `vector.edit.position {x?, y?}`, `vector.edit.setHandle`, `vector.edit.mirroring
-{mode: none|angle|angleAndLength}`, `vector.edit.smooth {smooth?}`, `vector.edit.bend`,
-`vector.edit.addVertex`, `vector.edit.connect {a, b}`, `vector.edit.pen {x, y, dx?, dy?}` (continues
-from the pen's open end; clicking a point connects or branches), `vector.edit.penEnd`,
-`vector.edit.paint {x, y} | {points}` (paint bucket: fills or unfills the closed area under a page
-point; with `points`, the areas under the rest go the way the first went, like a drag), `fill.set`,
-`fill.add`, `fill.remove`, `fill.move` and `fill.paste` on the edited layer while regions are
-selected (`vector.edit.select {regions}`), which edit those regions' own fills and leave the
-layer's (`regions: [index, ...]` names them on any vector layer; `fill.copy` copies the selected
-regions' paint),
-`vector.edit.cut {segment, t} | {vertex} | {from: [x, y], to: [x, y]}` (the last cuts every path the
-page line crosses; parts that come apart move to layers of their own above, listed in `layers`),
-`vector.edit.erase {points, radius?}` (the eraser),
-`vector.edit.lasso {points}`, `vector.edit.delete`,
-`vector.deleteHeal`, `vector.join` / `vector.smoothJoin` (join the selected points while editing),
-`vector.edit.cornerRadius` (rounds the selected sharp points, next to straight or curved segments: a
-curve is cut where the arc meets it and keeps the rest of its shape; drawn and exported;
-`node.set {cornerRadius}` on a vector rounds every point, and on a boolean group every sharp corner of its result, while its layers keep their own radius), `vector.edit.strokeCap {cap, vertices?}`
-and `vector.edit.strokeJoin {join, vertices?}` (the stroke's cap where it ends at these points and
-its join where it turns there, `null` for the layer's; drawn, exported and outlined),
-`vector.edit.moveHandles {dx, dy, handles?}` (moves the selected handles by a page offset),
-`vector.edit.end`. Point indices refer to `network.vertices` in `vector.edit.state`; local
-coordinates are the layer's own.
-
-Several layers at once: with more than one layer in edit mode, a press on another layer's point,
-handle or segment makes it the active layer; Shift-click and marquee or lasso select points in any of
-them; dragging a selected point, the arrows, Delete, `vector.edit.nudge`, `vector.edit.moveVertices`,
-`vector.edit.delete`, `vector.deleteHeal`, `vector.edit.mirroring`, `vector.edit.smooth`,
-`vector.edit.cornerRadius`, `vector.edit.strokeCap` and `vector.edit.strokeJoin` reach every layer's
-selected points in one undo step (a `vertices` list names points of the active layer only). The pen,
-bend, paint bucket, cut, eraser, join, position and the transform box work in the active layer; the
-box hides while points are selected in more than one layer. Shift-click Bezier handles to select
-several; dragging one drags them all.
-
-The Pen tool outside edit mode: clicking the path's first point closes it; clicking another of its
-own points (not the last) connects there and ends the path; with an open vector selected, a click on
-one of its end points continues that path in edit mode.
-`vector.deleteHeal` fits the healed curve through where the deleted point was, keeping the
-neighbours' tangents. With `pointer`, the Paint bucket and Cut tools also drag (across areas to
-paint, across paths to divide), one undo step each; `shift` on a selected point at a corner of the
-points' box takes it out of the selection on a click and scales in proportion on a drag.
-
-The selected points' transform box: `vector.edit.bounds` (`{x, y, width, height, corners,
-points}`: the box in the vector's axes, `x`/`y` in the parent's coordinates like the Position
-fields), `vector.edit.resize {width?, height?, center?}` (keeps the top-left unless `center`),
-`vector.edit.rotate {angle, cx?, cy?}` (degrees counter-clockwise about the box centre or a page
-pivot), `vector.edit.transform {matrix: [a, b, c, d, e, f], vertices?}` (any page-space affine).
-While points are selected, `object.flipH` / `object.flipV` and the 90°/180° rotations act on them.
-On the canvas (`pointer`), dragging points, handles and pen clicks snap to other points and segment
-midpoints (this vector's and other vectors'), the usual layer targets and the pixel grid; `cmd`
-held while dragging turns the object snapping off.
+single one, or when none is a vector, the call is refused. Undo brings the old path back.
+`node.set {cornerRadius}` on a vector rounds every point, and on a boolean group every sharp corner
+of its result, while its layers keep their own radius. `fill.set`, `fill.add`, `fill.remove`,
+`fill.move` and `fill.paste` with `regions: [index, ...]` edit those fill regions' own fills on one
+vector layer and leave the layer's.
 
 Dash caps: `node.set {dashCap}` takes `none`, `round` or `square` for both ends of every dash of a
 dashed stroke, and `null` clears it (dashes then take `startCap` and `endCap`, the default).
@@ -762,20 +709,12 @@ dashed stroke, and `null` clears it (dashes then take `startCap` and `endCap`, t
 Variable width strokes: `stroke.widthProfile {ids?, preset?: uniform|wedge|taper|eye|rounded|pinch,
 points?: [[t, scale], ...]}` (also `node.set {widthProfile}`; `t` runs 0–1 along each subpath by
 length, `scale` multiplies the stroke weight, widths in between are interpolated smoothly; no
-preset or points = uniform). While editing, the Variable width tool (`width`, ⇧W) drags width
-points: `vector.edit.widthPoint {t, width? (px) | scale?}` adds one, `{index, t?, width? | scale?}`
-moves or resizes it, `{action: "remove", index}` deletes it. Rendering, PNG/SVG/PDF export and
-`vector.outlineStroke` follow the profile.
+preset or points = uniform). Rendering and PNG/SVG/PDF export follow the profile.
 
 One-sided widths: a width point can be wider on one side of the path than the other (left and
 right looking along the path, y down). Points are `[t, left, right]` (or `{t, left, right}`) where
 each side's scale is what `scale` would be with both sides that wide, so `[t, s]` equals
-`[t, s, s]`; `get_node` reports one-sided points that way. `vector.edit.widthPoint {index, side:
-left|right, width? | scale?}` changes one side (`width`: the distance from the centre line to that
-edge; with `t` it adds a point keeping the other side as it is); a width without `side` makes the
-point symmetric again. With `pointer`, `alt: true` while dragging a handle (or the path) changes
-that side only; `vector.edit.state` lists `widthPoints` with both handle positions (`sides`:
-right, left) and `oneSided`.
+`[t, s, s]`; `get_node` reports one-sided points that way.
 
 ### Prototypes
 
@@ -786,42 +725,18 @@ opens and saves them unchanged, and `get_node` / `inspect_document` show them (`
 
 ### Boolean groups
 
-`bool.union` / `bool.subtract` / `bool.intersect` / `bool.exclude {ids?}` wrap layers in a new
-boolean group, except: with one boolean group selected they set its operation (every operand follows
-it again), and with layers inside boolean groups they set those operands' own operation. Each
-operand above the bottom one combines with the result of the operands below it by its own
-operation, or the group's (`node.set {operandOperation: union|subtract|intersect|exclude | null}`
-on any operand, or `booleanOperation` on an operand that isn't itself a boolean group; on a group
-`booleanOperation` is the group's). `get_node` shows `operandOperation` on operands that have one.
-Operands stay editable layers: `select.children` (Enter) or a double-click selects them, `cmd: true`
-clicks reach them directly, and moving, resizing or editing an operand's points (`vector.edit.*`)
-updates the group's result on every pointer move, one undo step per gesture; a dragged operand
-stays in its group. Clicks and `select.layersAt` hit a boolean group where its result is (a click in
-a subtracted hole reaches what's behind it); while the group or one of its operands is selected, its
-operands are hit instead, so each can be picked. `bool.flatten` bakes the result. Only the operands from the edited one up are
-recombined during a drag (`figcraft_render::boolean`; timed by `cargo xtask bench`).
-
-### Shape builder
-
-The selected shapes' outlines split the canvas into regions (areas covered by the same shapes).
-`shapeBuilder.regions {ids?}` lists them: an SVG `path` in page coordinates, the `sources` covering
-each one (top-most first), the `parts` covering it (`{id, stroke}`: a shape's fill, or its stroke's
-outlined area; top-most first), `bounds` and a `point` inside. Visible strokes take part as their
-outlined areas, so stroked lines and open paths split the regions they cross and a stroke's band is a
-region of its own. `shapeBuilder.merge {ids?, regions?, points?}` makes one vector from the regions
-(by index, or the regions under page points), styled like the top-most fill or stroke over the first
-one (a stroke's region is filled with the stroke's paints); `shapeBuilder.remove {ids?, regions?,
-points?}` deletes them. Either way every shape covering a picked region loses that area (it becomes
-a vector, or goes when nothing is left); the strokes of the shapes involved become outlined vectors
-just above them (`outlines` in the result; an open path is replaced by its outline), and each call
-is one undo step. The tool is `tool.shapeBuilder` (Shift+M):
-click or drag across regions with `pointer` to merge, add `alt` to remove; `shapeBuilder.mode
-{mode: merge|remove}` swaps what a plain click does.
-
-```json
-{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"run_command","arguments":{"command":"shapeBuilder.regions","params":{"ids":[2,3]}}}}
-{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"run_command","arguments":{"command":"shapeBuilder.merge","params":{"ids":[2,3],"points":[[120,80],[160,80]]}}}}
-```
+No command makes a boolean group (#32); those a file holds keep working. Each operand above the
+bottom one combines with the result of the operands below it by its own operation, or the group's
+(`node.set {operandOperation: union|subtract|intersect|exclude | null}` on any operand, or
+`booleanOperation` on an operand that isn't itself a boolean group; on a group `booleanOperation`
+is the group's). `get_node` shows `operandOperation` on operands that have one. Operands stay
+layers: `select.children` (Enter) or a double-click selects them, `cmd: true` clicks reach them
+directly, and moving or resizing an operand updates the group's result on every pointer move, one
+undo step per gesture; a dragged operand stays in its group. Clicks and `select.layersAt` hit a
+boolean group where its result is (a click in a subtracted hole reaches what's behind it); while the
+group or one of its operands is selected, its operands are hit instead, so each can be picked. Only
+the operands from the moved one up are recombined during a drag (`figcraft_render::boolean`; timed
+by `cargo xtask bench`).
 
 ### Text on a path and pattern fills
 
@@ -1321,7 +1236,7 @@ through the outlines of its layers.
   ships with FigCraft. Soft masks stay RGB (they aren't printed) and transparency groups blend in
   RGB, as the PDF writer declares them.
 
-### Brushes and pen pressure
+### Brushes
 
 - `stroke.brush {ids?, preset, spacing?, sizeJitter?, rotationJitter?, scatter?, seed?}` draws a
   layer's stroke with a brush (`preset: null` back to a plain stroke; a layer without a stroke gets
@@ -1331,14 +1246,8 @@ through the outlines of its layers.
   most 5,000 copies a path): `dots`, `stars`, `confetti`, `leaves`, varied by `sizeJitter` (0–1),
   `rotationJitter` (0–1, up to half a turn) and `scatter` (0–4 weights off the path), repeatably
   from `seed`. The stroke weight sets the brush's size and a width profile scales it along the
-  path. Brushes draw on the canvas, in PNG, SVG and PDF (as filled outlines) and `vector.outlineStroke`
-  flattens them; dashes don't apply to brushes.
-- **Pen pressure**: the Pencil records pressure into the stroke's width profile (up to 32 points by
-  length; medium pressure, 0.5, draws the stroke weight, from a tenth of it to twice it); without
-  pressure (a mouse) the stroke stays uniform. `pointer` takes `pressure` and, for drags,
-  `pressureTo`. `tool.pencilBrush {preset?, …}` sets the brush new Pencil strokes get (`null`
-  clears it; no `preset` reads it). The desktop app reads pressure from pen input on Windows; in the
-  browser from stylus touch events that report a force; macOS and Linux tablets report none.
+  path. Brushes draw on the canvas and in PNG, SVG and PDF (as filled outlines); dashes don't apply
+  to brushes.
 
 ### Selection colors
 
@@ -1622,5 +1531,5 @@ reach into its result list with a path (`{"$ref": "inner", "field": "1/id"}`).
 
 The end-to-end tests in `crates/mcp/tests/it/agent_tasks.rs` are worked examples of realistic tasks
 (auto layout, a card built in one batch with step references, gradients
-and shadows, paint styles, Light/Dark variables, align/distribute/group, boolean subtract + flatten,
+and shadows, paint styles, Light/Dark variables, align/distribute/group,
 export, undo/redo, drawing with tools).

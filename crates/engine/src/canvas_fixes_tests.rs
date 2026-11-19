@@ -47,7 +47,7 @@ fn ring_over_a_rectangle(s: &mut Session) -> (NodeId, NodeId, NodeId, NodeId) {
     let behind = ex(s, "shape.rectangle", json!({"x": 60, "y": 60, "width": 80, "height": 80}));
     let outer = ex(s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 200, "height": 200}));
     let hole = ex(s, "shape.rectangle", json!({"x": 50, "y": 50, "width": 100, "height": 100}));
-    let ring = ex(s, "bool.subtract", json!({"ids": [outer, hole]}));
+    let ring = crate::test_helpers::bool_group(s, &[outer, hole], figcraft_doc::BoolOp::Subtract);
     s.execute("select.none", &json!({})).unwrap();
     no_snapping(s);
     (behind, ring, outer, hole)

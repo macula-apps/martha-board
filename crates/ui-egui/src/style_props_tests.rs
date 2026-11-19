@@ -88,17 +88,18 @@ fn the_style_keys_copy_and_paste_every_style_property() {
 
 #[test]
 fn a_vectors_anchor_radii_are_not_part_of_the_copied_style() {
-    // Radii set on anchors in edit mode live in the network's vertices, not in the layer's corners:
-    // copying such a vector's style and pasting it back must leave every anchor's radius as it was.
+    // Radii on anchors live in the network's vertices, not in the layer's corners: copying such a
+    // vector's style and pasting it back must leave every anchor's radius as it was. The vector is
+    // written as a file holds it (point editing left, #32).
     let mut s = Session::new();
-    let v = id(s.execute("node.create", &json!({"type": "rectangle", "x": 0, "y": 0, "width": 40, "height": 40})).unwrap());
-    s.execute("vector.edit.begin", &json!({"id": v})).unwrap();
-    s.execute("vector.edit.cornerRadius", &json!({"radius": 6, "vertices": [0, 1]})).unwrap();
-    s.execute("vector.edit.end", &json!({})).unwrap();
+    let v = id(s.execute("node.create", &json!({"type": "vector", "points": [[0, 0], [40, 0], [40, 40], [0, 40]], "closed": true})).unwrap());
+    if let NodeKind::Vector { network } = &mut s.doc_mut().unwrap().get_mut(v).unwrap().kind {
+        network.vertices.iter_mut().take(2).for_each(|p| p.radius = 6.0);
+    }
     s.execute("select.set", &json!({"ids": [v]})).unwrap();
     let radii = |s: &Session| match &s.doc().unwrap().node(v).unwrap().kind {
         NodeKind::Vector { network } => network.vertices.iter().map(|p| p.radius).collect::<Vec<_>>(),
-        _ => panic!("the layer was converted to a vector"),
+        _ => panic!("not a vector"),
     };
     let before = radii(&s);
     assert_eq!(&before[..2], &[6.0, 6.0], "two anchors are rounded");

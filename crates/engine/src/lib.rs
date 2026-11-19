@@ -43,12 +43,10 @@ pub use canvas::drop;
 pub use canvas::guides;
 pub use canvas::rotation_origin;
 pub use canvas::shape_handles;
-pub use canvas::shapebuilder;
 pub use canvas::snap;
 pub use canvas::textedit;
 pub use canvas::textpreview;
 pub use canvas::tools;
-pub use canvas::vectoredit;
 pub use content::templates;
 pub use content::textfit;
 pub use selection::rename;
@@ -196,8 +194,6 @@ mod board_tables_tests;
 mod board_tests;
 #[cfg(test)]
 mod board_tools_tests;
-#[cfg(test)]
-mod boolean_cap_tests;
 #[cfg(test)]
 mod boolean_radius_tests;
 #[cfg(test)]
@@ -399,14 +395,6 @@ mod path_read_caps_tests;
 #[cfg(test)]
 mod pdf_print_tests;
 #[cfg(test)]
-mod pen_end_tests;
-#[cfg(test)]
-mod pen_overlay_tests;
-#[cfg(test)]
-mod pen_undo_tests;
-#[cfg(test)]
-mod pen_vector_edit_tests;
-#[cfg(test)]
 mod pixel_preview_tests;
 #[cfg(test)]
 mod place_crosshair_tests;
@@ -444,10 +432,6 @@ mod selection_behaviour_tests;
 mod selection_depth_tests;
 #[cfg(test)]
 mod shape_handles_tests;
-#[cfg(test)]
-mod shapebuilder_strokes_tests;
-#[cfg(test)]
-mod shapebuilder_tests;
 #[cfg(test)]
 mod shapes_behaviour_tests;
 #[cfg(test)]
@@ -507,13 +491,7 @@ mod variables_behaviour_tests;
 #[cfg(test)]
 mod variables_colour_tests;
 #[cfg(test)]
-mod vector_behaviour_tests;
-#[cfg(test)]
-mod vector_fill_rule_tests;
-#[cfg(test)]
-mod vector_multi_behaviour_tests;
-#[cfg(test)]
-mod vector_offset_tests;
+mod vector_layers_left_tests;
 #[cfg(test)]
 mod vector_path_set_tests;
 #[cfg(test)]

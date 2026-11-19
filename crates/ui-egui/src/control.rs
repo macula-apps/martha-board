@@ -1003,7 +1003,7 @@ fn ui_key(app: &mut FigApp, ctx: &Context, p: &Value) -> Result<Value, String> {
             return Ok(json!({"ok": true}));
         }
     }
-    // Vector edit mode and shape builder keys (tools, nudging points, delete, join, Enter).
+    // A selected ruler guide's keys.
     if app.session.tool_key(key, m.shift, m.alt, m.cmd).map_err(|e| e.to_string())? {
         return Ok(json!({"ok": true}));
     }
@@ -1035,10 +1035,7 @@ fn ui_key(app: &mut FigApp, ctx: &Context, p: &Value) -> Result<Value, String> {
                 ("view.pan", json!({"dx": dx, "dy": dy, "big": m.shift}))
             } else if (m.cmd || m.ctrl) && m.alt {
                 // Rotate a degree, 15 with Shift: down and right clockwise, up and left back, about
-                // the selection's rotation origin; nothing while points are being edited.
-                if app.session.ds().is_ok_and(|d| d.vector_edit.is_some()) {
-                    return Ok(json!({}));
-                }
+                // the selection's rotation origin.
                 let step = if m.shift { 15.0 } else { 1.0 };
                 let origin = app.session.ds().ok().and_then(|d| d.origin_point());
                 ("transform.rotate", json!({"degrees": if dx + dy < 0 { -step } else { step }, "cx": origin.map(|o| o.x), "cy": origin.map(|o| o.y)}))
@@ -1433,7 +1430,6 @@ fn pointer(app: &mut FigApp, p: &Value) -> Result<Value, String> {
     };
     let f = |k: &str| p.get(k).and_then(Value::as_f64);
     let (x, y) = at(f("x"), f("y"), f("sx"), f("sy")).ok_or("pass x, y (page) or sx, sy (screen)")?;
-    let pressure = |k: &str| f(k).filter(|v| v.is_finite()).map(|v| v.clamp(0.0, 1.0) as f32);
     let mk = |kind: PointerKind, x: f64, y: f64| PointerEvent {
         kind,
         x,
@@ -1445,10 +1441,7 @@ fn pointer(app: &mut FigApp, p: &Value) -> Result<Value, String> {
         cmd: b(p, "cmd"),
         ctrl: b(p, "ctrl"),
         zoom,
-        pressure: pressure("pressure"),
     };
-    // A drag's pressure goes from `pressure` to `pressureTo`.
-    let (pr0, pr1) = (pressure("pressure"), pressure("pressureTo").or(pressure("pressure")));
     let kind = p.get("kind").and_then(Value::as_str).unwrap_or("click");
     let run = |app: &mut FigApp, ev: PointerEvent| app.session.pointer(&ev).map_err(|e| e.to_string());
     match kind {
@@ -1469,10 +1462,9 @@ fn pointer(app: &mut FigApp, p: &Value) -> Result<Value, String> {
             run(app, mk(PointerKind::Down, x, y))?;
             for i in 1..=steps {
                 let t = i as f64 / steps as f64;
-                let pressure = pr0.zip(pr1).map(|(a, b)| a + (b - a) * t as f32);
-                run(app, PointerEvent { pressure, ..mk(PointerKind::Move, x + (tx - x) * t, y + (ty - y) * t) })?;
+                run(app, mk(PointerKind::Move, x + (tx - x) * t, y + (ty - y) * t))?;
             }
-            run(app, PointerEvent { pressure: pr1, ..mk(PointerKind::Up, tx, ty) })?;
+            run(app, mk(PointerKind::Up, tx, ty))?;
         }
         other => return Err(format!("unknown pointer kind `{other}`")),
     }

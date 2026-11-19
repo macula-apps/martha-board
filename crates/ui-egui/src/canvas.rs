@@ -15,15 +15,12 @@ use crate::render_worker::{Done, Job, Worker};
 use crate::theme::{Tokens, doc_c32, regular, semibold};
 
 mod background;
-mod builder;
 mod input;
 mod outline;
 mod overlays;
 mod render;
 mod rulers;
 
-#[cfg(test)]
-use builder::clean_poly;
 use input::input;
 pub use input::open_context_menu;
 pub(crate) use outline::{TextOnScreen, node_quad};
@@ -89,9 +86,6 @@ pub struct CanvasState {
     /// something on the canvas with a cursor of its own has it (a ruler guide, a gradient handle).
     pub cursor: Option<crate::cursors::Shown>,
     preedit: Option<PreeditView>,
-    /// The pen pressure last reported during the current press (pen and stylus touches; the
-    /// winit backends and browsers that report it).
-    pressure: Option<f32>,
     /// The latest scroll came from a mouse wheel rather than a trackpad (Scroll wheel zoom).
     wheel_is_mouse: bool,
 }
@@ -123,7 +117,6 @@ impl Default for CanvasState {
             hovering: false,
             last_hover: None,
             preedit: None,
-            pressure: None,
             wheel_is_mouse: false,
         }
     }
@@ -234,7 +227,6 @@ fn pointer_event(app: &FigApp, kind: PointerKind, pos: Pos2, m: &egui::Modifiers
         cmd: m.command || app.ui.crop.is_some(),
         ctrl: m.ctrl,
         zoom,
-        pressure: app.canvas.pressure,
     }
 }
 
@@ -460,9 +452,6 @@ fn describe_box([x0, y0, x1, y1]: [f64; 4]) -> String {
         &[("w", &w), ("h", &h), ("x", &x), ("y", &y), ("cmd", &cmd)],
     )
 }
-
-#[cfg(test)]
-mod builder_poly_tests;
 
 #[cfg(test)]
 mod outline_tests;

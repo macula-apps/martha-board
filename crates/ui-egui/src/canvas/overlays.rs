@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use super::builder::{builder_overlay, hatched, region_hatch};
 use super::outline::{TextOnScreen, draw_outline, node_quad, outline_shapes, quad, stroke};
 use super::rulers::{boards, fmt, rulers};
 use super::{
@@ -51,13 +50,11 @@ pub(super) fn overlays(app: &FigApp, painter: &egui::Painter, t: &Tokens) -> Vec
         draw_outline(app, painter, &doc, h, stroke(accent(painter), 1.5));
     }
     pick_outline(app, painter, &doc);
-    // Inside a boolean group (an operand selected or in vector edit mode): every operand's outline,
-    // so the shapes making the live result stay visible while one of them changes.
-    let editing = ds.vector_edit.as_ref().map(|ve| ve.id);
+    // Inside a boolean group (an operand selected): every operand's outline, so the shapes making
+    // the live result stay visible while one of them changes.
     let unmoved = crate::selection_cache::unmoved(ds, &doc);
-    let key: Vec<u64> = editing.map(|e| e.0).into_iter().collect();
-    let operands = crate::selection_cache::cached(painter.ctx(), "operands", &unmoved, &sel, &key, || {
-        figcraft_engine::booleans::outlined_operands(&unmoved, &sel, editing)
+    let operands = crate::selection_cache::cached(painter.ctx(), "operands", &unmoved, &sel, &[], || {
+        figcraft_engine::booleans::outlined_operands(&unmoved, &sel)
     });
     for id in operands.iter().filter(|o| !sel.contains(o)) {
         draw_outline(app, painter, &doc, *id, stroke(accent(painter).gamma_multiply(0.6), 1.0));
@@ -87,41 +84,12 @@ pub(super) fn overlays(app: &FigApp, painter: &egui::Painter, t: &Tokens) -> Vec
         let pts = [r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom(), r.left_top()];
         painter.add(Shape::dashed_line(&pts, stroke(accent(painter), 1.5), 4.0, 3.0));
     }
-    // Vector edit mode, with the transform box around several selected points.
     // The selection's size label, which measurement labels keep clear of.
     let mut size_label = None;
-    if let Some(ve) = ds.vector_edit.clone()
-        && let Some(o) = figcraft_engine::vectoredit::overlay(&doc, &ve)
-    {
-        // The Variable width tool shows width points in place of the path's points.
-        let width_tool = ve.tool == figcraft_engine::vectoredit::VTool::Width;
-        // Other layers edited at once go under the active one; the hover shows on its own layer.
-        let ov = &app.session.tool.overlay;
-        let hover_on = |id| ov.vector_hover.filter(|_| ov.vector_hover_on.unwrap_or(ve.id) == id);
-        for part in &ve.others {
-            if let Some(po) = figcraft_engine::vectoredit::overlay(&doc, &ve.view(part)) {
-                vector_overlay(app, painter, &po, !width_tool, hover_on(part.id), false, None);
-            }
-        }
-        vector_overlay(app, painter, &o, !width_tool, hover_on(ve.id), true, ov.vector_add);
-        if width_tool {
-            width_overlay(app, painter, &doc, &ve, zoom);
-        } else if let Some(c) = app.session.vector_edit_box() {
-            // The box around several selected points draws no corner handles: they would read as
-            // points. Its corners and edges still scale the points when dragged.
-            let label = format!("{} × {}", fmt((c[1] - c[0]).hypot()), fmt((c[3] - c[0]).hypot()));
-            size_label = transform_box(app, painter, c.map(|p| app.to_screen(p.x, p.y)), accent(painter), true, 0, Some(label));
-        }
-    }
     // Selection.
     let editing = ds.text_edit.clone();
-    if !sel.is_empty() && editing.is_none() && ds.vector_edit.is_none() {
+    if !sel.is_empty() && editing.is_none() {
         size_label = selection_overlay(app, painter, ds, &doc, &sel, zoom);
-    }
-    if app.session.tool.tool == ToolId::ShapeBuilder
-        && let Some(arr) = figcraft_engine::shapebuilder::current(&app.session)
-    {
-        builder_overlay(app, painter, t, &arr);
     }
     // Text editing: caret and selection, or the IME composition underlined at the caret.
     if let Some(te) = editing {
@@ -135,23 +103,15 @@ pub(super) fn overlays(app: &FigApp, painter: &egui::Painter, t: &Tokens) -> Vec
         painter.rect_filled(r, CornerRadius::ZERO, accent(painter).gamma_multiply(0.1));
         painter.rect_stroke(r, CornerRadius::ZERO, stroke(accent(painter), 1.0), StrokeKind::Inside);
     }
-    // Pen path.
-    pen_overlay(app, painter, zoom);
+    // A marker or highlighter stroke, or a connector end, being dragged.
+    stroke_overlay(app, painter);
     crosshair_overlay(app, painter);
-    // Eraser brush (vector edit mode).
+    // The board eraser's brush.
     if let Some([x, y, r]) = ov.brush {
         let c = app.to_screen(x, y);
         let rs = (r * app.session.ds().map(|d| d.view.zoom).unwrap_or(1.0)) as f32;
         painter.circle_stroke(c, rs, stroke(Color32::WHITE, 3.0));
         painter.circle_stroke(c, rs, stroke(accent(painter), 1.5));
-    }
-    // Lasso (vector edit mode).
-    if ov.lasso.len() > 1 {
-        let mut pts: Vec<Pos2> = ov.lasso.iter().map(|[x, y]| app.to_screen(*x, *y)).collect();
-        if let Some(first) = pts.first().copied() {
-            pts.push(first);
-        }
-        painter.add(Shape::dashed_line(&pts, stroke(accent(painter), 1.0), 4.0, 3.0));
     }
     // Guides (under the rulers).
     crate::guides::draw(app, painter);
@@ -365,14 +325,12 @@ fn selection_overlay(
             s
         }));
     }
-    // Constraint guides belong to the normal selection overlay: not while the Shape Builder
-    // reshapes by regions, nor while measuring to another layer (Alt), whose lines take over.
-    if app.session.tool.tool != ToolId::ShapeBuilder && app.session.tool.overlay.measure_box.is_none() {
+    // Constraint guides belong to the normal selection overlay: not while measuring to another
+    // layer (Alt), whose lines take over.
+    if app.session.tool.overlay.measure_box.is_none() {
         constraint_lines(app, painter, ds, doc, sel);
     }
-    // The shape builder reshapes by regions: no transform box.
-    if app.session.tool.tool != ToolId::ShapeBuilder
-        && let Some(b) = geo.bbox.map(|b| b.map(|p| p + page_shift))
+    if let Some(b) = geo.bbox.map(|b| b.map(|p| p + page_shift))
         && let Some((w, h)) = geo.size
     {
         let is_line = sel.len() == 1 && matches!(sel.first().and_then(|i| doc.node(*i)).map(|n| &n.kind), Some(NodeKind::Line));
@@ -476,46 +434,18 @@ fn crosshair_overlay(app: &FigApp, painter: &egui::Painter) {
     painter.circle_stroke(c, 3.0, stroke(col, 1.5));
 }
 
-fn pen_overlay(app: &FigApp, painter: &egui::Painter, zoom: f64) {
+/// A marker or highlighter stroke in progress (its points), or a selected connector's end being
+/// dragged (from its other end to the pointer; one being drawn shows itself, previewed in the
+/// document).
+fn stroke_overlay(app: &FigApp, painter: &egui::Painter) {
     let ov = &app.session.tool.overlay;
     if !ov.pen.is_empty() {
-        let pts: Vec<Pos2> = ov.pen.iter().map(|[x, y]| app.to_screen(*x, *y)).collect();
-        if app.session.tool.tool == ToolId::Pencil {
-            // The stroke it will make, in its colour and weight (at least a point when zoomed out):
-            // white over a dark page or frame, as the stroke will be (#1741).
-            let (default, weight) = figcraft_engine::tools::PENCIL_STROKE;
-            let color = ov.pen_color.unwrap_or(default);
-            painter.add(Shape::line(pts, stroke(doc_c32(painter.ctx(), color), ((weight * zoom) as f32).max(1.0))));
-        } else {
-            for [x0, y0, x1, y1] in &ov.pen_handles {
-                bezier_handle(painter, app.to_screen(*x0, *y0), app.to_screen(*x1, *y1), 3.5, Color32::WHITE);
-            }
-            for p in &pts {
-                painter.circle_filled(*p, 3.5, Color32::WHITE);
-                painter.circle_stroke(*p, 3.5, stroke(accent(painter), 1.0));
-            }
-            if let Some([x0, y0, x1, y1]) = ov.rubber {
-                let (a, b) = (app.to_screen(x0, y0), app.to_screen(x1, y1));
-                // The segment a click would make: along the last anchor's out handle, if it has one.
-                match ov.rubber_handle {
-                    Some([hx, hy]) => {
-                        let h = app.to_screen(hx, hy);
-                        painter.add(egui::epaint::CubicBezierShape::from_points_stroke(
-                            [a, h, b, b],
-                            false,
-                            Color32::TRANSPARENT,
-                            stroke(accent(painter), 1.0),
-                        ));
-                    }
-                    None => {
-                        painter.line_segment([a, b], stroke(accent(painter), 1.0));
-                    }
-                }
-            }
+        for [x, y] in &ov.pen {
+            let p = app.to_screen(*x, *y);
+            painter.circle_filled(p, 3.5, Color32::WHITE);
+            painter.circle_stroke(p, 3.5, stroke(accent(painter), 1.0));
         }
     } else if let Some([x0, y0, x1, y1]) = ov.rubber {
-        // A selected connector's end being dragged: from its other end to the pointer (one being
-        // drawn shows itself, previewed in the document).
         painter.line_segment([app.to_screen(x0, y0), app.to_screen(x1, y1)], stroke(accent(painter), 1.5));
     }
 }
@@ -694,127 +624,6 @@ fn shape_overlay(app: &FigApp, painter: &egui::Painter, col: Color32) {
             ShapeHandle::Count => format!("{} {}", tr("Count"), hint.value),
         };
         pill(painter, c + vec2(12.0, 12.0), Align2::LEFT_TOP, text, col);
-    }
-}
-
-/// Variable width tool: each width point on the path with a bar across the stroke to its two
-/// width handles (the selected point filled), and a faint preview where a drag would add one.
-fn width_overlay(app: &FigApp, painter: &egui::Painter, doc: &Document, ve: &figcraft_engine::vectoredit::VectorEdit, zoom: f64) {
-    use figcraft_doc::WidthSide;
-    use figcraft_engine::vectoredit::{WHit, width_handles, width_preview};
-    let hover = app.session.tool.overlay.width_hover;
-    let sp = |p: &[f64; 2]| app.to_screen(p[0], p[1]);
-    let draw = |h: &figcraft_engine::vectoredit::WidthHandle, ghost: bool| {
-        let (c, a, b) = (sp(&h.at), sp(&h.sides[0]), sp(&h.sides[1]));
-        let col = if ghost { accent(painter).gamma_multiply(0.5) } else { accent(painter) };
-        painter.line_segment([a, b], stroke(Color32::from_white_alpha(160), 3.0));
-        painter.line_segment([a, b], stroke(col, 1.0));
-        for (e, side) in [(a, WidthSide::Right), (b, WidthSide::Left)] {
-            let grab = !ghost && hover == Some(WHit::Handle { index: h.index, side });
-            let r = if grab { 4.5 } else { 3.5 };
-            painter.circle_filled(e, r, Color32::WHITE);
-            painter.circle_stroke(e, r, stroke(col, 1.0));
-        }
-        let on = !ghost && ve.width_point == Some(h.index);
-        let hovered = !ghost && hover == Some(WHit::Point { index: h.index });
-        let r = if hovered { 5.0 } else { 4.0 };
-        painter.circle_filled(c, r, if on { accent(painter) } else { Color32::WHITE });
-        painter.circle_stroke(c, r, stroke(col, 1.0));
-    };
-    for h in width_handles(doc, ve, zoom) {
-        draw(&h, false);
-    }
-    if let Some(WHit::Path { t, .. }) = hover {
-        for h in width_preview(doc, ve, t, zoom) {
-            draw(&h, true);
-        }
-    }
-}
-
-/// A bezier handle from its anchor `v` to its end `e` (screen points): the line, and a dot of
-/// radius `r` filled with `fill` (vector edit mode and the Pen draw them alike).
-fn bezier_handle(painter: &egui::Painter, v: Pos2, e: Pos2, r: f32, fill: Color32) {
-    painter.line_segment([v, e], stroke(accent(painter), 1.0));
-    painter.circle_filled(e, r, fill);
-    painter.circle_stroke(e, r, stroke(accent(painter), 1.0));
-}
-
-/// Vector edit mode: a layer's segments, handles and points (`points`) with its `hover`ed part, the
-/// `add` point a press would put on the outline, and for the `active` layer the closed area under
-/// the paint bucket and the pen's rubber band.
-fn vector_overlay(
-    app: &FigApp,
-    painter: &egui::Painter,
-    o: &figcraft_engine::vectoredit::EditOverlay,
-    points: bool,
-    hover: Option<figcraft_engine::vectoredit::VHit>,
-    active: bool,
-    add: Option<figcraft_engine::tools::VectorAdd>,
-) {
-    use figcraft_engine::vectoredit::VHit;
-    let ov = &app.session.tool.overlay;
-    let sp = |p: &[f64; 2]| app.to_screen(p[0], p[1]);
-    // Paint bucket target: hatched like a fill to come.
-    if active && !ov.face.is_empty() {
-        let polys: Vec<Vec<Pos2>> = ov.face.iter().map(|poly| poly.iter().map(sp).collect()).collect();
-        hatched(painter, &polys, accent(painter));
-    }
-    if active {
-        region_hatch(app, painter);
-    }
-    let hover_seg = match hover {
-        Some(VHit::Segment { seg, .. }) => Some(seg),
-        _ => None,
-    };
-    for (i, seg) in o.segments.iter().enumerate() {
-        let [a, b, c, d] = [sp(&seg[0]), sp(&seg[1]), sp(&seg[2]), sp(&seg[3])];
-        let w = if o.selected_segments.contains(&i) {
-            3.0
-        } else if hover_seg == Some(i) {
-            2.5
-        } else {
-            1.5
-        };
-        painter.add(egui::epaint::CubicBezierShape::from_points_stroke([a, b, c, d], false, Color32::TRANSPARENT, stroke(accent(painter), w)));
-    }
-    if !points {
-        return;
-    }
-    for h in &o.handles {
-        let hovered = hover == Some(VHit::Handle { seg: h.seg, start: h.start });
-        let on = o.selected_handles.contains(&(h.seg, h.start));
-        bezier_handle(painter, sp(&h.vertex), sp(&h.handle), if hovered { 4.5 } else { 3.5 }, if on { accent(painter) } else { Color32::WHITE });
-    }
-    for (i, v) in o.vertices.iter().enumerate() {
-        let p = sp(v);
-        let hovered = matches!(hover, Some(VHit::Vertex { index }) if index == i);
-        let size = if hovered { 9.0 } else { 7.0 };
-        let r = Rect::from_center_size(p, vec2(size, size));
-        let on = o.selected_vertices.contains(&i);
-        painter.rect_filled(r, CornerRadius::same(5), if on { accent(painter) } else { Color32::WHITE });
-        painter.rect_stroke(r, CornerRadius::same(5), stroke(accent(painter), 1.0), StrokeKind::Inside);
-        if o.anchor == Some(i) {
-            painter.circle_stroke(p, 7.5, stroke(accent(painter), 1.0));
-        }
-    }
-    // The point a press would add to the outline: the pen's ghost anchor where it is over a
-    // segment, or a segment's midpoint under the Move tool (which grows and fills once the pointer
-    // is on it, when a press adds it).
-    if let Some(a) = add {
-        let p = app.to_screen(a.at[0], a.at[1]);
-        let col = accent(painter);
-        if a.midpoint {
-            let (r, fill) = if a.on { (5.5, col) } else { (3.5, Color32::from_white_alpha(190)) };
-            painter.circle_filled(p, r, fill);
-            painter.circle_stroke(p, r, stroke(if a.on { Color32::WHITE } else { col.gamma_multiply(0.7) }, 1.2));
-        } else {
-            let r = Rect::from_center_size(p, vec2(7.0, 7.0));
-            painter.rect_filled(r, CornerRadius::same(5), Color32::from_white_alpha(160));
-            painter.rect_stroke(r, CornerRadius::same(5), stroke(col.gamma_multiply(0.8), 1.0), StrokeKind::Inside);
-        }
-    }
-    if let Some([x0, y0, x1, y1]) = ov.rubber.filter(|_| active) {
-        painter.add(Shape::dashed_line(&[app.to_screen(x0, y0), app.to_screen(x1, y1)], stroke(accent(painter), 1.0), 4.0, 3.0));
     }
 }
 

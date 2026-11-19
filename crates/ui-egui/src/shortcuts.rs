@@ -178,7 +178,7 @@ pub(crate) fn handle_input(
                 let props = ctx.input(|i| i.modifiers.alt);
                 crate::menus::invoke(app, if props { "edit.copyProperties" } else { "edit.copy" });
             }
-            Event::Cut => cut(app, ctx.input(|i| i.modifiers)),
+            Event::Cut => crate::menus::invoke(app, "edit.cut"),
             Event::Paste(text) if !paste.drop_text => crate::menus::paste(app, Some(text), None),
             Event::Key { key, physical_key, pressed: true, modifiers, repeat }
                 if key_event(app, *key, *physical_key, *modifiers, *repeat, now, ctx) =>
@@ -187,26 +187,6 @@ pub(crate) fn handle_input(
             }
             _ => {}
         }
-    }
-}
-
-/// Cut: usually the layers. Windows sends Shift+Delete (remove the points and heal the path)
-/// as a cut command and never as a key, so in vector edit mode the selection is points: they are
-/// removed, a heal joining the path through them. Ctrl/Cmd+X is the real Cut: with points or
-/// segments selected the engine copies them and removes them, staying in edit mode (#1875).
-fn cut(app: &mut FigApp, modifiers: egui::Modifiers) {
-    let Some(ve) = app.session.ds().ok().and_then(|d| d.vector_edit.clone()) else {
-        crate::menus::invoke(app, "edit.cut");
-        return;
-    };
-    if modifiers.command {
-        if ve.parts().iter().any(|p| !p.vertices.is_empty() || !p.segments.is_empty()) {
-            crate::menus::invoke(app, "edit.cut");
-        }
-    } else if ve.parts().iter().any(|p| !p.vertices.is_empty()) {
-        app.run("vector.deleteHeal", json!({}));
-    } else if ve.parts().iter().any(|p| !p.segments.is_empty()) {
-        app.run("vector.edit.delete", json!({}));
     }
 }
 
@@ -393,7 +373,7 @@ pub fn paste_events(app: &mut FigApp, ctx: &Context) -> PasteEvents {
 }
 
 /// Run the command a shortcut is bound to, with the keyboard's own twists (Escape steps out
-/// before it deselects, Delete ends a pen path, Enter edits the selected text or vector).
+/// before it deselects, Enter edits the selected text).
 pub fn run_binding(app: &mut FigApp, id: &str) {
     match id {
         "select.none" => {
@@ -401,9 +381,6 @@ pub fn run_binding(app: &mut FigApp, id: &str) {
                 app.toast(e.to_string());
             }
             app.ui.context_menu = None;
-        }
-        "edit.delete" if app.session.tool.pen.is_some() => {
-            let _ = app.session.pen_finish();
         }
         // Enter with a shape or frame tool chosen places one in the middle of the view.
         "select.children" if app.session.tool.tool.draws_shape() => {
@@ -439,8 +416,7 @@ fn key_event(app: &mut FigApp, key: Key, physical: Option<Key>, m: Modifiers, re
     if matches!(key, Key::Backspace | Key::Delete) && m.is_none() && app.ui.picker.is_some() && crate::handles::remove_selected_stop(app, ctx) {
         return true;
     }
-    // Vector edit mode and the shape builder have their own keys (tools, nudging points, delete,
-    // join, Enter to finish); the rest fall through.
+    // A selected ruler guide has its own keys; the rest fall through.
     match app.session.tool_key(key.name(), m.shift, m.alt, m.command) {
         Ok(true) => return true,
         Ok(false) => {}
@@ -485,12 +461,8 @@ fn key_event(app: &mut FigApp, key: Key, physical: Option<Key>, m: Modifiers, re
         } else if m.command && m.alt {
             // Cmd/Ctrl+Alt+arrows rotate a degree at a time, 15 with Shift (Accessibility at
             // Figma); down and right turn clockwise, up and left back (the documentation doesn't
-            // say which way). Not while points are being edited: the layer must not turn under
-            // the editor, and no key rotates points. About the selection's rotation origin (the
-            // moved one, else the centre of the rotated selection box), so repeated turns stay put.
-            if app.session.ds().is_ok_and(|d| d.vector_edit.is_some()) {
-                return true;
-            }
+            // say which way). About the selection's rotation origin (the moved one, else the
+            // centre of the rotated selection box), so repeated turns stay put.
             let step = if m.shift { 15.0 } else { 1.0 };
             let origin = app.session.ds().ok().and_then(|d| d.origin_point());
             app.run(
@@ -680,20 +652,10 @@ pub fn opacity_digit(app: &mut FigApp, key: Key, now: f64) -> bool {
     true
 }
 
-/// Enter on a single selected text layer starts editing it; on shapes, edits them as vectors.
+/// Enter on a single selected text layer, or a board object with text, starts editing its text.
 fn enter_text(app: &mut FigApp) -> bool {
     let sel = app.session.selection();
-    if sel.len() > 1 {
-        let ids = app.session.doc().ok().and_then(|d| figcraft_engine::vectoredit::enter_targets(d, &sel));
-        return ids.is_some_and(|ids| {
-            app.run("vector.edit.begin", json!({"ids": ids}));
-            true
-        });
-    }
-    if sel.len() != 1 {
-        return false;
-    }
-    let Some(id) = sel.first().copied() else { return false };
+    let [id] = sel[..] else { return false };
     // A board object (a sticky, a shape with text, a label): type in its text.
     match figcraft_engine::board::edit_text(&mut app.session, id) {
         Ok(true) => return true,
@@ -703,18 +665,11 @@ fn enter_text(app: &mut FigApp) -> bool {
             return true;
         }
     }
-    let kind = app.session.doc().ok().and_then(|d| d.node(id)).map(|n| (matches!(n.kind, figcraft_doc::NodeKind::Text(_)), n.kind.is_shape()));
-    match kind {
-        Some((true, _)) => {
-            let _ = figcraft_engine::textedit::begin(&mut app.session, id, None, false);
-            true
-        }
-        Some((_, true)) => {
-            app.run("vector.edit.begin", json!({"id": id}));
-            true
-        }
-        _ => false,
+    let text = app.session.doc().ok().and_then(|d| d.node(id)).is_some_and(|n| matches!(n.kind, figcraft_doc::NodeKind::Text(_)));
+    if text {
+        let _ = figcraft_engine::textedit::begin(&mut app.session, id, None, false);
     }
+    text
 }
 
 /// A composition's input owner before this viewport's control/pointer handling. A normal

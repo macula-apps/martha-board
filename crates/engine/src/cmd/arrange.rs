@@ -11,62 +11,14 @@ use crate::{Result, Session, bad, spec};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
-        spec!(
-            "align.left",
-            "Align left",
-            "{ids?} (in vector edit mode without ids: the selected points, and nothing moves with none selected)",
-            true,
-            |s, p| align(s, p, Al::Left)
-        ),
-        spec!(
-            "align.hcenter",
-            "Align horizontal centers",
-            "{ids?} (in vector edit mode without ids: the selected points, and nothing moves with none selected)",
-            true,
-            |s, p| align(s, p, Al::HCenter)
-        ),
-        spec!(
-            "align.right",
-            "Align right",
-            "{ids?} (in vector edit mode without ids: the selected points, and nothing moves with none selected)",
-            true,
-            |s, p| align(s, p, Al::Right)
-        ),
-        spec!(
-            "align.top",
-            "Align top",
-            "{ids?} (in vector edit mode without ids: the selected points, and nothing moves with none selected)",
-            true,
-            |s, p| align(s, p, Al::Top)
-        ),
-        spec!(
-            "align.vcenter",
-            "Align vertical centers",
-            "{ids?} (in vector edit mode without ids: the selected points, and nothing moves with none selected)",
-            true,
-            |s, p| align(s, p, Al::VCenter)
-        ),
-        spec!(
-            "align.bottom",
-            "Align bottom",
-            "{ids?} (in vector edit mode without ids: the selected points, and nothing moves with none selected)",
-            true,
-            |s, p| align(s, p, Al::Bottom)
-        ),
-        spec!(
-            "distribute.horizontal",
-            "Distribute horizontal spacing",
-            "{ids?, spacing?} (in vector edit mode without ids: the selected points, and nothing moves with none selected)",
-            true,
-            |s, p| distribute(s, p, true)
-        ),
-        spec!(
-            "distribute.vertical",
-            "Distribute vertical spacing",
-            "{ids?, spacing?} (in vector edit mode without ids: the selected points, and nothing moves with none selected)",
-            true,
-            |s, p| distribute(s, p, false)
-        ),
+        spec!("align.left", "Align left", "{ids?}", true, |s, p| align(s, p, Al::Left)),
+        spec!("align.hcenter", "Align horizontal centers", "{ids?}", true, |s, p| align(s, p, Al::HCenter)),
+        spec!("align.right", "Align right", "{ids?}", true, |s, p| align(s, p, Al::Right)),
+        spec!("align.top", "Align top", "{ids?}", true, |s, p| align(s, p, Al::Top)),
+        spec!("align.vcenter", "Align vertical centers", "{ids?}", true, |s, p| align(s, p, Al::VCenter)),
+        spec!("align.bottom", "Align bottom", "{ids?}", true, |s, p| align(s, p, Al::Bottom)),
+        spec!("distribute.horizontal", "Distribute horizontal spacing", "{ids?, spacing?}", true, |s, p| distribute(s, p, true)),
+        spec!("distribute.vertical", "Distribute vertical spacing", "{ids?, spacing?}", true, |s, p| distribute(s, p, false)),
         spec!(
             "arrange.spacing",
             "Spacing",
@@ -89,17 +41,11 @@ pub fn specs() -> Vec<CommandSpec> {
         spec!("arrange.forward", "Bring forward", "{ids?}", true, |s, p| zorder(s, p, Z::Forward)),
         spec!("arrange.backward", "Send backward", "{ids?}", true, |s, p| zorder(s, p, Z::Backward)),
         spec!("arrange.back", "Send to back", "{ids?}", true, |s, p| zorder(s, p, Z::Back)),
-        spec!("object.flipH", "Flip horizontal", "{ids?} (in vector edit mode without ids: the selected points)", true, |s, p| flip(s, p, true)),
-        spec!("object.flipV", "Flip vertical", "{ids?} (in vector edit mode without ids: the selected points)", true, |s, p| flip(s, p, false)),
-        spec!("object.rotate180", "Rotate 180°", "{ids?} (in vector edit mode without ids: the selected points)", true, |s, p| rotate_by(
-            s, p, 180.0
-        )),
-        spec!("object.rotateLeft", "Rotate 90° left", "{ids?} (in vector edit mode without ids: the selected points)", true, |s, p| rotate_by(
-            s, p, 90.0
-        )),
-        spec!("object.rotateRight", "Rotate 90° right", "{ids?} (in vector edit mode without ids: the selected points)", true, |s, p| {
-            rotate_by(s, p, -90.0)
-        }),
+        spec!("object.flipH", "Flip horizontal", "{ids?}", true, |s, p| flip(s, p, true)),
+        spec!("object.flipV", "Flip vertical", "{ids?}", true, |s, p| flip(s, p, false)),
+        spec!("object.rotate180", "Rotate 180°", "{ids?}", true, |s, p| rotate_by(s, p, 180.0)),
+        spec!("object.rotateLeft", "Rotate 90° left", "{ids?}", true, |s, p| rotate_by(s, p, 90.0)),
+        spec!("object.rotateRight", "Rotate 90° right", "{ids?}", true, |s, p| { rotate_by(s, p, -90.0) }),
         spec!("transform.move", "Move", "{ids?, dx, dy}  (page units)", true, |s, p| {
             let (dx, dy) = (num_or(p, "dx", 0.0), num_or(p, "dy", 0.0));
             let ids = req_targets("transform.move", s, p)?;
@@ -240,18 +186,6 @@ fn align_target(doc: &Document, roots: &[NodeId]) -> Option<Rect> {
 }
 
 fn align(s: &mut Session, p: &Value, a: Al) -> Result<Value> {
-    use crate::vectoredit::transform::PointAlign;
-    let how = match a {
-        Al::Left => PointAlign::Left,
-        Al::HCenter => PointAlign::HCenter,
-        Al::Right => PointAlign::Right,
-        Al::Top => PointAlign::Top,
-        Al::VCenter => PointAlign::VCenter,
-        Al::Bottom => PointAlign::Bottom,
-    };
-    if let Some(r) = crate::vectoredit::transform::align_points_in_edit_mode(s, p, how) {
-        return r;
-    }
     let ids = req_targets("align", s, p)?;
     let doc = s.doc_mut()?;
     let ids = roots(doc, &ids);
@@ -272,9 +206,6 @@ fn align(s: &mut Session, p: &Value, a: Al) -> Result<Value> {
 }
 
 fn distribute(s: &mut Session, p: &Value, horizontal: bool) -> Result<Value> {
-    if let Some(r) = crate::vectoredit::transform::distribute_points_in_edit_mode(s, p, horizontal) {
-        return r;
-    }
     let ids = req_targets("distribute", s, p)?;
     let doc = s.doc_mut()?;
     let ids = roots(doc, &ids);
@@ -409,13 +340,6 @@ fn zorder(s: &mut Session, p: &Value, z: Z) -> Result<Value> {
 }
 
 fn flip(s: &mut Session, p: &Value, horizontal: bool) -> Result<Value> {
-    // Editing a vector with points selected: flip them in their box.
-    let points = crate::vectoredit::transform::transform_in_edit_mode(s, p, |b| {
-        if horizontal { b.onto(b.width, 0.0, 0.0, b.height) } else { b.onto(0.0, b.height, b.width, 0.0) }
-    });
-    if let Some(r) = points {
-        return r;
-    }
     let ids = req_targets("flip", s, p)?;
     let doc = s.doc_mut()?;
     let ids = roots(doc, &ids);
@@ -430,9 +354,6 @@ fn flip(s: &mut Session, p: &Value, horizontal: bool) -> Result<Value> {
 }
 
 fn rotate_by(s: &mut Session, p: &Value, deg: f64) -> Result<Value> {
-    if let Some(r) = crate::vectoredit::transform::transform_in_edit_mode(s, p, |b| figcraft_geom::rotate_about(Affine::IDENTITY, b.center(), deg)) {
-        return r;
-    }
     let ids = req_targets("rotate", s, p)?;
     let Some(pivot) = turn_pivot(s, &ids)? else { return ok() };
     let doc = s.doc_mut()?;

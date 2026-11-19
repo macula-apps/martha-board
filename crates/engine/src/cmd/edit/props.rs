@@ -284,9 +284,8 @@ pub(super) fn reparent(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// The regions of a vector whose own fill stacks a fill command edits instead of the layer's: the
-/// `regions` named (with one target, a vector; indices into its network's regions), else the
-/// regions selected in vector edit mode when the one target is the layer being edited (#1875).
-/// None: the layer's.
+/// `regions` named (with one target, a vector; indices into its network's regions). None: the
+/// layer's.
 pub(crate) fn fill_regions(s: &Session, cmd: &str, p: &Value, ids: &[NodeId]) -> Result<Option<(NodeId, Vec<usize>)>> {
     let doc = s.doc()?;
     let region_count = |id: NodeId| match doc.node(id).map(|n| &n.kind) {
@@ -315,13 +314,7 @@ pub(crate) fn fill_regions(s: &Session, cmd: &str, p: &Value, ids: &[NodeId]) ->
         }
         return Ok(Some((*id, regions)));
     }
-    let [id] = ids else { return Ok(None) };
-    let Some(ve) = s.ds()?.vector_edit.as_ref().filter(|ve| ve.id == *id && !ve.regions.is_empty()) else { return Ok(None) };
-    let count = region_count(*id).unwrap_or(0);
-    let mut regions: Vec<usize> = ve.regions.iter().copied().filter(|r| *r < count).collect();
-    regions.sort_unstable();
-    regions.dedup();
-    Ok((!regions.is_empty()).then_some((*id, regions)))
+    Ok(None)
 }
 
 /// Runs `f` on the own fill stack of each of `regions` of vector `id` (a region without one
@@ -486,15 +479,8 @@ pub(super) fn paint_copy(s: &mut Session, p: &Value, fills: bool) -> Result<Valu
     let (paint, stroke) = {
         let doc = s.doc()?;
         let n = doc.get(id)?;
-        // Regions selected in vector edit mode: their own fills, as the Fill section lists them
-        // (#1875); a text's fills are what its characters show (#1856).
-        let regions = if fills { crate::vectoredit::selected_region_fills(s, id) } else { None };
-        let list: Vec<figcraft_color::Paint> = match regions {
-            Some(Some(list)) => list,
-            Some(None) => return Err(bad(cmd, "the selected regions' fills differ")),
-            None if fills => crate::cmd::lists::character_fills(n).unwrap_or_default(),
-            None => n.strokes.clone(),
-        };
+        // A text's fills are what its characters show (#1856).
+        let list: Vec<figcraft_color::Paint> = if fills { crate::cmd::lists::character_fills(n).unwrap_or_default() } else { n.strokes.clone() };
         let at = at.unwrap_or(list.len().saturating_sub(1));
         let paint = list.get(at).cloned().ok_or_else(|| bad(cmd, format!("no {} at index {at}", if fills { "fill" } else { "stroke" })))?;
         (paint, (!fills).then(|| n.stroke.clone()))

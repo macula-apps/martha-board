@@ -1,11 +1,11 @@
-//! Live boolean editing: selecting operands on the canvas, results that follow an operand during a
-//! drag or a point edit (one undo step each), per-operand operations from the boolean commands
-//! and `node.set`, the operands outlined on the canvas, flatten, inspect and junk parameters.
+//! Boolean groups as a file holds them (no command makes one, #32): selecting operands on the
+//! canvas, results that follow an operand during a drag (one undo step), per-operand operations
+//! from `node.set`, the operands outlined on the canvas, inspect and junk parameters.
 
 use serde_json::{Value, json};
 
 use crate::Session;
-use crate::booleans::{distinct_op, operand_op, outlined_operands, shown_op};
+use crate::booleans::{distinct_op, outlined_operands};
 use crate::params::id_of;
 use crate::tools::{PointerEvent, PointerKind};
 use figcraft_doc::{BoolOp, NodeId, NodeKind};
@@ -35,7 +35,7 @@ pub(crate) fn area(s: &Session, id: NodeId) -> f64 {
 fn subtract(s: &mut Session) -> (NodeId, NodeId, NodeId) {
     let a = id_of(&ex(s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 100, "height": 100}))["id"]).unwrap();
     let b = id_of(&ex(s, "shape.rectangle", json!({"x": 50, "y": 50, "width": 100, "height": 100}))["id"]).unwrap();
-    let g = id_of(&ex(s, "bool.subtract", json!({"ids": [a, b]}))["id"]).unwrap();
+    let g = crate::test_helpers::bool_group(s, &[a, b], BoolOp::Subtract);
     ex(s, "select.none", json!({}));
     let ds = s.ds_mut().unwrap();
     ds.view.snap_objects = false;
@@ -55,19 +55,19 @@ fn clicks_select_the_group_and_reach_operands() {
     // With an operand selected, a click on another picks it.
     click(&mut s, 120.0, 120.0, false);
     assert_eq!(s.selection(), vec![b]);
-    // A double click goes into the group, then into vector edit mode on the operand.
+    // A double click goes into the group; another on the operand leaves it selected as it is (no
+    // vector edit mode, #32).
     ex(&mut s, "select.set", json!({"ids": [g]}));
     s.pointer(&ev(PointerKind::DoubleClick, 120.0, 120.0, false)).unwrap();
     assert_eq!(s.selection(), vec![b], "double click: the operand under the pointer");
     s.pointer(&ev(PointerKind::DoubleClick, 120.0, 120.0, false)).unwrap();
-    let ve = s.ds().unwrap().vector_edit.clone().expect("vector edit on the operand");
-    assert_eq!(ve.id, b);
-    assert!(matches!(s.doc().unwrap().node(b).unwrap().kind, NodeKind::Vector { .. }));
+    assert_eq!(s.selection(), vec![b], "the operand stays selected");
+    assert!(matches!(s.doc().unwrap().node(b).unwrap().kind, NodeKind::Rectangle), "and stays a rectangle");
     assert_eq!(s.doc().unwrap().node(b).unwrap().parent, Some(g), "still an operand");
-    assert!((area(&s, g) - 7500.0).abs() < 1.0, "converting it changes nothing");
-    // The canvas outlines every operand of the group while one is edited.
-    assert_eq!(outlined_operands(s.doc().unwrap(), &s.selection(), Some(b)), vec![a, b]);
-    assert!(outlined_operands(s.doc().unwrap(), &[g], None).is_empty(), "not for the group itself");
+    assert!((area(&s, g) - 7500.0).abs() < 1.0);
+    // The canvas outlines every operand of the group while one is selected.
+    assert_eq!(outlined_operands(s.doc().unwrap(), &s.selection()), vec![a, b]);
+    assert!(outlined_operands(s.doc().unwrap(), &[g]).is_empty(), "not for the group itself");
 }
 
 #[test]
@@ -93,77 +93,14 @@ fn moving_an_operand_updates_the_result_during_the_drag() {
 }
 
 #[test]
-fn editing_an_operands_points_updates_the_result_live() {
-    let mut s = Session::new();
-    let (g, a, _) = subtract(&mut s);
-    ex(&mut s, "vector.edit.begin", json!({"id": a}));
-    // Drag A's top-left corner 50 to the left: A becomes a 12,500 trapezoid, the cut stays.
-    s.pointer(&ev(PointerKind::Down, 0.0, 0.0, false)).unwrap();
-    s.pointer(&ev(PointerKind::Move, -25.0, 0.0, false)).unwrap();
-    s.pointer(&ev(PointerKind::Move, -50.0, 0.0, false)).unwrap();
-    assert!((area(&s, g) - 10000.0).abs() < 1.0, "live: {}", area(&s, g));
-    s.pointer(&ev(PointerKind::Up, -50.0, 0.0, false)).unwrap();
-    assert!((area(&s, g) - 10000.0).abs() < 1.0);
-    s.undo().unwrap();
-    assert!((area(&s, g) - 7500.0).abs() < 1.0, "one undo step: {}", area(&s, g));
-}
-
-#[test]
-fn boolean_commands_set_operand_and_group_operations() {
-    let mut s = Session::new();
-    let (g, a, b) = subtract(&mut s);
-    let c = id_of(&ex(&mut s, "shape.rectangle", json!({"x": 200, "y": 0, "width": 50, "height": 50}))["id"]).unwrap();
-    ex(&mut s, "node.reparent", json!({"ids": [c], "parent": g}));
-    assert_eq!(s.doc().unwrap().node(c).unwrap().parent, Some(g));
-    // Subtracting the top operand removes it; uniting it adds its 2,500.
-    assert!((area(&s, g) - 7500.0).abs() < 1.0);
-    let r = ex(&mut s, "bool.union", json!({"ids": [c]}));
-    assert_eq!(r["operation"], json!("union"));
-    assert_eq!(operand_op(s.doc().unwrap(), c), Some(BoolOp::Union));
-    assert_eq!(distinct_op(s.doc().unwrap(), c), Some(BoolOp::Union));
-    assert!((area(&s, g) - 10000.0).abs() < 1.0, "{}", area(&s, g));
-    assert_eq!(s.ds().unwrap().doc.node(g).unwrap().children.len(), 3, "no new group");
-    // Undo is one step; the operand follows the group again when set to its operation.
-    s.undo().unwrap();
-    assert!((area(&s, g) - 7500.0).abs() < 1.0);
-    s.redo().unwrap();
-    ex(&mut s, "bool.subtract", json!({"ids": [c]}));
-    assert_eq!(s.doc().unwrap().node(c).unwrap().bool_op, None);
-    // The controls show the selection's operation.
-    ex(&mut s, "bool.intersect", json!({"ids": [b]}));
-    assert_eq!(shown_op(s.doc().unwrap(), &[b]), Some(BoolOp::Intersect));
-    assert_eq!(shown_op(s.doc().unwrap(), &[b, c]), None, "mixed");
-    assert_eq!(shown_op(s.doc().unwrap(), &[g]), Some(BoolOp::Subtract));
-    // (A ∩ B) − C: the 2,500 overlap.
-    assert!((area(&s, g) - 2500.0).abs() < 1.0, "{}", area(&s, g));
-    // One boolean group selected: its operation changes and every operand follows it.
-    ex(&mut s, "bool.union", json!({"ids": [g]}));
-    let doc = s.doc().unwrap();
-    assert!(matches!(doc.node(g).unwrap().kind, NodeKind::BooleanOp { op: BoolOp::Union }));
-    assert_eq!(doc.node(g).unwrap().name, "Union", "a default name follows the operation");
-    assert!([a, b, c].iter().all(|i| doc.node(*i).unwrap().bool_op.is_none()));
-    assert!((area(&s, g) - 20000.0).abs() < 1.0, "{}", area(&s, g));
-    // Anything else is wrapped in a new group, whose operands follow it.
-    let d = id_of(&ex(&mut s, "shape.rectangle", json!({"x": 400, "y": 0, "width": 10, "height": 10}))["id"]).unwrap();
-    let r = ex(&mut s, "bool.exclude", json!({"ids": [g, d]}));
-    let outer = id_of(&r["id"]).unwrap();
-    assert_ne!(outer, g);
-    assert_eq!(s.doc().unwrap().node(g).unwrap().parent, Some(outer));
-    // Flatten bakes the mixed result.
-    ex(&mut s, "bool.subtract", json!({"ids": [c]}));
-    let before = area(&s, g);
-    let r = ex(&mut s, "bool.flatten", json!({"ids": [g]}));
-    let flat = id_of(&r["id"]).unwrap();
-    assert!((before - 17500.0).abs() < 1.0, "(A ∪ B) − C, C off to the side: {before}");
-    assert!((area(&s, flat) - before).abs() < 2.0, "{} vs {before}", area(&s, flat));
-}
-
-#[test]
 fn node_set_and_inspect_carry_operand_operations() {
     let mut s = Session::new();
     let (g, a, b) = subtract(&mut s);
     ex(&mut s, "node.set", json!({"id": b, "props": {"booleanOperation": "intersect"}}));
     assert_eq!(s.doc().unwrap().node(b).unwrap().bool_op, Some(BoolOp::Intersect));
+    // The layers panel marks it, and the group draws A ∩ B: the 2,500 overlap.
+    assert_eq!(distinct_op(s.doc().unwrap(), b), Some(BoolOp::Intersect));
+    assert!((area(&s, g) - 2500.0).abs() < 1.0, "{}", area(&s, g));
     let n = ex(&mut s, "node.get", json!({"id": b}));
     assert_eq!(n["operandOperation"], json!("intersect"));
     ex(&mut s, "node.set", json!({"id": b, "props": {"operandOperation": null}}));
@@ -183,7 +120,7 @@ fn node_set_and_inspect_carry_operand_operations() {
 }
 
 #[test]
-fn boolean_commands_survive_junk() {
+fn node_set_on_operands_survives_junk() {
     let junk = [
         json!({}),
         json!(null),
@@ -193,17 +130,15 @@ fn boolean_commands_survive_junk() {
         json!({"id": {"nested": true}}),
         json!({"props": {"booleanOperation": [1, 2]}}),
     ];
-    for cmd in ["bool.union", "bool.subtract", "bool.intersect", "bool.exclude", "bool.flatten", "node.set"] {
-        for j in &junk {
-            let mut s = Session::new();
-            let (g, _, b) = subtract(&mut s);
-            ex(&mut s, "select.set", json!({"ids": [b]}));
-            if let Err(crate::EngineError::Internal { cmd, msg }) = s.execute(cmd, j) {
-                panic!("{cmd} panicked on {j}: {msg}");
-            }
-            if let Some(n) = s.doc().unwrap().node(g) {
-                let _ = figcraft_render::node_outline(s.doc().unwrap(), n);
-            }
+    for j in &junk {
+        let mut s = Session::new();
+        let (g, _, b) = subtract(&mut s);
+        ex(&mut s, "select.set", json!({"ids": [b]}));
+        if let Err(crate::EngineError::Internal { cmd, msg }) = s.execute("node.set", j) {
+            panic!("{cmd} panicked on {j}: {msg}");
+        }
+        if let Some(n) = s.doc().unwrap().node(g) {
+            let _ = figcraft_render::node_outline(s.doc().unwrap(), n);
         }
     }
     // node.set with junk operations on an operand.

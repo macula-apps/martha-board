@@ -80,13 +80,6 @@ fn current_paint(app: &FigApp, target: &PickerTarget) -> Option<Paint> {
         },
         PickerTarget::Paint { fills, index, ids } => {
             let n = doc.node(*ids.first()?)?;
-            // Regions selected in vector edit mode: the picker edits their own fills (#1875).
-            if *fills
-                && ids.len() == 1
-                && let Some(Some(list)) = figcraft_engine::vectoredit::selected_region_fills(&app.session, n.id)
-            {
-                return list.get(*index).cloned();
-            }
             // A text's fills are its characters' (none to pick while they differ, #1856).
             let list = if *fills { figcraft_engine::cmd::lists::character_fills(n)? } else { n.strokes.clone() };
             list.get(*index).cloned()
@@ -533,18 +526,6 @@ fn set_image_pending(ctx: &egui::Context, target: Option<&PickerTarget>) {
 }
 
 /// `image.replace`'s parameters for layers' paint `index`.
-/// Whether `target` is a paint of the regions selected in vector edit mode (#1875): the picker
-/// shows the regions' own fills, which the image commands (layer paints only) don't reach, so
-/// their image edits are written as paints like any other.
-fn region_backed(app: &FigApp, target: &PickerTarget) -> bool {
-    match target {
-        PickerTarget::Paint { fills: true, ids, .. } => {
-            matches!(ids.as_slice(), [id] if figcraft_engine::vectoredit::selected_region_fills(&app.session, *id).is_some())
-        }
-        _ => false,
-    }
-}
-
 fn image_params(fills: bool, index: usize, ids: &[NodeId]) -> serde_json::Value {
     json!({"ids": ids, "target": if fills { "fill" } else { "stroke" }, "index": index})
 }
@@ -555,11 +536,6 @@ fn image_params(fills: bool, index: usize, ids: &[NodeId]) -> serde_json::Value 
 pub(crate) fn image_drop_target(app: &FigApp, ctx: &egui::Context) -> Option<(Rect, serde_json::Value)> {
     let target = app.ui.picker.as_ref()?;
     let PickerTarget::Paint { fills, index, ids } = target else { return None };
-    // A region's own paint takes no drop (`image.replace` edits layer paints); the file goes to
-    // the canvas as it would without the picker.
-    if region_backed(app, target) {
-        return None;
-    }
     if !image_pending(ctx, target) && !matches!(current_paint(app, target)?.kind, PaintKind::Image(_)) {
         return None;
     }
@@ -580,9 +556,7 @@ fn picked_bytes(file: &serde_json::Value) -> Option<Vec<u8>> {
 fn upload_image(app: &mut FigApp, target: &PickerTarget) {
     let target = target.clone();
     app.pick_file(tr("Choose image"), &IMAGE_FILES, true, move |app, file| {
-        if let PickerTarget::Paint { fills, index, ids } = &target
-            && !region_backed(app, &target)
-        {
+        if let PickerTarget::Paint { fills, index, ids } = &target {
             let mut params = image_params(*fills, *index, ids);
             for key in ["path", "data"] {
                 if let Some(v) = file.get(key) {
@@ -713,14 +687,11 @@ fn blend_row(ui: &mut Ui, app: &mut FigApp, target: &PickerTarget, paint: &mut P
 
 /// The layer and fill index to crop on the canvas (`image.crop`) when Crop is chosen for `target`:
 /// one layer's image fill as the Fill section shows it (a text's characters' shared fills
-/// included). Strokes, several layers at once and the regions selected in vector edit mode have
-/// no crop mode, so for them Crop only sets the paint's mode.
+/// included). Strokes and several layers at once have no crop mode, so for them Crop only sets the
+/// paint's mode.
 pub(crate) fn crop_on_canvas(app: &FigApp, target: &PickerTarget) -> Option<(NodeId, usize)> {
     let PickerTarget::Paint { fills: true, index, ids } = target else { return None };
     let [id] = ids[..] else { return None };
-    if figcraft_engine::vectoredit::selected_region_fills(&app.session, id).is_some() {
-        return None;
-    }
     let doc = app.session.doc().ok()?;
     let shown = figcraft_engine::cmd::lists::character_fills(doc.node(id)?)?;
     matches!(shown.get(*index)?.kind, PaintKind::Image(_)).then_some((id, *index))
@@ -1399,9 +1370,9 @@ fn image_presets(app: &mut FigApp, ui: &mut Ui, target: &PickerTarget, paint: &m
             app.run("image.deletePreset", json!({"name": name}));
         }
         Some(PresetAction::Apply(name)) => match target {
-            // Layer paints go through the command; other targets (a text range, a style, a
-            // region's own paint) get the preset's values written like any edit.
-            PickerTarget::Paint { fills, index, ids } if !region_backed(app, target) => {
+            // Layer paints go through the command; other targets (a text range, a style) get the
+            // preset's values written like any edit.
+            PickerTarget::Paint { fills, index, ids } => {
                 app.run("image.adjust", json!({"ids": ids, "target": if *fills { "fill" } else { "stroke" }, "index": index, "preset": name}));
             }
             _ => {

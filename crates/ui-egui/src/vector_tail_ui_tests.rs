@@ -1,5 +1,5 @@
-//! The Design panel's Arc fields (named, valued, Mixed across ellipses, typed into), the width
-//! point's side fields, and operands with an operation of their own in the layers panel.
+//! The Design panel's Arc fields (named, valued, Mixed across ellipses, typed into), and operands
+//! with an operation of their own in the layers panel.
 
 use egui::accesskit::{Node, Role};
 use egui::{Event, Key, Modifiers};
@@ -75,31 +75,15 @@ fn arc_fields_show_and_set_the_ellipse_arc() {
 }
 
 #[test]
-fn a_width_point_shows_its_sides() {
-    let mut s = Session::new();
-    let v = id(s.execute("vector.create", &json!({"points": [[0, 50], [100, 50]], "closed": false})).unwrap());
-    s.execute("node.set", &json!({"id": v, "props": {"strokes": ["#000000"], "strokeWeight": 10, "strokeAlign": "center"}})).unwrap();
-    s.execute("vector.edit.begin", &json!({"id": v})).unwrap();
-    s.execute("vector.edit.tool", &json!({"tool": "width"})).unwrap();
-    s.execute("vector.edit.widthPoint", &json!({"t": 0.5, "width": 20})).unwrap();
-    s.execute("vector.edit.widthPoint", &json!({"index": 1, "side": "left", "width": 4})).unwrap();
-    let mut u = Ui::new(s);
-    let nodes = tree(&mut u);
-    assert_eq!(value(&nodes, "Left side width").as_deref(), Some("4"));
-    assert_eq!(value(&nodes, "Right side width").as_deref(), Some("10"));
-    assert_eq!(value(&nodes, "Width").as_deref(), Some("14"));
-}
-
-#[test]
 fn operands_with_their_own_operation_show_it_in_the_layers_panel() {
     let mut s = Session::new();
     let a = id(s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 100})).unwrap());
     let b = id(s.execute("shape.ellipse", &json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap());
-    let g = id(s.execute("bool.subtract", &json!({"ids": [a, b]})).unwrap());
+    let g = crate::test_booleans::bool_group(&mut s, &[a, b], figcraft_doc::BoolOp::Subtract);
     let doc = s.doc().unwrap();
     assert_eq!(crate::layers::node_icon(doc, b), Icon::Ellipse, "following the group: its own icon");
     assert_eq!(crate::layers::node_icon(doc, g), Icon::Subtract);
-    s.execute("bool.intersect", &json!({"ids": [b]})).unwrap();
+    s.execute("node.set", &json!({"id": b, "props": {"operandOperation": "intersect"}})).unwrap();
     assert_eq!(crate::layers::node_icon(s.doc().unwrap(), b), Icon::Intersect);
     assert_eq!(crate::layers::node_icon(s.doc().unwrap(), a), Icon::Rectangle, "the bottom operand's never shows");
 }

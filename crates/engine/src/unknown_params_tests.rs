@@ -41,7 +41,6 @@ fn ids_and_id_are_always_taken() {
 /// `null` params or no params at all stay fine.
 #[test]
 fn documented_alternatives_and_empty_params_are_taken() {
-    assert_eq!(param_names("vector.fillRule").map(|n| n.contains(&"id") && n.contains(&"ids")), Some(true));
     assert_eq!(param_names("text.setFeatures").map(|n| n.contains(&"id") && n.contains(&"ids")), Some(true));
     assert_eq!(param_names("file.import").map(|n| n.contains(&"path") && n.contains(&"data") && n.contains(&"name")), Some(true));
     assert_eq!(param_names("file.export").map(|n| n.contains(&"scale") && n.contains(&"size")), Some(true));
@@ -51,9 +50,11 @@ fn documented_alternatives_and_empty_params_are_taken() {
     // Commands that run another command's code take its names too.
     assert_eq!(param_names("file.placeImage").map(|n| ["width", "height", "target", "mode"].iter().all(|k| n.contains(k))), Some(true));
     assert_eq!(param_names("file.exportSvg").map(|n| ["scale", "size", "contentsOnly", "svgOutlineText"].iter().all(|k| n.contains(k))), Some(true));
-    // Alternative groups: `{x, y} | {points: …}`.
-    assert_eq!(param_names("vector.edit.paint"), Some(&["x", "y", "points"][..]));
-    assert_eq!(param_names("vector.edit.cut"), Some(&["segment", "t", "vertex", "from", "to"][..]));
+    // Alternative groups: `{x, y} | {points: …}` (read the same way, though no command's doc has
+    // one since vector editing left, #32).
+    let alternatives: Vec<&str> =
+        crate::cmd::doc_items("{x, y} | {points: [[x, y], ...]}").unwrap().into_iter().flat_map(crate::cmd::item_names).collect();
+    assert_eq!(alternatives, ["x", "y", "points"]);
     // `node.set` documents its props and checks them itself.
     assert_eq!(param_names("node.set"), None);
     let mut s = Session::new();

@@ -26,11 +26,6 @@ fn b(p: &Value, k: &str) -> bool {
     figcraft_engine::params::boolean(p, k).unwrap_or(false)
 }
 
-/// Pen pressure `k` (0..1), if given.
-fn pressure(p: &Value, k: &str) -> Option<f32> {
-    f(p, k).filter(|v| v.is_finite()).map(|v| v.clamp(0.0, 1.0) as f32)
-}
-
 fn f(p: &Value, k: &str) -> Option<f64> {
     figcraft_engine::params::num(p, k)
 }
@@ -89,10 +84,7 @@ impl Headless {
             cmd: b(p, "cmd"),
             ctrl: b(p, "ctrl"),
             zoom,
-            pressure: pressure(p, "pressure"),
         };
-        // A drag's pressure goes from `pressure` to `pressureTo`.
-        let (pr0, pr1) = (pressure(p, "pressure"), pressure(p, "pressureTo").or(pressure(p, "pressure")));
         let kind = p.get("kind").and_then(Value::as_str).unwrap_or("click");
         let mut events = Vec::new();
         match kind {
@@ -113,10 +105,9 @@ impl Headless {
                 events.push(mk(PointerKind::Down, x, y));
                 for i in 1..=steps {
                     let t = i as f64 / steps as f64;
-                    let pressure = pr0.zip(pr1).map(|(a, b)| a + (b - a) * t as f32);
-                    events.push(PointerEvent { pressure, ..mk(PointerKind::Move, x + (tx - x) * t, y + (ty - y) * t) });
+                    events.push(mk(PointerKind::Move, x + (tx - x) * t, y + (ty - y) * t));
                 }
-                events.push(PointerEvent { pressure: pr1, ..mk(PointerKind::Up, tx, ty) });
+                events.push(mk(PointerKind::Up, tx, ty));
             }
             other => return Err(format!("unknown pointer kind `{other}` (down|move|up|click|double|hover|drag)")),
         }
@@ -148,8 +139,7 @@ impl Headless {
                 return Ok(json!({"ok": true, "textEdit": true}));
             }
         }
-        // Vector edit mode and shape builder keys (tools, nudging points, delete, join, Enter), as
-        // on the canvas.
+        // A selected ruler guide's keys, as on the canvas.
         if self.session.tool_key(key, m.shift, m.alt, m.cmd).map_err(|e| e.to_string())? {
             return Ok(json!({"ok": true}));
         }
@@ -163,10 +153,6 @@ impl Headless {
                 // Enter on a text layer starts editing it.
                 "select.children" if self.single_text().is_some() => {
                     self.execute("text.edit.begin", &json!({"id": self.single_text()}))?;
-                }
-                // Enter on shapes edits them as vectors (several at once).
-                "select.children" if self.vector_targets().is_some() => {
-                    self.execute("vector.edit.begin", &json!({"ids": self.vector_targets()}))?;
                 }
                 id => {
                     self.execute(id, &json!({}))?;
@@ -196,11 +182,6 @@ impl Headless {
     }
 
     /// The selected layer when exactly one text layer is selected.
-    /// The selected layers Enter edits as vectors (see `vectoredit::enter_targets`).
-    fn vector_targets(&self) -> Option<Vec<NodeId>> {
-        figcraft_engine::vectoredit::enter_targets(self.session.doc().ok()?, &self.session.selection())
-    }
-
     fn single_text(&self) -> Option<NodeId> {
         let sel = self.session.selection();
         let doc = self.session.doc().ok()?;

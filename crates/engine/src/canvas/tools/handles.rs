@@ -58,13 +58,6 @@ pub(crate) fn readable_text_fills(doc: &Document, parent: NodeId) -> Option<Vec<
     on_dark_background(doc, parent).then(|| vec![figcraft_color::Paint::solid(figcraft_color::Color::WHITE)])
 }
 
-/// The colour the Pencil draws with in `parent`: [`PENCIL_STROKE`]'s black, or white on a dark
-/// background by the rule text follows (#1741; "in black, unless you're sketching on a dark canvas
-/// or frame").
-pub(crate) fn pencil_color(doc: &Document, parent: NodeId) -> figcraft_color::Color {
-    if on_dark_background(doc, parent) { figcraft_color::Color::WHITE } else { PENCIL_STROKE.0 }
-}
-
 const ANCHORS: [&str; 9] = ["tl", "t", "tr", "l", "c", "r", "bl", "b", "br"];
 
 const HANDLE_PX: f64 = 5.0;
@@ -219,9 +212,6 @@ pub(super) fn on_corner_square(doc: &Document, sel: &[NodeId], p: Point, zoom: f
 /// A box whose sides are both shorter than this on screen (pixels) would be covered by its
 /// handles: the canvas draws just its outline (the handles still answer just outside it).
 pub const SMALL_BOX_PX: f64 = 16.0;
-
-/// The stroke the Pencil draws: its colour and weight (the canvas previews it the same).
-pub const PENCIL_STROKE: (figcraft_color::Color, f64) = (figcraft_color::Color::BLACK, 2.0);
 
 /// The shorter and longer sides, in screen pixels, of the box with `corners` (tl, tr, br, bl).
 pub fn box_sides_px(corners: &[Point; 4], zoom: f64) -> (f64, f64) {
@@ -436,13 +426,3 @@ pub(super) fn shape_hint(doc: &Document, id: NodeId, handle: ShapeHandle, zoom: 
 
 #[allow(dead_code)]
 fn unused(_: BTreeMap<u8, u8>) {}
-
-/// An end point of a selected open vector within `tol` of page point `p`: (layer, point).
-pub(super) fn selected_end_at(doc: &Document, sel: &[NodeId], p: Point, tol: f64) -> Option<(NodeId, usize)> {
-    sel.iter().find_map(|id| {
-        let net = crate::vectoredit::network(doc, *id)?;
-        let w = doc.world_transform(*id);
-        let near = |v: &usize| net.vertices.get(*v).is_some_and(|x| (w * x.point() - p).hypot() <= tol);
-        (0..net.vertices.len()).filter(near).find(|v| net.incident(*v).len() == 1).map(|v| (*id, v))
-    })
-}

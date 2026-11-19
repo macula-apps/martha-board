@@ -41,16 +41,11 @@ enum Drag {
 type UnitRect = (f64, f64, f64, f64);
 
 /// The paint list a picker paint at an index belongs to on layer `n`, as the Fill section and the
-/// colour picker list it: the selected regions' own fills while regions of it are selected in
-/// vector edit mode (#1875); else, for fills, a text's characters' shared fills (`character_fills`:
-/// the layer's own when the characters have none, #1856), or the layer's strokes. None when those
-/// regions' or characters' fills differ. Writes go through `fill.set`, which edits the selected
-/// regions or moves the characters' list to the layer first, so the handles read and write the
-/// same paint.
-fn edited_list(app: &FigApp, n: &figcraft_doc::Node, fills: bool) -> Option<Vec<Paint>> {
-    if fills && let Some(regions) = figcraft_engine::vectoredit::selected_region_fills(&app.session, n.id) {
-        return regions;
-    }
+/// colour picker list it: for fills, a text's characters' shared fills (`character_fills`: the
+/// layer's own when the characters have none, #1856), or the layer's strokes. None when the
+/// characters' fills differ. Writes go through `fill.set`, which moves the characters' list to the
+/// layer first, so the handles read and write the same paint.
+fn edited_list(n: &figcraft_doc::Node, fills: bool) -> Option<Vec<Paint>> {
     if fills { figcraft_engine::cmd::lists::character_fills(n) } else { Some(n.strokes.clone()) }
 }
 
@@ -67,7 +62,7 @@ fn crop_target(app: &FigApp) -> Option<(NodeId, bool, usize, ImagePaint, UnitRec
     };
     let doc = app.session.doc().ok()?;
     let n = doc.node(id)?;
-    let list = edited_list(app, n, fills)?;
+    let list = edited_list(n, fills)?;
     let PaintKind::Image(img) = &list.get(index)?.kind else { return None };
     if img.scale_mode != ImageScaleMode::Crop {
         return None;
@@ -241,7 +236,7 @@ fn gradient_target(app: &FigApp) -> Option<(NodeId, bool, usize, figcraft_color:
         return None;
     }
     let n = app.session.doc().ok()?.node(id)?;
-    let list = edited_list(app, n, *fills)?;
+    let list = edited_list(n, *fills)?;
     match &list.get(*index)?.kind {
         PaintKind::Gradient(g) => Some((id, *fills, *index, g.clone())),
         _ => None,
@@ -278,7 +273,7 @@ fn line_param(a: Pos2, b: Pos2, p: Pos2) -> Option<(f64, f32)> {
 
 fn set_gradient(app: &mut FigApp, id: NodeId, fills: bool, index: usize, g: figcraft_color::Gradient) {
     let Some(n) = app.session.doc().ok().and_then(|d| d.node(id)).cloned() else { return };
-    let Some(list) = edited_list(app, &n, fills) else { return };
+    let Some(list) = edited_list(&n, fills) else { return };
     let Some(mut paint) = list.get(index).cloned() else { return };
     paint.kind = PaintKind::Gradient(g);
     let cmd = if fills { "fill.set" } else { "stroke.set" };
@@ -373,7 +368,7 @@ fn padding_affects(side: usize, candidate: usize, modifiers: egui::Modifiers) ->
 
 fn al_zones(app: &FigApp) -> Option<Zones> {
     let ds = app.session.ds().ok()?;
-    if ds.selection.len() != 1 || ds.text_edit.is_some() || ds.vector_edit.is_some() {
+    if ds.selection.len() != 1 || ds.text_edit.is_some() {
         return None;
     }
     let id = *ds.selection.first()?;
@@ -760,7 +755,7 @@ fn apply(app: &mut FigApp, drag: &Drag, pos: Pos2, modifiers: egui::Modifiers) {
         Drag::Gradient { id, fills, index, which } => {
             let Some(u) = screen_to_unit(app, *id, pos) else { return };
             let Some(n) = app.session.doc().ok().and_then(|d| d.node(*id)).cloned() else { return };
-            let Some(list) = edited_list(app, &n, *fills) else { return };
+            let Some(list) = edited_list(&n, *fills) else { return };
             let Some(mut paint) = list.get(*index).cloned() else { return };
             if let PaintKind::Gradient(g) = &mut paint.kind {
                 match which {
@@ -837,7 +832,7 @@ fn apply(app: &mut FigApp, drag: &Drag, pos: Pos2, modifiers: egui::Modifiers) {
                 (ax.min(ax + nw), ay.min(ay + nh), ax.max(ax + nw), ay.max(ay + nh))
             };
             let Some(n) = app.session.doc().ok().and_then(|d| d.node(*id)).cloned() else { return };
-            let Some(list) = edited_list(app, &n, *fills) else { return };
+            let Some(list) = edited_list(&n, *fills) else { return };
             let Some(mut paint) = list.get(*index).cloned() else { return };
             if let PaintKind::Image(img) = &mut paint.kind {
                 img.crop = Some(ImagePaint::crop_from_rect(r.0, r.1, r.2, r.3));
@@ -864,5 +859,3 @@ fn apply(app: &mut FigApp, drag: &Drag, pos: Pos2, modifiers: egui::Modifiers) {
 mod character_fill_tests;
 #[cfg(test)]
 mod padding_tests;
-#[cfg(test)]
-mod region_tests;

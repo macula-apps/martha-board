@@ -231,7 +231,7 @@ returns one level of children.
 
 ### `ui.inspect {}`
 
-UI state: panels and tabs (`panels`: the `left` and `right` panels' widths as asked for and whether the left one is closed, `leftCollapsed`), the cursor the canvas shows (`cursor`: a CSS cursor name such as `default`, `crosshair`, `ew-resize`, `grab`, `copy`, `not-allowed`, `zoom-in`, or one FigCraft draws: `rotate <degrees>`, `pen`, `pen-close`, `pen-add`, `pen-bend`, `eyedropper`, `comment`; `null` while the pointer is elsewhere or over something with a cursor of its own, a ruler guide or a gradient handle; the engine's own hint is `tool.overlay.cursor`), current tool (`tool`: its id, overlay hints and, for a selected
+UI state: panels and tabs (`panels`: the `left` and `right` panels' widths as asked for and whether the left one is closed, `leftCollapsed`), the cursor the canvas shows (`cursor`: a CSS cursor name such as `default`, `crosshair`, `ew-resize`, `grab`, `copy`, `not-allowed`, `zoom-in`, or one FigCraft draws: `rotate <degrees>`, `eyedropper`, `comment`; `null` while the pointer is elsewhere or over something with a cursor of its own, a ruler guide or a gradient handle; the engine's own hint is `tool.overlay.cursor`), current tool (`tool`: its id, overlay hints and, for a selected
 ellipse, its arc handles `arcHandles`, for a selected rectangle, frame, polygon or star, its corner radius and ratio handles `shapeHandles`; see [mcp.md](mcp.md#measuring-the-scale-tool-arc-handles-and-selecting)), canvas rect, dialogs, view, timings (`frameMs`,
 `renderMs`), frames drawn since start or the last `ui.set {resetFrameStats: true}` (`framesDrawn`;
 an idle window draws none), how long building them took (`frameTimes`: `{frames, meanMs, maxMs}`, the
@@ -283,12 +283,11 @@ confirmed or renamed (`confirmRemove`, `rename`; Escape closes them); the list i
 them: `[{name, live}]`, `live` being `"shared"` (in a live session others get into), `"private"`
 (a file of yours on a server, open only to you) or null.
 
-### `ui.pointer {kind, x, y | sx, sy, to?, steps?, shift?, alt?, cmd?, ctrl?, pressure?, pressureTo?}`
+### `ui.pointer {kind, x, y | sx, sy, to?, steps?, shift?, alt?, cmd?, ctrl?}`
 
 A mouse gesture with the current tool. `kind`: `down`, `move`, `up`, `click`, `double`, `hover`,
 `drag` (needs `to: [x, y]`; `steps` intermediate moves, default 8). Position in page coordinates
-(`x`, `y`) or screen pixels (`sx`, `sy`). `pressure` (0–1) is pen pressure (the Pencil records
-it); a drag's pressure goes from `pressure` to `pressureTo`. Returns `{selection, tool}`. With the Move and Scale
+(`x`, `y`) or screen pixels (`sx`, `sy`). Returns `{selection, tool}`. With the Move and Scale
 tools, a press on a frame's or section's name label (as the canvas last drew it, along a rotated
 frame's top edge) selects and drags that frame; a double-click there renames the frame in place in
 the desktop app (the name field opens over the label).
@@ -300,7 +299,7 @@ the desktop app (the name field opens over the label).
 
 ### `ui.key {key, shift?, alt?, cmd?, ctrl?}`
 
-A key as if typed on the canvas (in vector edit mode the edit keys come first: `V` `P` `B` `Q` `X` `Shift+E` `Shift+W` tools, arrows nudge points, `Delete`/`Shift+Delete`, `Cmd+A`, `Cmd+J`; with the shape builder, `Enter` finishes): a menu shortcut (`{"key":"G","cmd":true}` groups), a tool key,
+A key as if typed on the canvas (with a ruler guide selected its keys come first: `Delete` removes it, arrows nudge it, `Escape` deselects it): a menu shortcut (`{"key":"G","cmd":true}` groups), a tool key,
 `Escape`, `Delete`/`Backspace`, `Enter`, number keys (opacity; two quick digits make an exact percentage), arrows (nudge; shift = big nudge; auto layout children move one place instead: along the flow, between wrapped rows, to the next grid cell, or into the neighbouring nested auto layout frame; with `cmd` they resize the selection). With the Comment
 tool, `ArrowUp`/`ArrowDown` open the previous/next thread of the Comments panel's list instead
 (returns `{"comment": id}`). While text is being edited, the text shortcuts (Bold, alignment,

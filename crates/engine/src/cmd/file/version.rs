@@ -165,7 +165,6 @@ pub(super) fn restore_version(s: &mut Session, p: &Value) -> Result<Value> {
     ds.doc = doc;
     ds.selection.clear();
     ds.text_edit = None;
-    ds.vector_edit = None;
     // The restored design is in the history already: restoring it again keeps nothing new.
     ds.mark_checkpoint();
     Ok(out)

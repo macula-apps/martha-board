@@ -1,8 +1,7 @@
 //! Snapping and smart guides: while moving or resizing, edges and centres snap to nearby layers'
 //! edges/centres, the parent frame, layout grid columns and ruler guides (the page's and the
 //! top-level frame's); the matches come back as
-//! guide lines (with spacing labels) for the canvas to draw in red. Vector points also snap to
-//! other points (see `vectoredit::snap`); landing on one shows a marker (a zero-length guide).
+//! guide lines (with spacing labels) for the canvas to draw in red.
 
 use figcraft_doc::{BoardItem, Document, NodeId};
 use figcraft_geom::{Affine, Point, Rect, Vec2, transform_rect_bbox};

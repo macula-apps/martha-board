@@ -1,12 +1,12 @@
 //! A boolean group's corner radius through the engine: it rounds the result (and the SVG export
-//! of it), children keep their own radius, Flatten bakes the arcs and clicks follow the result.
+//! of it), children keep their own radius and clicks follow the result.
 
 use serde_json::json;
 
 use crate::Session;
 use crate::booleans_tests::{area, click, ex};
 use crate::params::id_of;
-use figcraft_doc::{NodeId, NodeKind};
+use figcraft_doc::{BoolOp, NodeId};
 use figcraft_geom::{Point, Shape};
 
 const L_AREA: f64 = 34656.6;
@@ -29,7 +29,7 @@ fn set_radius(s: &mut Session, id: NodeId, r: f64) {
 /// The L of two rectangles, united, nothing selected, snapping off.
 fn l_group(s: &mut Session) -> NodeId {
     let (a, b) = (rect(s, 0.0, 0.0, 200.0, 100.0), rect(s, 150.0, 0.0, 100.0, 200.0));
-    let g = id_of(&ex(s, "bool.union", json!({"ids": [a, b]}))["id"]).unwrap();
+    let g = crate::test_helpers::bool_group(s, &[a, b], BoolOp::Union);
     snapping_off(s);
     g
 }
@@ -64,7 +64,7 @@ fn a_boolean_group_rounds_every_sharp_corner_of_its_result() {
 /// whose own radius is `a_radius`, under a group radius of `radius`.
 fn notch(s: &mut Session, a: NodeId, radius: f64) -> NodeId {
     let b = rect(s, 50.0, -50.0, 100.0, 100.0);
-    let g = id_of(&ex(s, "bool.subtract", json!({"ids": [a, b]}))["id"]).unwrap();
+    let g = crate::test_helpers::bool_group(s, &[a, b], BoolOp::Subtract);
     snapping_off(s);
     set_radius(s, g, radius);
     g
@@ -97,26 +97,10 @@ fn children_keep_their_radius_and_a_subtraction_rounds_its_cut() {
 fn a_nested_group_keeps_its_own_radius() {
     let mut s = Session::new();
     let (l, r) = (rect(&mut s, 0.0, 0.0, 120.0, 100.0), rect(&mut s, 80.0, 0.0, 120.0, 100.0));
-    let inner = id_of(&ex(&mut s, "bool.union", json!({"ids": [l, r]}))["id"]).unwrap();
+    let inner = crate::test_helpers::bool_group(&mut s, &[l, r], BoolOp::Union);
     set_radius(&mut s, inner, 10.0);
     let g = notch(&mut s, inner, 20.0);
     assert_notch_at_20(&s, g);
-}
-
-#[test]
-fn flatten_bakes_the_arcs_and_the_vector_has_no_radius() {
-    let mut s = Session::new();
-    let g = l_group(&mut s);
-    set_radius(&mut s, g, 20.0);
-    let flat = id_of(&ex(&mut s, "vector.flatten", json!({"ids": [g]}))["id"]).unwrap();
-    let doc = s.doc().unwrap();
-    let n = doc.node(flat).unwrap();
-    let NodeKind::Vector { network } = &n.kind else { panic!("a vector: {:?}", n.kind) };
-    assert_eq!(n.corners.radii, [0.0; 4]);
-    assert!(network.vertices.iter().all(|v| v.radius == 0.0));
-    let path = figcraft_doc::geometry::shape_path(n).unwrap();
-    assert!((path.area().abs() - L_AREA).abs() < 1.0, "{}", path.area());
-    assert!((n.width - 250.0).abs() < 1e-6 && (n.height - 200.0).abs() < 1e-6);
 }
 
 #[test]

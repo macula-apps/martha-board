@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 
 use figcraft_color::{ImageScaleMode, PaintKind};
 use figcraft_doc::geometry::select_target;
-use figcraft_doc::{Document, LayoutMode, Node, NodeId, NodeKind, Sizing, StrokeAlign, StrokeCap, TextAutoResize, TextData, TextPath, VectorNetwork};
+use figcraft_doc::{Document, LayoutMode, Node, NodeId, NodeKind, Sizing, StrokeCap, TextAutoResize, TextData, TextPath};
 use figcraft_geom::{Affine, Point, Rect, Vec2};
 use serde::Serialize;
 use serde_json::json;
@@ -24,19 +24,16 @@ mod drag;
 mod draw;
 mod handles;
 mod keys;
-mod pen;
 mod pointer;
 
 use handles::DRAG_SLOP_PX;
-#[cfg(test)]
-pub(crate) use handles::scale_factor;
 pub use handles::{
-    PENCIL_STROKE, SMALL_BOX_PX, anchor_name, anchor_of, box_sides_px, handle_at, handle_at_corners, label_at, locked_in, scale_anchor_point,
-    selection_box, selection_frame, shared_rotation_degrees,
+    SMALL_BOX_PX, anchor_name, anchor_of, box_sides_px, handle_at, handle_at_corners, label_at, locked_in, scale_anchor_point, selection_box,
+    selection_frame, shared_rotation_degrees,
 };
-pub(crate) use handles::{SNAP_PX, UNMEASURED_SNAP_PX, handle_cursor, readable_text_fills, resized_box};
+pub(crate) use handles::{UNMEASURED_SNAP_PX, readable_text_fills};
 #[cfg(test)]
-pub(crate) use pen::pressure_profile;
+pub(crate) use handles::{handle_cursor, resized_box, scale_factor};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Default)]
 pub enum ToolId {
@@ -53,13 +50,10 @@ pub enum ToolId {
     Ellipse,
     Polygon,
     Star,
-    Pen,
-    Pencil,
     Text,
     TextOnPath,
     Comment,
     Eyedropper,
-    ShapeBuilder,
     // Board tools.
     Sticky,
     BoardShape,
@@ -71,7 +65,7 @@ pub enum ToolId {
 }
 
 impl ToolId {
-    pub const ALL: [ToolId; 26] = [
+    pub const ALL: [ToolId; 23] = [
         ToolId::Move,
         ToolId::Scale,
         ToolId::Hand,
@@ -84,13 +78,10 @@ impl ToolId {
         ToolId::Ellipse,
         ToolId::Polygon,
         ToolId::Star,
-        ToolId::Pen,
-        ToolId::Pencil,
         ToolId::Text,
         ToolId::TextOnPath,
         ToolId::Comment,
         ToolId::Eyedropper,
-        ToolId::ShapeBuilder,
         ToolId::Sticky,
         ToolId::BoardShape,
         ToolId::Connector,
@@ -113,13 +104,10 @@ impl ToolId {
             ToolId::Ellipse => "ellipse",
             ToolId::Polygon => "polygon",
             ToolId::Star => "star",
-            ToolId::Pen => "pen",
-            ToolId::Pencil => "pencil",
             ToolId::Text => "text",
             ToolId::TextOnPath => "textOnPath",
             ToolId::Comment => "comment",
             ToolId::Eyedropper => "eyedropper",
-            ToolId::ShapeBuilder => "shapeBuilder",
             ToolId::Sticky => "sticky",
             ToolId::BoardShape => "shape",
             ToolId::Connector => "connector",
@@ -146,13 +134,10 @@ impl ToolId {
             ToolId::Ellipse => "Ellipse",
             ToolId::Polygon => "Polygon",
             ToolId::Star => "Star",
-            ToolId::Pen => "Pen",
-            ToolId::Pencil => "Pencil",
             ToolId::Text => "Text",
             ToolId::TextOnPath => "Text on a path",
             ToolId::Comment => "Comment",
             ToolId::Eyedropper => "Pick color",
-            ToolId::ShapeBuilder => "Shape builder",
             ToolId::Sticky => "Sticky note",
             ToolId::BoardShape => "Shapes",
             ToolId::Connector => "Connector",
@@ -232,8 +217,6 @@ pub struct PointerEvent {
     pub ctrl: bool,
     /// Screen pixels per page unit.
     pub zoom: f64,
-    /// Pen pressure, 0..1, where the device reports it (`None`: a mouse, or a platform that doesn't).
-    pub pressure: Option<f32>,
 }
 
 /// The pointer is still within [`DRAG_SLOP_PX`] of where it was pressed.
@@ -243,7 +226,7 @@ pub(crate) fn within_slop(ev: &PointerEvent, start: Point) -> bool {
 
 impl PointerEvent {
     pub fn at(kind: PointerKind, x: f64, y: f64, zoom: f64) -> Self {
-        Self { kind, x, y, sx: x * zoom, sy: y * zoom, shift: false, alt: false, cmd: false, ctrl: false, zoom, pressure: None }
+        Self { kind, x, y, sx: x * zoom, sy: y * zoom, shift: false, alt: false, cmd: false, ctrl: false, zoom }
     }
     pub(crate) fn p(&self) -> Point {
         Point::new(self.x, self.y)
@@ -268,7 +251,6 @@ pub enum Cursor {
     Grab,
     Grabbing,
     Text,
-    Pen(PenCursor),
     /// A drag here makes a copy (Alt).
     Copy,
     Eyedropper,
@@ -278,31 +260,16 @@ pub enum Cursor {
     NotAllowed,
 }
 
-/// What a click with the pen would do.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Default)]
-pub enum PenCursor {
-    /// A new point.
-    #[default]
-    New,
-    /// On a point: closes the path, connects to the point or goes on from it.
-    Close,
-    /// On a segment: adds a point there.
-    Add,
-    /// Bends the segment or the point's handles (the Bend tool; Cmd/Ctrl in vector edit mode).
-    Bend,
-}
-
 impl ToolId {
     /// The tool's cursor over empty canvas.
     pub fn cursor(self) -> Cursor {
         match self {
             ToolId::Hand => Cursor::Grab,
-            ToolId::Pen => Cursor::Pen(PenCursor::New),
             ToolId::Comment => Cursor::Comment,
             ToolId::Eyedropper => Cursor::Eyedropper,
             // Text on a path acts only over a path, where it shows the I-beam.
             ToolId::Move | ToolId::Scale | ToolId::TextOnPath => Cursor::Default,
-            // The other tools make something where they are pressed: shapes, frames, slices, pencil
+            // The other tools make something where they are pressed: shapes, frames, slices, ink
             // strokes, a new text (over a text the Text tool shows the I-beam instead).
             _ => Cursor::Crosshair,
         }
@@ -324,18 +291,10 @@ pub struct Overlay {
     pub marquee: Option<[f64; 4]>,
     pub guides: Vec<Guide>,
     pub cursor: Cursor,
-    /// Pen tool: the in-progress path's anchor points and the rubber band to the pointer.
+    /// Marker and highlighter: the points of the stroke in progress.
     pub pen: Vec<[f64; 2]>,
-    /// Pencil: the colour of the stroke in progress, for its preview (white over a dark page or
-    /// frame); None outside a Pencil stroke.
-    pub pen_color: Option<figcraft_color::Color>,
+    /// A connector end being dragged: the line from its other end to the pointer (x0, y0, x1, y1).
     pub rubber: Option<[f64; 4]>,
-    /// Pen tool: the handles shaping the segments at the pen (anchor x, y, handle x, y): the last
-    /// anchor's in and out handles and the one before's out handle.
-    pub pen_handles: Vec<[f64; 4]>,
-    /// Pen tool: where the last anchor's out handle ends, when it has one: the rubber band is the
-    /// curve a click would make, leaving along it.
-    pub rubber_handle: Option<[f64; 2]>,
     /// Frame/section the pointer is drawing or dropping into (highlighted).
     pub drop_target: Option<NodeId>,
     /// Boards: the object a stamp would stick to, under the stamp tool's pointer or a stamp being
@@ -348,24 +307,8 @@ pub struct Overlay {
     pub insert_line: Option<[f64; 4]>,
     /// Auto layout grid cell a drag would drop into (x0, y0, x1, y1).
     pub drop_cell: Option<[f64; 4]>,
-    /// Vector edit mode: what the pointer is over, the lasso being drawn and the closed area the
-    /// paint bucket would fill (page-space polygons).
-    pub vector_hover: Option<crate::vectoredit::VHit>,
-    /// The edited layer `vector_hover` is on (several layers can be in edit mode).
-    pub vector_hover_on: Option<NodeId>,
-    /// Vector edit mode: the point a press on the outline would add (the pen's ghost anchor where
-    /// it is over a segment, or the midpoint of the segment under the Move tool).
-    pub vector_add: Option<VectorAdd>,
-    /// Vector edit mode, Variable width tool: the width point, handle or path under the pointer.
-    pub width_hover: Option<crate::vectoredit::WHit>,
-    pub lasso: Vec<[f64; 2]>,
     /// The eraser brush under the pointer (x, y, radius in page units).
     pub brush: Option<[f64; 3]>,
-    pub face: Vec<Vec<[f64; 2]>>,
-    /// Shape builder: the regions under the pointer or collected by the drag (indexes into
-    /// [`crate::shapebuilder::current`]) and whether releasing removes them.
-    pub builder_regions: Vec<usize>,
-    pub builder_remove: bool,
     /// Measuring (Alt): the box of the layer or frame measured to (x0, y0, x1, y1), outlined.
     pub measure_box: Option<[f64; 4]>,
     /// Scale tool drag: the factor so far and the point that stays put.
@@ -378,16 +321,6 @@ pub struct Overlay {
     /// while one is dragged (see [`crate::shape_handles`]).
     pub shape_hover: Option<ShapeHandle>,
     pub shape: Option<ShapeHint>,
-}
-
-/// A point a press would add to the edited vector's outline: page position, whether it is a
-/// segment's midpoint (the Move tool) rather than the pen's place on its segment, and whether the
-/// pointer is on it (a press adds it; otherwise it just shows where one would go).
-#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
-pub struct VectorAdd {
-    pub at: [f64; 2],
-    pub midpoint: bool,
-    pub on: bool,
 }
 
 /// The Scale tool's live readout while dragging a handle.
@@ -460,10 +393,9 @@ pub(crate) enum Gesture {
         cx: f64,
         cy: f64,
     },
+    /// A marker or highlighter stroke: the points so far.
     Pencil {
         points: Vec<Point>,
-        /// The pen pressure at each point, where the device reports it.
-        pressure: Vec<Option<f32>>,
     },
     TextSelect {
         id: NodeId,
@@ -475,11 +407,6 @@ pub(crate) enum Gesture {
         start: Point,
         line: f64,
     },
-    PenDrag {
-        anchor: Point,
-    },
-    /// Vector edit mode gestures (handled in `vectoredit`).
-    Vector(crate::vectoredit::VGesture),
     /// Dragging an ellipse's arc handle: the arc so far (see [`crate::arc_handles`]).
     Arc {
         id: NodeId,
@@ -515,42 +442,6 @@ pub(crate) enum Gesture {
     Erase {
         gone: Vec<NodeId>,
     },
-    /// Shape builder: regions collected so far (handled in `shapebuilder`).
-    ShapeBuild {
-        picked: Vec<usize>,
-        remove: bool,
-        start: Point,
-        last: Point,
-    },
-}
-
-/// Where Shift puts the Pen's next point: as far from `last` as `p` is, at the nearest 45° step.
-fn at_45_degrees(last: Point, p: Point) -> Point {
-    let v = p - last;
-    let ang = (v.atan2() / (std::f64::consts::PI / 4.0)).round() * std::f64::consts::PI / 4.0;
-    last + Vec2::from_angle(ang) * v.hypot()
-}
-
-/// The handles a pen path shows while it is drawn ([`Overlay::pen_handles`]): the last anchor's in
-/// and out handles and the one before's out handle, those that aren't zero.
-fn pen_handles(points: &[(Point, Vec2, Vec2)]) -> Vec<[f64; 4]> {
-    let last = points.last().into_iter().flat_map(|(p, i, o)| [(p, i), (p, o)]);
-    let before = points.len().checked_sub(2).and_then(|k| points.get(k)).into_iter().map(|(p, _, o)| (p, o));
-    before.chain(last).filter(|(_, h)| h.hypot() > 0.0).map(|(p, h)| [p.x, p.y, p.x + h.x, p.y + h.y]).collect()
-}
-
-/// The pen tool's in-progress path (page coordinates).
-#[derive(Clone, Debug, Default)]
-pub struct PenPath {
-    pub id: Option<NodeId>,
-    pub parent: Option<NodeId>,
-    /// Anchors with (in, out) handle offsets.
-    pub points: Vec<(Point, Vec2, Vec2)>,
-    pub closed: bool,
-    /// The path ends connected to this anchor of its own (a vector network).
-    pub join: Option<usize>,
-    /// Anchors taken back by undo, the last one first to come back on redo.
-    pub undone: Vec<(Point, Vec2, Vec2)>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -558,20 +449,10 @@ pub struct ToolState {
     pub tool: ToolId,
     pub(crate) gesture: Gesture,
     pub overlay: Overlay,
-    pub pen: Option<PenPath>,
     /// Tool to return to after a temporary tool (space → hand).
     pub temp_from: Option<ToolId>,
     /// Last click (for double-click detection by agents that only send downs).
     pub last_hover: Option<NodeId>,
-    /// Shape builder: the cached arrangement of the selection, and Remove mode (a plain click
-    /// removes; Alt merges).
-    pub shape_builder: Option<std::sync::Arc<crate::shapebuilder::Arrangement>>,
-    pub builder_remove: bool,
-    /// Pen snap targets, kept while hovering (see `vectoredit::point_snap`).
-    pub(crate) pen_targets: Option<crate::vectoredit::point_snap::PenTargets>,
-    /// Vector edit mode's pen: where the last press that started something new (no path being
-    /// drawn) was, and the undo depth before it, so a double-click there takes that edit back.
-    pub(crate) pen_press: Option<(Point, usize)>,
     /// The Scale tool's origin: column and row (0 start, 1 middle, 2 end) of the point of the
     /// selection box that stays put when the Scale field sets a factor (`tool.scaleAnchor`; the
     /// centre, `(1, 1)`, until set). Handle drags ignore it and pivot on the opposite handle.
@@ -582,8 +463,6 @@ pub struct ToolState {
     /// corners on the page, turned with its frame): the Move and Scale tools treat a press or
     /// hover on one as on its frame.
     pub labels: Vec<(NodeId, [Point; 4])>,
-    /// The brush the Pencil draws with (`tool.pencilBrush`; `None`: a plain stroke).
-    pub pencil_brush: Option<figcraft_doc::Brush>,
     /// The board tools' colours and choices.
     pub board: crate::board::BoardTool,
     /// The eyedropper samples for a colour picker (`edit.pickColor` with `apply: false`): the

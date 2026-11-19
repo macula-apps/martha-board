@@ -1697,7 +1697,7 @@ fn alt_held_over_a_field_scrubs_it() {
 #[test]
 fn a_boolean_group_has_one_corner_radius_field_and_a_mixed_selection_reads_mixed() {
     let (mut u, a, b) = setup();
-    let g = id(u.app.session.execute("bool.union", &json!({"ids": [a, b]})).unwrap());
+    let g = crate::test_booleans::bool_group(&mut u.app.session, &[a, b], figcraft_doc::BoolOp::Union);
     let r = id(u.app.session.execute("shape.rectangle", &json!({"x": 400, "y": 0, "width": 50, "height": 50})).unwrap());
     u.app.run("select.set", json!({"ids": [g]}));
     assert_eq!(field(&mut u, "Corner radius").1, "0");
@@ -1717,7 +1717,7 @@ fn a_boolean_group_has_one_corner_radius_field_and_a_mixed_selection_reads_mixed
 #[test]
 fn a_boolean_groups_field_shows_the_radius_it_draws() {
     let (mut u, a, b) = setup();
-    let g = id(u.app.session.execute("bool.union", &json!({"ids": [a, b]})).unwrap());
+    let g = crate::test_booleans::bool_group(&mut u.app.session, &[a, b], figcraft_doc::BoolOp::Union);
     let corners = json!({"topRightRadius": 30, "bottomRightRadius": 30, "bottomLeftRadius": 30});
     u.app.session.execute("node.set", &json!({"ids": [g], "props": corners})).unwrap();
     u.app.run("select.set", json!({"ids": [g]}));

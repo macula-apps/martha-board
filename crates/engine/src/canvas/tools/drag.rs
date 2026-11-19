@@ -418,14 +418,13 @@ impl Session {
                 ds.revision += 1;
                 Ok(())
             }
-            Gesture::Pencil { points, pressure } => {
-                let (mut pts, mut pressure) = (points.clone(), pressure.clone());
+            Gesture::Pencil { points } => {
+                let mut pts = points.clone();
                 if pts.last().is_none_or(|l| (*l - ev.p()).hypot() > 0.5 / ev.zoom.max(1e-6)) {
                     pts.push(ev.p());
-                    pressure.push(ev.pressure);
                 }
                 self.tool.overlay.pen = pts.iter().map(|p| [p.x, p.y]).collect();
-                self.tool.gesture = Gesture::Pencil { points: pts, pressure };
+                self.tool.gesture = Gesture::Pencil { points: pts };
                 if let Ok(ds) = self.ds_mut() {
                     ds.revision += 1;
                 }
@@ -437,7 +436,7 @@ impl Session {
                 textedit::set_caret(self, idx, true)?;
                 Ok(())
             }
-            Gesture::Vector(_) | Gesture::ShapeBuild { .. } | Gesture::Origin => Ok(()),
+            Gesture::Origin => Ok(()),
             Gesture::Connect { from, start } => {
                 let (from, start) = (*from, *start);
                 self.connect_drag(ev, from, start);
@@ -456,18 +455,6 @@ impl Session {
                 let (id, portion, start) = (*id, *portion, *start);
                 self.reshape_drag(ev, id, portion, start);
                 return Ok(());
-            }
-            Gesture::PenDrag { anchor } => {
-                // A click's wobble pulls out no handle.
-                let out = if within_slop(ev, *anchor) { Vec2::ZERO } else { ev.p() - *anchor };
-                if let Some(pen) = self.tool.pen.as_mut()
-                    && let Some(last) = pen.points.last_mut()
-                {
-                    last.2 = out;
-                    last.1 = -out;
-                }
-                self.pen_update()?;
-                Ok(())
             }
         };
         self.tool.gesture = g;

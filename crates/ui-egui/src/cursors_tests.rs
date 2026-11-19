@@ -6,7 +6,7 @@
 use egui::{CursorIcon, Event, Key, Modifiers, Pos2, pos2};
 use figcraft_doc::NodeId;
 use figcraft_engine::Session;
-use figcraft_engine::tools::{Cursor, PenCursor, ToolId};
+use figcraft_engine::tools::{Cursor, ToolId};
 use serde_json::json;
 
 use crate::cursors::{Glyph, Shown, of, on_canvas, resize_icon};
@@ -33,10 +33,6 @@ fn every_engine_cursor_has_a_system_cursor_or_a_glyph() {
         (Cursor::Grab, System(CursorIcon::Grab), "grab"),
         (Cursor::Grabbing, System(CursorIcon::Grabbing), "grabbing"),
         (Cursor::Text, System(CursorIcon::Text), "text"),
-        (Cursor::Pen(PenCursor::New), Drawn(Glyph::Pen(PenCursor::New)), "pen"),
-        (Cursor::Pen(PenCursor::Close), Drawn(Glyph::Pen(PenCursor::Close)), "pen-close"),
-        (Cursor::Pen(PenCursor::Add), Drawn(Glyph::Pen(PenCursor::Add)), "pen-add"),
-        (Cursor::Pen(PenCursor::Bend), Drawn(Glyph::Pen(PenCursor::Bend)), "pen-bend"),
         (Cursor::Copy, System(CursorIcon::Copy), "copy"),
         (Cursor::Eyedropper, Drawn(Glyph::Eyedropper), "eyedropper"),
         (Cursor::Comment, Drawn(Glyph::Comment), "comment"),
@@ -175,7 +171,6 @@ fn the_window_asks_for_the_cursor_of_the_tool_under_the_pointer() {
         ("frame", on, &[], no, CursorIcon::None, "crosshair"),
         ("slice", empty, &[], no, CursorIcon::None, "crosshair"),
         ("text", empty, &[], no, CursorIcon::None, "crosshair"),
-        ("pen", empty, &[], no, CursorIcon::None, "pen"),
         ("comment", empty, &[], no, CursorIcon::None, "comment"),
         ("move", empty, &[Key::Space], no, CursorIcon::Grab, "grab"),
         ("rectangle", empty, &[Key::Space], no, CursorIcon::Grab, "grab"),

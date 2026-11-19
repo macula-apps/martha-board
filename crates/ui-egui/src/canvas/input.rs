@@ -1,7 +1,7 @@
 use super::{FigApp, Point, PointerKind, Pos2, Rect, Ui, json, pointer_event};
 
 /// What a hover was found in: the event (where, the modifiers, the zoom) and what decides what it
-/// hits (the file and page, their revision, the selection, the tool and modes). The same again finds
+/// hits (the file and page, their revision, the selection, the tool and text editing). The same again finds
 /// the same, so it isn't sent again.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct HoverKey {
@@ -9,7 +9,7 @@ pub(crate) struct HoverKey {
     doc: Option<(u64, figcraft_engine::doc::NodeId, u64)>,
     selection: Vec<figcraft_engine::doc::NodeId>,
     tool: figcraft_engine::ToolId,
-    modes: [bool; 2],
+    text_edit: bool,
 }
 
 impl HoverKey {
@@ -20,7 +20,7 @@ impl HoverKey {
             doc: ds.map(|d| (d.uid, d.page, d.revision)),
             selection: ds.map(|d| d.selection.clone()).unwrap_or_default(),
             tool: app.session.tool.tool,
-            modes: [ds.is_some_and(|d| d.vector_edit.is_some()), ds.is_some_and(|d| d.text_edit.is_some())],
+            text_edit: ds.is_some_and(|d| d.text_edit.is_some()),
         }
     }
 }
@@ -282,23 +282,9 @@ pub(super) fn input(app: &mut FigApp, ui: &mut Ui, resp: &egui::Response) -> boo
     }
     // A third quick click is counted as a triple, not a double (a click elsewhere in between still
     // leaves its time in the sequence): it means the same here — edit, enter, open — unless a
-    // vector or text is being edited, where a triple already has its own meaning. A triple on
-    // empty canvas still means a double in vector edit mode: the double-click that entered edit
-    // mode counts on, so leaving it right away would otherwise take a fourth click or a pause.
-    let ds = app.session.ds().ok();
-    let editing = ds.is_some_and(|d| d.vector_edit.is_some() || d.text_edit.is_some());
-    // Only a triple click asks (it walks the parts' render bounds).
-    let empty_canvas = || {
-        ds.is_some_and(|d| {
-            let Some(ve) = d.vector_edit.as_ref().filter(|v| v.anchor.is_none() && d.text_edit.is_none()) else {
-                return false;
-            };
-            let p = app.to_page(pos);
-            let tol = 6.0 / d.view.zoom.max(1e-6);
-            ve.parts().iter().all(|part| d.doc.world_render_bounds(part.id).is_none_or(|b| !b.inflate(tol * 4.0, tol * 4.0).contains(p)))
-        })
-    };
-    if resp.double_clicked() || (resp.triple_clicked() && (!editing || empty_canvas())) {
+    // text is being edited, where a triple already has its own meaning.
+    let editing = app.session.ds().is_ok_and(|d| d.text_edit.is_some());
+    if resp.double_clicked() || (resp.triple_clicked() && !editing) {
         let ev = pointer_event(app, PointerKind::DoubleClick, pos, &mods);
         if let Err(e) = app.session.pointer(&ev) {
             app.toast(e.to_string());
@@ -350,17 +336,6 @@ pub(super) fn input(app: &mut FigApp, ui: &mut Ui, resp: &egui::Response) -> boo
         }
         None
     };
-    // Pen pressure comes with touch events (a pen on Windows, a stylus in a browser); a mouse,
-    // macOS and Linux tablets report none and draw at the stroke weight.
-    let force = ctx.input(|i| {
-        i.events.iter().rev().find_map(|e| match e {
-            egui::Event::Touch { force: Some(f), .. } if f.is_finite() && *f > 0.0 => Some(f.clamp(0.0, 1.0)),
-            _ => None,
-        })
-    });
-    if force.is_some() {
-        app.canvas.pressure = force;
-    }
     if let Some(k) = kind {
         let at = if matches!(k, PointerKind::Down) { press_pos.unwrap_or(pos) } else { pos };
         send(app, k, at, &mods);
@@ -389,9 +364,6 @@ fn send(app: &mut FigApp, kind: PointerKind, pos: Pos2, m: &egui::Modifiers) {
     let hover = kind == PointerKind::Hover;
     if hover && app.canvas.last_hover.as_ref().is_some_and(|k| *k == HoverKey::of(app, ev.clone())) {
         return;
-    }
-    if kind == PointerKind::Up {
-        app.canvas.pressure = None;
     }
     app.canvas.last_pointer = Some(Point::new(ev.x, ev.y));
     // A gesture something else committed under the held button (a colour picker closing on this

@@ -202,7 +202,17 @@ fn masks_and_boolean_operands_are_not_selection_colors() {
     let mut s = Session::new();
     let a = rectangle(&mut s, "#ff0000");
     let b = rectangle(&mut s, "#00ff00");
-    let boolean = NodeId(run(&mut s, "bool.union", json!({"ids":[a,b]}))["id"].as_u64().unwrap());
+    // A boolean group as a file holds one (no command makes one, #32).
+    let boolean = {
+        let doc = s.doc_mut().unwrap();
+        let page = doc.first_page().unwrap();
+        let g = doc.alloc_id();
+        let node = figcraft_doc::Node::new(g, figcraft_doc::NodeKind::BooleanOp { op: figcraft_doc::BoolOp::Union }, "Union", 100.0, 100.0);
+        doc.insert(node, page, None).unwrap();
+        doc.reparent(a, g, None).unwrap();
+        doc.reparent(b, g, None).unwrap();
+        g
+    };
     run(&mut s, "fill.set", json!({"id":boolean,"color":"#0000ff"}));
     let colors = collect(s.doc().unwrap(), &[boolean]);
     assert_eq!(colors.len(), 1);

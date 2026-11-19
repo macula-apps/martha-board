@@ -137,7 +137,7 @@ fn constraint_guides_follow_the_layers_frame() {
 fn operand_outlines_follow_the_boolean_group() {
     let mut s = Session::new();
     let ops = [rect(&mut s, 0, None), rect(&mut s, 20, None), rect(&mut s, 40, None)];
-    s.execute("bool.union", &json!({"ids": ops})).unwrap();
+    crate::test_booleans::bool_group(&mut s, &ops, figcraft_doc::BoolOp::Union);
     s.execute("select.set", &json!({"ids": [ops[0]]})).unwrap();
     let (mut app, ctx) = app_of(s);
     let (three, fresh) = drawn_now(&app, &ctx);

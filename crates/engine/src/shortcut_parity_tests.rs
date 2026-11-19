@@ -1,7 +1,7 @@
 //! Keyboard shortcut parity with the public shortcut documentation, per platform. One row per
 //! documented shortcut: the action in our own words, the macOS and the Windows/Linux keys as the
 //! documentation gives them, what does it here (a keymap command, a held key or gesture the panel
-//! lists, a vector edit tool key, or nothing yet) and a note. Rows the documentation is silent on
+//! lists, or nothing yet) and a note. Rows the documentation is silent on
 //! pin today's keys, so every default binding is in this table: changing one means changing a row.
 //!
 //! The documentation is spread over the help centre's feature articles (keyboard layouts, text
@@ -14,7 +14,6 @@ use crate::Session;
 use crate::keymap::Group::{self, *};
 use crate::keymap::{Context, GESTURES, KEYS, Platform, display, lookup, parse};
 use crate::params::id_of;
-use crate::vectoredit::VTool;
 
 const PLATFORMS: [Platform; 2] = [Platform::Mac, Platform::Other];
 
@@ -25,9 +24,7 @@ enum Ours {
     Bound(&'static str),
     /// A held key, pointer gesture or presentation key; the shortcuts panel lists it under this label.
     Gesture(&'static str),
-    /// A tool key in vector edit mode.
-    VectorTool(VTool),
-    /// No such behaviour here (Dev Mode's left, #11; prototyping's, #14).
+    /// No such behaviour here (Dev Mode's left, #11; prototyping's, #14; vector editing's, #32).
     Missing,
 }
 use Ours::*;
@@ -100,8 +97,8 @@ static ROWS: &[Row] = &[
     doc(Tools, "Line tool", &["L"], &[], Bound("tool.line"), ""),
     doc(Tools, "Arrow tool", &["Shift+L"], &[], Bound("tool.arrow"), ""),
     doc(Tools, "Ellipse tool", &["O"], &[], Bound("tool.ellipse"), ""),
-    doc(Tools, "Pen tool", &["P"], &[], Bound("tool.pen"), ""),
-    doc(Tools, "Pencil tool", &["Shift+P"], &[], Bound("tool.pencil"), ""),
+    doc(Tools, "Pen tool", &["P"], &[], Missing, "vector editing left (#32)"),
+    doc(Tools, "Pencil tool", &["Shift+P"], &[], Missing, "vector editing left (#32)"),
     doc(Tools, "Text tool", &["T"], &[], Bound("tool.text"), ""),
     doc(Tools, "Comment mode", &["C"], &[], Bound("tool.comment"), ""),
     doc(Tools, "Annotation tool", &["Shift+T"], &[], Missing, "Accessibility at Figma, Add an annotation; Developer Mode, which left (#11)"),
@@ -114,7 +111,6 @@ static ROWS: &[Row] = &[
     pin(Tools, "tool.section", &["Shift+S"], &[]),
     pin(Tools, "tool.slice", &["S"], &[]),
     pin(Tools, "file.placeImage", &["Shift+Cmd+K"], &[]),
-    pin(Tools, "tool.shapeBuilder", &["Shift+M"], &[]),
     // Board tools (boards only), on keys no design-file shortcut uses.
     pin(Tools, "tool.sticky", &["Q"], &[]),
     pin(Tools, "tool.shape", &["B"], &[]),
@@ -125,13 +121,14 @@ static ROWS: &[Row] = &[
     pin(Tools, "tool.stamp", &["W"], &[]),
     pin(Tools, "board.nextSticky", &["Shift+Cmd+Enter"], &[]),
     // Vector edit mode
-    doc(Selection, "Edit the selected shape's points", &["Enter"], &[], Bound("select.children"), "Enter on a shape edits it; on a frame or group it selects the children"),
-    doc(Shape, "Vector edit: move", &["V"], &[], VectorTool(VTool::Move), ""),
-    doc(Shape, "Vector edit: pen", &["P"], &[], VectorTool(VTool::Pen), ""),
-    doc(Shape, "Vector edit: cut", &["X"], &[], VectorTool(VTool::Cut), ""),
-    doc(Shape, "Vector edit: eraser", &["Shift+E"], &[], VectorTool(VTool::Eraser), ""),
-    doc(Shape, "Vector edit: lasso", &["Q"], &[], VectorTool(VTool::Lasso), ""),
-    doc(Shape, "Vector edit: paint bucket", &["Shift+B"], &[], VectorTool(VTool::Paint), "B alone works too (pinned)"),
+    doc(Selection, "Edit the selected shape's points", &["Enter"], &[], Missing, "vector editing left (#32); Enter selects the children"),
+    pin(Selection, "select.children", &["Enter"], &[]),
+    doc(Shape, "Vector edit: move", &["V"], &[], Missing, "vector editing left (#32)"),
+    doc(Shape, "Vector edit: pen", &["P"], &[], Missing, "vector editing left (#32)"),
+    doc(Shape, "Vector edit: cut", &["X"], &[], Missing, "vector editing left (#32)"),
+    doc(Shape, "Vector edit: eraser", &["Shift+E"], &[], Missing, "vector editing left (#32)"),
+    doc(Shape, "Vector edit: lasso", &["Q"], &[], Missing, "vector editing left (#32)"),
+    doc(Shape, "Vector edit: paint bucket", &["Shift+B"], &[], Missing, "vector editing left (#32)"),
     // View
     doc(View, "Pixel grid", &["Shift+'", "Cmd+'"], &[], Bound("view.pixelGrid"),
         "articles disagree (Shift+' in most, Cmd+' in the zoom article); both bound, Shift+' first"),
@@ -197,19 +194,14 @@ static ROWS: &[Row] = &[
     pin(Text, "text.alignRight", &["Alt+Cmd+R"], &[]),
     pin(Text, "text.alignJustify", &["Alt+Cmd+J"], &[]),
     // Shape
-    doc(Shape, "Union", &["Alt+Shift+U"], &[], Bound("bool.union"), ""),
-    doc(Shape, "Subtract", &["Alt+Shift+S"], &[], Bound("bool.subtract"), ""),
-    doc(Shape, "Intersect", &["Alt+Shift+I"], &[], Bound("bool.intersect"), ""),
-    doc(Shape, "Exclude", &["Alt+Shift+E"], &[], Bound("bool.exclude"), ""),
-    doc(Shape, "Flatten", &["Alt+Shift+F"], &[], Bound("vector.flatten"), ""),
+    doc(Shape, "Union", &["Alt+Shift+U"], &[], Missing, "vector editing left (#32)"),
+    doc(Shape, "Subtract", &["Alt+Shift+S"], &[], Missing, "vector editing left (#32)"),
+    doc(Shape, "Intersect", &["Alt+Shift+I"], &[], Missing, "vector editing left (#32)"),
+    doc(Shape, "Exclude", &["Alt+Shift+E"], &[], Missing, "vector editing left (#32)"),
+    doc(Shape, "Flatten", &["Alt+Shift+F"], &[], Missing, "vector editing left (#32)"),
     doc(Shape, "Remove fill", &["Alt+/"], &[], Bound("object.removeFill"), "one layout table writes Alt+, for Windows; Alt+, is letter spacing"),
     doc(Shape, "Remove stroke", &["Shift+/"], &[], Bound("object.removeStroke"), ""),
-    pin(Shape, "vector.flatten", &["Cmd+E"], &[]),
-    pin(Shape, "vector.outlineStroke", &["Alt+Cmd+O"], &[]),
     pin(Shape, "object.swapFillStroke", &["Shift+X"], &[]),
-    pin(Shape, "vector.join", &["Cmd+J"], &[]),
-    pin(Shape, "vector.smoothJoin", &["Shift+Cmd+J"], &[]),
-    pin(Shape, "vector.deleteHeal", &["Shift+Delete"], &[]),
     // Selection
     doc(Selection, "Select all", &["Cmd+A"], &[], Bound("select.all"), ""),
     doc(Selection, "Invert the selection", &["Shift+Cmd+A"], &[], Bound("select.inverse"), ""),
@@ -366,22 +358,6 @@ fn documented_shortcuts_fire_their_commands_on_both_platforms() {
 }
 
 #[test]
-fn vector_edit_tool_keys() {
-    for row in ROWS {
-        let VectorTool(tool) = row.ours else { continue };
-        let mut s = Session::new();
-        let r = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
-        s.execute("vector.edit.begin", &json!({"id": id_of(&r["id"]).unwrap()})).unwrap();
-        for k in row.mac {
-            let (m, key) = parse(k).unwrap();
-            assert!(crate::vectoredit::key(&mut s, key, m.shift, m.alt, m.cmd).unwrap(), "`{k}` taken");
-            assert_eq!(s.ds().unwrap().vector_edit.as_ref().unwrap().tool, tool, "`{k}`");
-        }
-        assert_eq!(tool.shortcut(), row.mac[0], "the tooltip shows the documented key");
-    }
-}
-
-#[test]
 fn every_default_binding_is_in_the_table() {
     for b in KEYS {
         for p in PLATFORMS {
@@ -396,11 +372,11 @@ fn every_default_binding_is_in_the_table() {
 #[test]
 fn counts_match_the_docs() {
     let documented: Vec<&Row> = ROWS.iter().filter(|r| r.documented).collect();
-    let bound = documented.iter().filter(|r| matches!(r.ours, Bound(_) | Gesture(_) | VectorTool(_))).count();
+    let bound = documented.iter().filter(|r| matches!(r.ours, Bound(_) | Gesture(_))).count();
     let missing = documented.iter().filter(|r| matches!(r.ours, Missing)).count();
     let reserved = documented.iter().filter(|r| !r.reserved.is_empty()).count();
     let pinned = ROWS.len() - documented.len();
-    assert_eq!((documented.len(), bound, missing, reserved, pinned), (137, 120, 17, 2, 55));
+    assert_eq!((documented.len(), bound, missing, reserved, pinned), (137, 106, 31, 2, 50));
 }
 
 #[test]

@@ -175,10 +175,12 @@ fn polygons_and_stars_take_corner_smoothing() {
 #[test]
 fn a_boolean_group_opens_corner_smoothing_and_has_no_corner_fields() {
     let mut s = Session::new();
-    let rect = |s: &mut Session, x: i32| s.execute("shape.rectangle", &json!({"x": x, "y": 0, "width": 100, "height": 100})).unwrap()["id"].clone();
+    let rect = |s: &mut Session, x: i32| {
+        NodeId(s.execute("shape.rectangle", &json!({"x": x, "y": 0, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap())
+    };
     let (a, b) = (rect(&mut s, 0), rect(&mut s, 60));
-    let g = NodeId(s.execute("bool.union", &json!({"ids": [a, b]})).unwrap()["id"].as_u64().unwrap());
-    takes_corner_smoothing(s, g, "bool.union");
+    let g = crate::test_booleans::bool_group(&mut s, &[a, b], figcraft_doc::BoolOp::Union);
+    takes_corner_smoothing(s, g, "a boolean group");
 }
 
 /// With `id` rounded at 8 and selected: the panel's button is named Corner smoothing and opens
@@ -209,7 +211,7 @@ fn closed_vectors_take_corner_smoothing() {
     let rows = [(true, json!([[0, 0], [120, 0], [120, 120], [0, 120]])), (false, json!([[0, 0], [120, 0], [120, 120]]))];
     for (closed, points) in rows {
         let mut s = Session::new();
-        let id = NodeId(s.execute("vector.create", &json!({"points": points, "closed": closed})).unwrap()["id"].as_u64().unwrap());
+        let id = NodeId(s.execute("node.create", &json!({"type": "vector", "points": points, "closed": closed})).unwrap()["id"].as_u64().unwrap());
         s.execute("node.set", &json!({"ids": [id], "props": {"cornerRadius": 8}})).unwrap();
         s.execute("select.set", &json!({"ids": [id]})).unwrap();
         let mut u = Ui::new(s);

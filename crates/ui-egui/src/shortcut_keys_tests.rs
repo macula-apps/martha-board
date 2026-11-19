@@ -183,9 +183,10 @@ fn enter_with_a_shape_tool_places_one_in_the_middle_of_the_view() {
     assert_eq!(sel.len(), 1, "placed and selected");
     let b = u.app.session.doc().unwrap().world_bounds(sel[0]).unwrap();
     assert!((b.center().x - 200.0).abs() < 1e-9 && (b.center().y - 100.0).abs() < 1e-9 && (b.width() - 100.0).abs() < 1e-9, "{b:?}");
-    // With the Move tool back, Enter on the shape edits it as before.
+    // With the Move tool back, Enter on the shape selects its children: it has none, so it stays
+    // selected (no vector edit mode, #32).
     press(&mut u, Key::Enter, Modifiers::NONE);
-    assert!(u.app.session.ds().unwrap().vector_edit.is_some());
+    assert_eq!(u.app.session.selection(), sel);
 }
 
 #[test]
@@ -266,11 +267,4 @@ fn cmd_alt_arrows_rotate_a_degree_and_fifteen_with_shift() {
             "{x:?} then {y:?}"
         );
     }
-    // While points are being edited the chord does nothing to the layer.
-    u.app.run("select.set", json!({"ids": [r]}));
-    let rot_before = rot(&u);
-    u.app.run("vector.edit.begin", json!({"id": r}));
-    press(&mut u, Key::ArrowDown, cmd() | Modifiers::ALT);
-    assert!((rot(&u) - rot_before).abs() < 1e-6, "no turn while editing points");
-    u.app.run("vector.edit.end", json!({}));
 }

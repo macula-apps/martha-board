@@ -519,7 +519,6 @@ fn note(s: &mut Session, mi: usize, bi: usize, name: &str) {
 fn show(ds: &mut DocState, doc: Arc<Document>) {
     ds.doc = doc;
     ds.text_edit = None;
-    ds.vector_edit = None;
     ds.clean_selection();
     if !ds.doc.pages.contains(&ds.page)
         && let Some(p) = ds.doc.first_page()

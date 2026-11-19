@@ -2,12 +2,11 @@
 
 use egui::{Align2, Color32, CornerRadius, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use figcraft_engine::ToolId;
-use figcraft_engine::vectoredit::VTool;
 use serde_json::json;
 
 use crate::FigApp;
 use crate::a11y::{self, Nav, Region, Tip};
-use crate::i18n::{tr, tr_noop, trf};
+use crate::i18n::{tr, tr_noop};
 use crate::icons::{self, Icon};
 use crate::theme::{Tokens, regular};
 
@@ -21,7 +20,7 @@ const CARET: f32 = 14.0;
 const FLYOUT_W: f32 = 16.0;
 const FLYOUT_GAP: f32 = 2.0;
 
-// The pill's grid: every state of it (the tools, the vector and shape builder ones) is laid out on
+// The pill's grid: every state of it is laid out on
 // one 32 pt cell, PAD in from its ends and GAP between its top-level items, the divider included.
 /// A toolbar button's size: the cell everything in the pill is placed on.
 const TOOL_CELL: f32 = 32.0;
@@ -31,10 +30,6 @@ const PAD: f32 = 8.0;
 const GAP: f32 = 8.0;
 /// The divider's width.
 const DIVIDER: f32 = 1.0;
-/// The mode switcher's marks: smaller than the tools' (13–14 pt).
-const MODE_GLYPH: f32 = 14.0;
-/// The mode switcher's buttons: Draw and Design.
-const MODE_CELLS: f32 = 2.0;
 
 /// `GLYPH`'s box centred in `r`.
 fn glyph_rect(r: Rect) -> Rect {
@@ -83,11 +78,6 @@ const GROUPS: &[Group] = &[
             (ToolId::Star, Icon::Star),
         ],
     ),
-    Group::tools(
-        "pen",
-        tr_noop("Drawing tools"),
-        &[(ToolId::Pen, Icon::Pen), (ToolId::Pencil, Icon::Pencil), (ToolId::ShapeBuilder, Icon::ShapeBuilder)],
-    ),
     Group::tools("text", tr_noop("Text"), &[(ToolId::Text, Icon::Text), (ToolId::TextOnPath, Icon::TextOnPath)]),
     Group::tools("comment", tr_noop("Comment"), &[(ToolId::Comment, Icon::Comment)]),
 ];
@@ -123,16 +113,6 @@ pub fn show(app: &mut FigApp, ui: &mut Ui) {
         view_only_toolbar(app, ui, why);
         return;
     }
-    // Vector edit mode swaps the tools for the edit tools.
-    if let Some(tool) = app.session.ds().ok().and_then(|d| d.vector_edit.as_ref()).map(|v| v.tool) {
-        edit_toolbar(app, ui, tool);
-        return;
-    }
-    // So does the shape builder, for its merge/remove modes.
-    if app.session.tool.tool == ToolId::ShapeBuilder {
-        builder_toolbar(app, ui);
-        return;
-    }
     let board = app.session.doc().is_ok_and(figcraft_engine::board::is_board);
     main_toolbar(app, ui, canvas, &t, board);
 }
@@ -144,18 +124,18 @@ pub(crate) fn bar_width(app: &FigApp) -> f32 {
     main_width(if board { BOARD_GROUPS } else { GROUPS }, board)
 }
 
-/// The main toolbar pill's width: the tool groups with their flyout carets, Actions, the divider
-/// and the mode switcher (boards: the templates and the Design panel's buttons instead).
+/// The main toolbar pill's width: the tool groups with their flyout carets and Actions (boards:
+/// then the divider, the templates and the Design panel's buttons).
 fn main_width(groups: &[Group], board: bool) -> f32 {
     let tools: f32 = groups.iter().map(|g| TOOL_CELL + if g.has_flyout() { FLYOUT_GAP + FLYOUT_W } else { 0.0 }).sum();
-    // The end, and the gaps that aren't a group's own: after Actions and after the divider (and
-    // between a board's two buttons, which the end counts as one item).
-    let (end, gaps) = if board { (2.0 * TOOL_CELL, 3.0) } else { (MODE_CELLS * TOOL_CELL, 2.0) };
-    PAD * 2.0 + tools + (groups.len() as f32 + gaps) * GAP + TOOL_CELL + DIVIDER + end
+    // A board's end, and the gaps that aren't a group's own: after Actions, after the divider and
+    // between its two buttons.
+    let end = if board { 3.0 * GAP + DIVIDER + 2.0 * TOOL_CELL } else { 0.0 };
+    PAD * 2.0 + tools + groups.len() as f32 * GAP + TOOL_CELL + end
 }
 
-/// The main toolbar pill: the tool groups with their flyouts, Actions, then the
-/// Draw · Design mode switcher (on a board, its two buttons).
+/// The main toolbar pill: the tool groups with their flyouts and Actions (on a board, then its two
+/// buttons).
 fn main_toolbar(app: &mut FigApp, ui: &mut Ui, canvas: Rect, t: &Tokens, board: bool) {
     let groups = if board { BOARD_GROUPS } else { GROUPS };
     let width = main_width(groups, board);
@@ -169,9 +149,9 @@ fn main_toolbar(app: &mut FigApp, ui: &mut Ui, canvas: Rect, t: &Tokens, board: 
         x = group_cell(app, ui, g, pos2(x, cy), rect.min.y, t);
     }
     x = actions_button(app, ui, x, cy, t);
-    divider(ui, t, x, cy);
-    x += DIVIDER + GAP;
     if board {
+        divider(ui, t, x, cy);
+        x += DIVIDER + GAP;
         // The Design panel is hidden on a board until asked for.
         x = crate::board_picker::button(app, ui, pos2(x, cy), rect.min.y, t) + GAP;
         let r = Rect::from_center_size(pos2(x + TOOL_CELL / 2.0, cy), vec2(TOOL_CELL, TOOL_CELL));
@@ -179,8 +159,6 @@ fn main_toolbar(app: &mut FigApp, ui: &mut Ui, canvas: Rect, t: &Tokens, board: 
         if tool_cell(ui, t, r, "board_panel", Icon::Panels, app.ui.board_panel, tip).clicked() {
             app.run("view.design", json!({}));
         }
-    } else {
-        mode_switcher(app, ui, x, cy, t);
     }
     ui.set_clip_rect(outer_clip);
     help_button(app, ui, canvas, rect, t);
@@ -276,43 +254,6 @@ fn actions_button(app: &mut FigApp, ui: &mut Ui, x: f32, cy: f32, t: &Tokens) ->
     x + TOOL_CELL + GAP
 }
 
-/// The mode switcher from `x`: Draw · Design.
-fn mode_switcher(app: &mut FigApp, ui: &mut Ui, x: f32, cy: f32, t: &Tokens) {
-    let modes = [(Icon::Pencil, tr("Draw")), (Icon::Frame, tr("Design"))];
-    let active = usize::from(app.session.tool.tool != ToolId::Pencil);
-    let seg = Rect::from_min_size(pos2(x, cy - TOOL_CELL / 2.0), vec2(MODE_CELLS * TOOL_CELL, TOOL_CELL));
-    ui.painter().rect_filled(seg, CornerRadius::same(5), t.field);
-    for (i, (icon, tip)) in modes.iter().enumerate() {
-        let r = Rect::from_min_size(pos2(seg.min.x + i as f32 * TOOL_CELL, seg.min.y), vec2(TOOL_CELL, TOOL_CELL));
-        let resp = ui.interact(r, ui.scope_id().with(("mode", i)), Sense::click()).on_hover_text(*tip);
-        a11y::toggle(&resp, tip, i == active);
-        if i == active {
-            // The current mode lifts with a plain inset, no outline.
-            ui.painter().rect_filled(r.shrink(2.0), CornerRadius::same(3), t.panel);
-        } else if resp.hovered() {
-            ui.painter().rect_filled(r, CornerRadius::same(5), t.hover);
-        }
-        icons::paint(
-            ui.painter(),
-            Rect::from_center_size(r.center(), vec2(MODE_GLYPH, MODE_GLYPH)),
-            *icon,
-            if i == active { t.accent_text } else { t.icon_secondary },
-        );
-        if resp.clicked() {
-            pick_mode(app, i);
-        }
-    }
-}
-
-/// Mode `i` of the switcher chosen.
-fn pick_mode(app: &mut FigApp, i: usize) {
-    if i == 0 {
-        app.run("tool.set", json!({"tool": "pencil"}));
-    } else if app.session.tool.tool == ToolId::Pencil {
-        app.run("tool.set", json!({"tool": "move"}));
-    }
-}
-
 /// The floating help button at the bottom right of the canvas.
 fn help_button(app: &mut FigApp, ui: &mut Ui, canvas: Rect, pill: Rect, t: &Tokens) {
     let mut hr = Rect::from_center_size(pos2(canvas.max.x - 32.0, canvas.max.y - 32.0), vec2(32.0, 32.0));
@@ -384,88 +325,6 @@ fn view_only_toolbar(app: &mut FigApp, ui: &mut Ui, why: &'static str) {
     ui.painter().galley(pos2(badge.min.x + 12.0 + 14.0 + 6.0, cy - text.size().y / 2.0), text, t.text);
 }
 
-/// The pill shown in vector edit mode: the edit tools and Done.
-fn edit_toolbar(app: &mut FigApp, ui: &mut Ui, current: VTool) {
-    let t = Tokens::get(ui.ctx());
-    let canvas = app.canvas.rect;
-    let width = VTool::ALL.len() as f32 * (TOOL_CELL + GAP) + PAD * 2.0 + DIVIDER + GAP + DONE_W;
-    let rect = pill(ui, &mut app.ui.nav, canvas, width, &t);
-    let cy = rect.center().y;
-    let mut x = rect.min.x + PAD;
-    // Holding Cmd with the Move tool bends: show it.
-    let held = current == VTool::Move && ui.input(|i| i.modifiers.command);
-    for tool in VTool::ALL {
-        let r = Rect::from_center_size(pos2(x + TOOL_CELL / 2.0, cy), vec2(TOOL_CELL, TOOL_CELL));
-        let tip = if tool == VTool::Bend {
-            trf("{tool}  hold {key}", &[("tool", &tr(tool.label())), ("key", &pretty_shortcut(tool.shortcut()))])
-        } else {
-            format!("{}  {}", tr(tool.label()), pretty_shortcut(tool.shortcut()))
-        };
-        let active = tool == current && !held || held && tool == VTool::Bend;
-        let icon = match tool {
-            VTool::Move => Icon::Move,
-            VTool::Pen => Icon::Pen,
-            VTool::Bend => Icon::Bend,
-            VTool::Paint => Icon::PaintBucket,
-            VTool::Lasso => Icon::Lasso,
-            VTool::Cut => Icon::Cut,
-            VTool::Eraser => Icon::Eraser,
-            VTool::Width => Icon::VariableWidth,
-        };
-        let resp = tool_cell(ui, &t, r, ("vtool", tool.id()), icon, active, &tip);
-        if active {
-            a11y::prefer(&mut app.ui.nav, Region::Toolbar, resp.id);
-        }
-        if resp.clicked() {
-            app.run("vector.edit.tool", json!({"tool": tool.id()}));
-        }
-        x += TOOL_CELL + GAP;
-    }
-    if done_button(ui, &t, x, cy, &format!("{}  Esc", tr("Done editing"))) {
-        app.run("vector.edit.end", json!({}));
-    }
-}
-
-/// The pill shown while the shape builder is active: Merge and Remove modes, a hint and Done.
-fn builder_toolbar(app: &mut FigApp, ui: &mut Ui) {
-    let t = Tokens::get(ui.ctx());
-    let remove = app.session.tool.builder_remove;
-    let has_regions = figcraft_engine::shapebuilder::current(&app.session).is_some_and(|a| !a.regions.is_empty());
-    let alt = pretty_shortcut("Alt");
-    let hint = if !has_regions {
-        tr("Select overlapping shapes").to_string()
-    } else if remove {
-        trf("Click or drag to remove · {alt} merges", &[("alt", &alt)])
-    } else {
-        trf("Click or drag to merge · {alt} removes", &[("alt", &alt)])
-    };
-    let galley = ui.painter().layout_no_wrap(hint, regular(12.0), t.text_secondary);
-    let width = PAD * 2.0 + 2.0 * (TOOL_CELL + GAP) + 2.0 * (DIVIDER + GAP) + galley.size().x + GAP + DONE_W;
-    let rect = pill(ui, &mut app.ui.nav, app.canvas.rect, width, &t);
-    let cy = rect.center().y;
-    let mut x = rect.min.x + PAD;
-    for (mode, icon, tip) in [("merge", Icon::ShapeBuilder, tr("Merge regions")), ("remove", Icon::ShapeBuilderRemove, tr("Remove regions"))] {
-        let r = Rect::from_center_size(pos2(x + TOOL_CELL / 2.0, cy), vec2(TOOL_CELL, TOOL_CELL));
-        let active = (mode == "remove") == remove;
-        let resp = tool_cell(ui, &t, r, ("sbmode", mode), icon, active, tip);
-        if active {
-            a11y::prefer(&mut app.ui.nav, Region::Toolbar, resp.id);
-        }
-        if resp.clicked() {
-            app.run("shapeBuilder.mode", json!({"mode": mode}));
-        }
-        x += TOOL_CELL + GAP;
-    }
-    divider(ui, &t, x, cy);
-    x += DIVIDER + GAP;
-    let w = galley.size().x;
-    ui.painter().galley(pos2(x, cy - galley.size().y / 2.0), galley, t.text_secondary);
-    x += w + GAP;
-    if done_button(ui, &t, x, cy, &format!("{}  {}", tr("Done"), pretty_shortcut("Enter"))) {
-        app.run("tool.set", json!({"tool": "move"}));
-    }
-}
-
 /// Where a toolbar pill `width` wide sits: centred 12 px above the canvas's bottom edge.
 /// (Never wider than the canvas less a margin: on a phone the main toolbar scrolls inside it.)
 pub(crate) fn pill_rect(canvas: Rect, width: f32) -> Rect {
@@ -478,7 +337,7 @@ pub(crate) fn pill_rect(canvas: Rect, width: f32) -> Rect {
 fn pill(ui: &Ui, nav: &mut Nav, canvas: Rect, width: f32, t: &Tokens) -> Rect {
     let rect = pill_rect(canvas, width);
     // The pill takes the press and the drag over it: its buttons sense clicks only, and egui gives
-    // a drag the canvas under them would sense to the canvas, so the pen placed an anchor there.
+    // a drag the canvas under them would sense to the canvas, so a tool placed something there.
     // Not focusable: the keyboard walks the buttons, not the pill.
     ui.interact(rect, ui.scope_id().with("pill"), Sense::CLICK | Sense::DRAG);
     a11y::area(nav, Region::Toolbar, rect);
@@ -514,18 +373,6 @@ pub(crate) fn tool_cell(ui: &mut Ui, t: &Tokens, r: Rect, id: impl egui::AsIdSal
 fn divider(ui: &Ui, t: &Tokens, x: f32, cy: f32) {
     let half = TOOL_CELL / 2.0;
     ui.painter().line_segment([pos2(x + DIVIDER / 2.0, cy - half), pos2(x + DIVIDER / 2.0, cy + half)], Stroke::new(DIVIDER, t.border));
-}
-
-const DONE_W: f32 = 56.0;
-
-/// A divider at `x` and the accent Done button after it; true when clicked.
-fn done_button(ui: &mut Ui, t: &Tokens, x: f32, cy: f32, tip: &str) -> bool {
-    divider(ui, t, x, cy);
-    let done = Rect::from_min_size(pos2(x + DIVIDER + GAP, cy - 14.0), vec2(DONE_W, 28.0));
-    let resp = ui.interact(done, ui.scope_id().with("tool_done"), Sense::click()).tip(tip);
-    ui.painter().rect_filled(done, CornerRadius::same(6), if resp.hovered() { t.accent_hover } else { t.accent });
-    ui.painter().text(done.center(), Align2::CENTER_CENTER, tr("Done"), crate::theme::semibold(11.5), t.accent_on);
-    resp.clicked()
 }
 
 /// A board tool's flyout: the colours, shapes or stamps it places, in rows of up to eight. A pick
@@ -633,7 +480,8 @@ mod tests {
 
     #[test]
     fn pill_never_outgrows_a_phone_canvas() {
-        let full = main_width(GROUPS, false);
+        // A board's toolbar: the design file's fits a phone since its drawing tools left (#32).
+        let full = main_width(BOARD_GROUPS, true);
         let phone = Rect::from_min_size(pos2(0.0, 0.0), vec2(375.0, 700.0));
         let pill = pill_rect(phone, full);
         assert!(pill.width() <= phone.width() - 16.0 && pill.min.x >= 8.0 && pill.max.x <= phone.max.x - 8.0, "{pill:?}");
@@ -645,9 +493,9 @@ mod tests {
         assert_eq!(pill_rect(Rect::from_min_size(pos2(0.0, 0.0), vec2(4.0, 4.0)), full).width(), 0.0);
     }
 
-    /// The width the pill asks for is the width its items take — the groups, Actions, the divider
-    /// and the end (the mode switcher, or a board's two buttons), PAD in from either end and one
-    /// GAP apart — so its last item ends exactly PAD from its right edge.
+    /// The width the pill asks for is the width its items take — the groups and Actions (on a board
+    /// then the divider and its two buttons), PAD in from either end and one GAP apart — so its
+    /// last item ends exactly PAD from its right edge.
     #[test]
     fn the_pill_is_as_wide_as_its_items() {
         let canvas = Rect::from_min_size(pos2(0.0, 0.0), vec2(1400.0, 800.0));
@@ -657,10 +505,12 @@ mod tests {
             for g in groups {
                 x += TOOL_CELL + if g.has_flyout() { FLYOUT_GAP + FLYOUT_W } else { 0.0 } + GAP;
             }
-            x += TOOL_CELL + GAP; // Actions
-            x += DIVIDER + GAP; // the divider
-            let end = if board { 2.0 * TOOL_CELL + GAP } else { MODE_CELLS * TOOL_CELL };
-            assert!((x + end - (pill.max.x - PAD)).abs() < 0.01, "board {board}: {} vs {}", x + end, pill.max.x - PAD);
+            x += TOOL_CELL; // Actions
+            if board {
+                x += GAP + DIVIDER + GAP; // the divider
+                x += 2.0 * TOOL_CELL + GAP; // its two buttons
+            }
+            assert!((x - (pill.max.x - PAD)).abs() < 0.01, "board {board}: {} vs {}", x, pill.max.x - PAD);
         }
     }
 

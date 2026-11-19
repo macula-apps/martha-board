@@ -25,7 +25,7 @@ replaced.
 | L3 | `figcraft-format` | ~1.5k | Native `.figcraft` (zip of `document.json` + images; streamed JSON), local library files, versions |
 | L4 | `figcraft-svg` | ~3.7k | SVG export and import (usvg) |
 | L4 | `figcraft-pdf` | ~2.3k | PDF export (krilla) with print options |
-| L5 | `figcraft-engine` | ~58.3k | Sessions, undo history (`Arc` snapshots), the command registry (`cmd/*`, `spec!`), pointer tools and vector edit mode, snapping and measuring, the branch compare, the menu catalog (`catalog.rs`) and the keymap (`keymap.rs`), a panic guard |
+| L5 | `figcraft-engine` | ~58.3k | Sessions, undo history (`Arc` snapshots), the command registry (`cmd/*`, `spec!`), pointer tools, snapping and measuring, the branch compare, the menu catalog (`catalog.rs`) and the keymap (`keymap.rs`), a panic guard |
 | L6 | `figcraft-ui-egui` | ~55.4k | The UI3-style frontend: canvas (render worker), toolbar, layers, the Design panel, colour picker, menus, dialogs, comments, accessibility (AccessKit), the control channel server |
 | L6 | `figcraft-mcp` | ~2.4k | MCP server (JSON-RPC over stdio), headless or bridged to a running app |
 | L6 | `figcraft-collab-net` | ~3.0k | Live sessions over the network: the WebSocket transport (tungstenite, a reader and a writer thread per connection), the hub that runs a collaboration core server per open file for the session host the app embeds and for `figcraft-server` (behind a `Backend`), the joining and managing clients (publishing), invite links, presence relay and limits; the browser client; the only crate allowed networking dependencies |

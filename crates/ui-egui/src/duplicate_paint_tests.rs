@@ -20,7 +20,7 @@ fn fill(u: &Ui, id: NodeId) -> String {
 fn red(vector: bool) -> (Ui, NodeId) {
     let mut s = Session::new();
     let a = if vector {
-        id(&s.execute("vector.create", &json!({"points": [[0, 0], [60, 0], [30, 50]], "closed": true})).unwrap())
+        id(&s.execute("node.create", &json!({"type": "vector", "points": [[0, 0], [60, 0], [30, 50]], "closed": true})).unwrap())
     } else {
         id(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 40, "height": 40})).unwrap())
     };

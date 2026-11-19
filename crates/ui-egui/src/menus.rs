@@ -141,7 +141,6 @@ pub fn invoke(app: &mut FigApp, id: &str) {
             app.ui.rename_file = true;
         }
         "text.link" => app.ui.menu_input = Some(crate::dialogs::MenuInput::Link(String::new())),
-        "vector.offset" => app.ui.menu_input = Some(crate::dialogs::MenuInput::Offset(0.0)),
         "object.moveToPage" => app.ui.menu_input = Some(crate::dialogs::MenuInput::MoveToPage),
         "object.batchRename" => {
             let ids = app.session.selection();
@@ -171,24 +170,13 @@ pub fn invoke(app: &mut FigApp, id: &str) {
             let ids = app.session.selection();
             // For other apps: text layers' text, other layers as SVG; taken before a cut removes them.
             let doc = app.session.doc().ok();
-            // Points or segments selected in vector edit mode copy just those: the whole vector's
-            // SVG would misdescribe them.
-            let partial = app
-                .session
-                .ds()
-                .ok()
-                .and_then(|d| d.vector_edit.as_ref())
-                .is_some_and(|ve| ve.parts().iter().any(|p| !p.vertices.is_empty() || !p.segments.is_empty()));
-            let mirror = doc.filter(|_| !partial).and_then(|d| text_layers_text(d, &ids).or_else(|| figcraft_svg_export(d, &ids)));
-            let ran = app.run(id, json!({}));
-            // A partial copy put temporary layers on the engine clipboard; mirror their SVG.
-            let refused = partial && ran.is_none();
-            let mirror = if partial { ran.and_then(|_| figcraft_engine::cmd::edit::clipboard_svg(&app.session)) } else { mirror };
+            let mirror = doc.and_then(|d| text_layers_text(d, &ids).or_else(|| figcraft_svg_export(d, &ids)));
+            app.run(id, json!({}));
             // Mirror to the system clipboard (text or SVG, else a marker) and remember it, so a
             // later paste knows whether the clipboard still holds our layers. Control-channel
             // gestures keep the engine's copy but never replace the user's clipboard; `run` then
             // invalidates the old mirror because it no longer describes the engine clipboard.
-            if !app.control_synthetic && !refused {
+            if !app.control_synthetic {
                 let text = mirror.unwrap_or_else(|| format!("figcraft://clipboard/{}", ids.len()));
                 app.clipboard_set_text(&text);
                 app.ui.last_copy = Some(text);
@@ -333,7 +321,6 @@ const TOP_MENUS: &[&str] = &[
     tr_noop("Object"),
     tr_noop("Text"),
     tr_noop("Arrange"),
-    tr_noop("Vector"),
     tr_noop("Preferences"),
     tr_noop("Help"),
 ];
@@ -474,8 +461,6 @@ pub fn popups(app: &mut FigApp, ctx: &egui::Context) {
                         (tr("Frame selection"), "object.frameSelection"),
                         (tr("Wrap in new section"), "object.wrapInSection"),
                         (tr("Ungroup"), "object.ungroup"),
-                        (tr("Flatten"), "vector.flatten"),
-                        (tr("Outline stroke"), "vector.outlineStroke"),
                         (tr("Use as mask"), "object.mask"),
                         ("-", ""),
                         (tr("Add auto layout"), "layout.add"),

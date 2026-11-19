@@ -1,10 +1,10 @@
 //! The pointer on the canvas: each engine cursor ([`figcraft_engine::tools::Cursor`]) as one of
 //! the system's cursors, or as a small glyph FigCraft draws at the pointer with the system's
-//! hidden (a rotate cursor turned to its corner, the pen's states, the eyedropper, the comment
+//! hidden (a rotate cursor turned to its corner, the eyedropper, the comment
 //! pin, the crosshair of the shape and Text tools). The glyphs are original, drawn from lines and the code-drawn icons: no cursor images.
 
-use egui::{Color32, CursorIcon, Painter, Pos2, Shape, Stroke, pos2, vec2};
-use figcraft_engine::tools::{Cursor, PenCursor};
+use egui::{Color32, CursorIcon, Painter, Pos2, Shape, Stroke, vec2};
+use figcraft_engine::tools::Cursor;
 
 use crate::icons::{self, Icon};
 
@@ -14,7 +14,6 @@ pub enum Glyph {
     /// A curved double arrow about the direction (degrees, 0 = right, 90 = down) from the box's
     /// centre to the corner.
     Rotate(f32),
-    Pen(PenCursor),
     Eyedropper,
     Comment,
     /// A plus open at the centre, for the shape and Text tools (the system's follows the
@@ -57,7 +56,6 @@ pub fn of(cursor: Cursor) -> Shown {
         Cursor::Grab => System(CursorIcon::Grab),
         Cursor::Grabbing => System(CursorIcon::Grabbing),
         Cursor::Text => System(CursorIcon::Text),
-        Cursor::Pen(p) => Drawn(Glyph::Pen(p)),
         Cursor::Copy => System(CursorIcon::Copy),
         Cursor::Eyedropper => Drawn(Glyph::Eyedropper),
         Cursor::Comment => Drawn(Glyph::Comment),
@@ -86,8 +84,8 @@ impl Shown {
     }
 
     /// A name for it (`ui.inspect`): the CSS cursor names where there is one ("default",
-    /// "nwse-resize", "copy"), and "rotate" (with its angle), "pen", "pen-close", "pen-add",
-    /// "pen-bend", "eyedropper", "comment" and "crosshair" for the drawn ones.
+    /// "nwse-resize", "copy"), and "rotate" (with its angle), "eyedropper", "comment" and
+    /// "crosshair" for the drawn ones.
     pub fn name(self) -> String {
         match self {
             Shown::System(i) => match i {
@@ -110,10 +108,6 @@ impl Shown {
             }
             .to_string(),
             Shown::Drawn(Glyph::Rotate(a)) => format!("rotate {}", a.round()),
-            Shown::Drawn(Glyph::Pen(PenCursor::New)) => "pen".into(),
-            Shown::Drawn(Glyph::Pen(PenCursor::Close)) => "pen-close".into(),
-            Shown::Drawn(Glyph::Pen(PenCursor::Add)) => "pen-add".into(),
-            Shown::Drawn(Glyph::Pen(PenCursor::Bend)) => "pen-bend".into(),
             Shown::Drawn(Glyph::Eyedropper) => "eyedropper".into(),
             Shown::Drawn(Glyph::Comment) => "comment".into(),
             Shown::Drawn(Glyph::Crosshair) => "crosshair".into(),
@@ -184,32 +178,6 @@ pub fn paint(painter: &Painter, at: Pos2, glyph: Glyph) {
             }
             for (a, b) in arms {
                 painter.add(Shape::line_segment([at + a, at + b], Stroke::new(1.0, INK)));
-            }
-        }
-        Glyph::Pen(state) => {
-            // A cross open at the centre (the point it lands on stays visible), and what a click
-            // does at its lower right.
-            for (a, b) in [
-                (vec2(-8.0, 0.0), vec2(-2.5, 0.0)),
-                (vec2(2.5, 0.0), vec2(8.0, 0.0)),
-                (vec2(0.0, -8.0), vec2(0.0, -2.5)),
-                (vec2(0.0, 2.5), vec2(0.0, 8.0)),
-            ] {
-                line(painter, &[at + a, at + b]);
-            }
-            let b = at + vec2(10.0, 10.0);
-            match state {
-                PenCursor::New => {}
-                PenCursor::Close => {
-                    let mut ring = arc(b, 3.0, 0.0, std::f32::consts::TAU);
-                    ring.push(pos2(b.x + 3.0, b.y));
-                    line(painter, &ring);
-                }
-                PenCursor::Add => {
-                    line(painter, &[b - vec2(3.5, 0.0), b + vec2(3.5, 0.0)]);
-                    line(painter, &[b - vec2(0.0, 3.5), b + vec2(0.0, 3.5)]);
-                }
-                PenCursor::Bend => line(painter, &arc(b + vec2(-3.5, 3.5), 7.0, -std::f32::consts::FRAC_PI_2, 0.0)),
             }
         }
         // The dropper's tip and the pin's tail, at the bottom left of their icons, are the hot spots.
