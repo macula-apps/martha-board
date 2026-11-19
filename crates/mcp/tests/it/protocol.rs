@@ -128,6 +128,8 @@ fn tools_call_happy_and_error_paths() {
     assert!(c.err("set_properties", json!({"ids": [id], "props": {"bogus": 1}})).contains("unknown properties"));
     assert!(c.err("set_properties", json!({"ids": [id], "props": {}})).contains("non-empty"));
     assert!(c.err("export", json!({"format": "bmp"})).contains("unknown format"));
+    // `.fig` export left with the importers (#9); the tool no longer offers it (#24).
+    assert_eq!(c.err("export", json!({"format": "fig"})), "unknown format `fig` (png|jpg|svg|webp|pdf)");
     assert!(c.err("batch", json!({"commands": []})).contains("empty"));
     assert!(c.err("batch", json!({"commands": [{"command": 3}]})).contains("step 0"));
     assert!(c.err("pointer", json!({"x": 1})).contains("`y`"));

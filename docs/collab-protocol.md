@@ -1,5 +1,7 @@
 # Real-time collaboration protocol (draft)
 
+> `server.md` and `plugins.md`, which this page names, are not in MarthaBoard: the collaboration server's guide and the plugin guide left at import (macula-apps/martha-board#1). The names are kept as plain text, not links (#25).
+
 Status: milestone M9. **Step 1 (the core, no networking) is implemented** in `crates/collab`:
 identifiers, the object/property model, change sets, ordering and validation, client
 reconciliation, derived data and the message encoding. **Step 2 is implemented** in
@@ -11,7 +13,7 @@ session and the transport). **Step 4 is implemented**: the browser build joins s
 app hosts and publishes files to a server, and `figcraft://` invite links open the app and join. Styles, variables, collections,
 modes and comments created in a session take ids from their creator's id space, and others' text
 carets, cursor chat and spotlights show live (see Presence). **Step 5 is implemented**: the
-standalone `figcraft-server` (`apps/figcraft-server`, running it: [`server.md`](server.md)) keeps
+standalone `figcraft-server` (`apps/figcraft-server`, running it: `server.md`) keeps
 many files with persistence and compaction, and share links that let people edit or only view;
 the app publishes to it, and a file's team library lives there for other files to use. Files are
 shared with **join codes** (see *Sharing with a join code*): online through a server that names
@@ -687,7 +689,7 @@ resuming with its offline edits, and leaving the session going back to snapshot 
   opening a file, so looking at the list never postpones a file's expiry. Each pair is checked
   like an owner token on `OpenHosting` (its SHA-256 against the stored hash, in constant time).
 
-*Built* (the team list; `figcraft_engine::team`, running it: [`server.md`](server.md#the-team-list)):
+*Built* (the team list; `figcraft_engine::team`, running it: `server.md`):
 
 - **Listing.** On a server whose operator set `team_files`, `Admin team` on an `OpenHosting`
   connection that names no file (or a managing one) answers `AdminReply::Team {web, files}`: the
@@ -762,7 +764,7 @@ resuming with its offline edits, and leaving the session going back to snapshot 
   browser opens them; see *Built (the standalone server)*). Some browsers also ask before a public
   site may reach private network addresses.
 
-*Built* (the standalone server, `apps/figcraft-server`; running it: [`server.md`](server.md)):
+*Built* (the standalone server, `apps/figcraft-server`; running it: `server.md`):
 
 - **One hub for both hosts.** The app's session host and the server run the same hub
   (`crates/collab-net/src/hub.rs`): the listener, a reader and a writer thread per connection,
@@ -812,7 +814,7 @@ resuming with its offline edits, and leaving the session going back to snapshot 
   same clients (the session id, client ids and log come back with the file), sending what they
   made meanwhile. The app's session ending (code 1001) stays final.
 
-*Built* (team libraries on the server; using them: [`server.md`](server.md#team-libraries)):
+*Built* (team libraries on the server; using them: `server.md`):
 
 - **A library connection.** A connection that opens with `OpenLibrary {file, token}` (checked like a
   hello's token, so any share link of the file opens it with that link's access) sends `Library`
@@ -853,8 +855,8 @@ resuming with its offline edits, and leaving the session going back to snapshot 
   those weeks (`component` is the style's or variable's id). The variants are appended to the enums, so the older messages keep their bytes; an older server refuses the new
   requests, and the app ignores that.
 
-*Built* (the plugin directory; operating it: [`server.md`](server.md#plugin-directory), publishing and
-installing: [`plugins.md`](plugins.md#plugin-directories)):
+*Built* (the plugin directory; operating it: `server.md`, publishing and
+installing: `plugins.md`):
 
 - **A plugin directory connection.** A connection that opens with `OpenPlugins {key}` lists and
   fetches plugins with no credential at all, and publishes or unpublishes them when `key` is the
@@ -871,7 +873,7 @@ installing: [`plugins.md`](plugins.md#plugin-directories)):
   checks the asset names; the app checks the same again after the hash. Fetches share a budget of
   bytes per second on the server, so many downloads at once are turned away instead of queued.
 
-*Built* (open hosting: a server open to the public; running one: [`server.md`](server.md#running-a-public-server)):
+*Built* (open hosting: a server open to the public; running one: `server.md`):
 
 - **Who the client is.** The hub knows each connection by its client's address: the socket's peer,
   or behind the configured reverse proxy (`trusted_proxy`) the last address of its
@@ -1065,7 +1067,7 @@ chooses to share on the network; the default is the invite link with a random to
   after it is handed out; it travels only in the first message of a connection, never in the
   WebSocket request. Anything that needs a stronger secret shares the link.
 - **TLS.** None in the server: a reverse proxy terminates it (Caddy and nginx examples in
-  `packaging/server/`, deployment in [`server.md`](server.md#deploy-on-a-linux-server)); clients
+  `packaging/server/`, deployment in `server.md`); clients
   speak `wss://` to the proxy. Tokens and keys are never in the
   WebSocket request (only in the first message), so proxies don't log them, and the server logs
   file and link ids, never secrets.
@@ -1093,7 +1095,7 @@ chooses to share on the network; the default is the invite link with a random to
    desktop-hosted sessions and publishes files to a server, #917; `figcraft://` links open the desktop app and join).
 5. **Standalone `figcraft-server`** with persistence, compaction, share links and permissions.
    **Done** (`apps/figcraft-server` on the shared hub; edit and view links, the server key,
-   publishing from the app; see [`server.md`](server.md)), followed by open hosting for a public
+   publishing from the app; see `server.md`), followed by open hosting for a public
    server (owner tokens, limits per address, idle expiry, reports and blocks), by sharing with
    join codes (online through the server, or carrying the host's address on the local network)
    and by your online files (the app remembers what it owns and opens it again as its owner).
