@@ -318,36 +318,6 @@ pub fn show(app: &mut FigApp, ctx: &Context) {
                     }
                 }
             });
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                ui.label(tr("Language"));
-                // Each language by its own name; System follows the OS (the browser on the web).
-                let langs = || {
-                    [("system", tr("System"))]
-                        .into_iter()
-                        .chain(i18n::languages().iter().filter(|l| crate::cjk::can_show(l.code)).map(|l| (l.code, l.name)))
-                };
-                let on = |code: &str| app.session.prefs.language.eq_ignore_ascii_case(code);
-                let selected = langs().find(|(code, _)| on(code)).map_or(tr("System"), |(_, name)| name);
-                let resp = crate::widgets::dropdown(ui, selected, 220.0, None);
-                let mut pick = None;
-                crate::right::menu_popup(&resp).show(|ui| {
-                    for (code, name) in langs() {
-                        if crate::right::menu_check(ui, on(code), name, "") {
-                            pick = Some(code);
-                            ui.close();
-                        }
-                    }
-                });
-                if let Some(code) = pick {
-                    app.run("pref.language", json!({"language": code}));
-                    ui.ctx().request_repaint();
-                }
-            });
-            if let Some(lang) = i18n::current().filter(|l| l.draft) {
-                let note = trf("{language}: draft translation, waiting for a native speaker's review.", &[("language", &lang.name)]);
-                crate::widgets::label(ui, &note, t.text_secondary);
-            }
         });
         if !open {
             app.ui.preferences = false;

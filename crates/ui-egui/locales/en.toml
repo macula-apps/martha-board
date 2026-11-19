@@ -4,9 +4,6 @@
 # the same text, except plural entries ({ one, other }). Command labels come from the engine.
 # `cargo test -p figcraft-ui-egui i18n` lists missing and unused keys. See docs/translating.md.
 
-[meta]
-name = "English"
-
 [ui]
 "% of all commits" = "% of all commits"
 "1…9, 0" = "1…9, 0"
@@ -579,7 +576,6 @@ name = "English"
 "Keyboard shortcuts" = "Keyboard shortcuts"
 "Kits" = "Kits"
 "Landing page" = "Landing page"
-"Language" = "Language"
 "Lasso" = "Lasso"
 "Last" = "Last"
 "Last commit" = "Last commit"
@@ -1308,7 +1304,6 @@ name = "English"
 "or" = "or"
 "yesterday" = "yesterday"
 "{count} in it now · Changed {date}" = "{count} in it now · Changed {date}"
-"{language}: draft translation, waiting for a native speaker's review." = "{language}: draft translation, waiting for a native speaker's review."
 "{length} bleed" = "{length} bleed"
 "{month} {day}, {year}" = "{month} {day}, {year}"
 "{name} cleared from the list" = "{name} cleared from the list"

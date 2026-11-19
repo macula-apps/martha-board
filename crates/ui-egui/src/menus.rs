@@ -132,7 +132,7 @@ pub fn invoke(app: &mut FigApp, id: &str) {
         "edit.findReplace" => app.ui.find = Some((String::new(), String::new())),
         // The Actions palette invokes commands without parameters. These values are edited in
         // Preferences; sending an empty object would either fail or silently reset a preference.
-        "pref.language" | "pref.userName" | "pref.publishServer" | "pref.nudge" => {
+        "pref.userName" | "pref.publishServer" | "pref.nudge" => {
             app.run("app.preferences", json!({}));
         }
         // The file name in the left panel's header turns into its editor, the name selected.

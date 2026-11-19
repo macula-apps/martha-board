@@ -120,8 +120,8 @@ Share reusable code through craft-libs. Do not depend on sibling application cra
 - CI is the check: `.github/workflows/ci.yml` runs fmt, clippy with the structural caps, the build
   and the whole test suite on every pull request. A change is done when that run is green on the
   pull request's tip.
-- Locally: `cargo xtask ci` runs fmt, clippy `-D warnings`, the tests, the translation report,
-  `layers`, `assets` and `docs`. `cargo xtask` with no task lists the others.
+- Locally: `cargo xtask ci` runs fmt, clippy `-D warnings`, the tests, `layers`, `assets` and
+  `docs`. `cargo xtask` with no task lists the others.
 
 ## Building and running
 - `cargo build --release -p figcraft -p figcraft-cli` builds the app (`figcraft`) and the command

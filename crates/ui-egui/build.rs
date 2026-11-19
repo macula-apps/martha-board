@@ -38,7 +38,6 @@ fn locales() -> String {
     println!("cargo::rerun-if-changed={}", dir.display());
     let mut files: Vec<_> =
         std::fs::read_dir(&dir).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "toml")).collect();
-    // By code, so "es" comes before "es-419".
     files.sort_by_key(|p| (p.file_stem().is_none_or(|s| s != "en"), p.file_stem().map(ToOwned::to_owned)));
     let langs: Vec<_> = files
         .into_iter()
@@ -52,10 +51,7 @@ fn locales() -> String {
 ",
     );
     for (code, path, t) in &langs {
-        let meta = |k: &str| t.get("meta").and_then(|m| m.get(k)).and_then(toml::Value::as_str).unwrap_or("").to_string();
-        // A regional catalog ("es-419") overlays its language's ("es"), if there is one.
-        let parent = code.split_once('-').and_then(|(base, _)| langs.iter().position(|(c, ..)| c == base)).unwrap_or(0);
-        let _ = writeln!(o, "    Lang {{ code: {code:?}, name: {:?}, draft: {}, parent: {parent}, ui: &[", meta("name"), !meta("status").is_empty());
+        let _ = writeln!(o, "    Lang {{ code: {code:?}, ui: &[");
         table(&mut o, path, t.get("ui"));
         let _ = writeln!(o, "    ], commands: &[");
         table(&mut o, path, t.get("commands"));
@@ -70,7 +66,7 @@ fn locales() -> String {
     o
 }
 
-/// The rows of one catalog table: strings or plural forms (`other` required).
+/// The rows of one catalog table: strings or plural forms (`other` required, `one` optional).
 fn table(o: &mut String, path: &std::path::Path, t: Option<&toml::Value>) {
     let Some(t) = t.and_then(toml::Value::as_table) else { return };
     // Sorted by key (byte order), as the lookup's binary search needs.
@@ -80,15 +76,7 @@ fn table(o: &mut String, path: &std::path::Path, t: Option<&toml::Value>) {
         let s = |k: &str| v.get(k).and_then(toml::Value::as_str);
         match (v.as_str(), s("one"), s("other")) {
             (Some(text), ..) => _ = writeln!(o, "        ({k:?}, Text::Plain({text:?})),"),
-            (None, one, Some(other)) => {
-                _ = writeln!(
-                    o,
-                    "        ({k:?}, Text::Plural(&Forms {{ one: {}, few: {}, many: {}, other: {other:?} }})),",
-                    name(one),
-                    name(s("few")),
-                    name(s("many")),
-                );
-            }
+            (None, one, Some(other)) => _ = writeln!(o, "        ({k:?}, Text::Plural(&Forms {{ one: {}, other: {other:?} }})),", name(one)),
             _ => println!("cargo::warning={}: `{k}` is neither a string nor plural forms with `other`; left out", path.display()),
         }
     }

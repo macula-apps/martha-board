@@ -158,17 +158,14 @@ impl FigApp {
         self.session.prefs.reduce_motion || self.services.reduce_motion()
     }
 
-    /// The CJK, Bengali and Thai scripts the UI shows: the language's, the language picker's (Preferences open),
-    /// typed text's, and those in the open file's names and comments (read when it changes, not
-    /// mid-drag). Nothing is checked once every script has a face.
+    /// The CJK, Bengali and Thai scripts the UI shows: the language's, typed text's, and those in the
+    /// open file's names and comments (read when it changes, not mid-drag). Nothing is checked once
+    /// every script has a face.
     pub(crate) fn cjk_needed(&mut self, ctx: &egui::Context, installed: u8) -> u8 {
         if installed == cjk::ALL {
             return installed;
         }
         let mut need = i18n::current().map_or(0, |l| cjk::language(l.code));
-        if self.ui.preferences {
-            need |= i18n::languages().iter().filter(|l| cjk::can_show(l.code)).fold(0, |m, l| m | cjk::language(l.code));
-        }
         need |= ctx.input(|i| {
             i.events.iter().fold(0, |m, e| match e {
                 egui::Event::Text(t) | egui::Event::Ime(egui::ImeEvent::Preedit { text: t, .. } | egui::ImeEvent::Commit(t)) => m | cjk::scripts(t),

@@ -1,5 +1,7 @@
 //! The UI language: lookups over the string catalogs in `crates/ui-egui/locales/` (one TOML file
-//! per language, baked in by build.rs; see docs/translating.md).
+//! per language, baked in by build.rs; see docs/translating.md). The UI ships in English only
+//! (#34): `en.toml` is the one catalog, and a preference or system language naming any other reads
+//! English.
 //!
 //! Keys are the English text as written in the code: `tr("Fill")`,
 //! `trf("Delete {name}", &[("name", &name)])`, `trn("{n} layers", count)`. A key a catalog lacks
@@ -10,32 +12,22 @@ use std::borrow::Cow;
 use std::fmt::Display;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-/// One catalog entry. Two words: the plural forms sit behind a reference, so the ~52,000 baked-in
-/// rows don't each carry four strings' worth of space (about 450 KB of the browser build).
+/// One catalog entry. Two words: the plural forms sit behind a reference, so a baked-in row doesn't
+/// carry two strings' worth of space.
 pub enum Text {
     Plain(&'static str),
     Plural(&'static Forms),
 }
 
-/// Optional language-specific plural forms, with `other` as the fallback.
+/// Plural forms: `one` (optional) for a count of 1, `other` for every count and as the fallback.
 pub struct Forms {
     pub one: Option<&'static str>,
-    pub few: Option<&'static str>,
-    pub many: Option<&'static str>,
     pub other: &'static str,
 }
 
 /// A language's catalog (generated from `locales/<code>.toml`).
 pub struct Lang {
     pub code: &'static str,
-    /// The language's own name for itself (the language picker shows it untranslated).
-    pub name: &'static str,
-    /// A draft (`[meta] status` set): waiting for a native speaker's review, or reviewed and waiting for
-    /// a maintainer's approval.
-    pub draft: bool,
-    /// Index into [`LANGS`] of the catalog a regional one overlays ("es" under "es-419": it lists
-    /// only what differs), else 0 (English).
-    pub parent: usize,
     /// UI strings by English text, sorted.
     pub ui: &'static [(&'static str, Text)],
     /// Command labels by command id, sorted.
@@ -50,11 +42,6 @@ include!(concat!(env!("OUT_DIR"), "/locales.rs"));
 /// Index into [`LANGS`] of the language the UI shows (0: English).
 static CURRENT: AtomicUsize = AtomicUsize::new(0);
 
-/// The languages the UI can show, English first.
-pub fn languages() -> &'static [Lang] {
-    LANGS
-}
-
 /// The language the UI shows.
 pub fn current() -> Option<&'static Lang> {
     LANGS.get(CURRENT.load(Ordering::Relaxed))
@@ -66,7 +53,8 @@ pub fn right_to_left() -> bool {
 }
 
 /// Whether language `code` ("ar", "he-IL"…) is written right to left: Arabic, Hebrew, Persian,
-/// Urdu, Pashto, Sindhi, Kurdish (Sorani), Uyghur, Dhivehi and Yiddish.
+/// Urdu, Pashto, Sindhi, Kurdish (Sorani), Uyghur, Dhivehi and Yiddish. It reads the code alone, so
+/// the mirrored layout follows as soon as a right-to-left catalog is baked in.
 fn writes_right_to_left(code: &str) -> bool {
     let base = code.split(['-', '_']).next().unwrap_or("");
     ["ar", "he", "fa", "ur", "ps", "sd", "ckb", "ug", "dv", "yi"].iter().any(|rtl| rtl.eq_ignore_ascii_case(base))
@@ -84,30 +72,13 @@ fn resolve(pref: &str, system: Option<&str>) -> usize {
     want.split(',').find_map(resolve_one).unwrap_or(0)
 }
 
-/// Regions whose Spanish reads the Latin American catalog (es-419): Latin America and the US.
-const LATIN_AMERICA: &[&str] =
-    &["419", "AR", "BO", "CL", "CO", "CR", "CU", "DO", "EC", "GT", "HN", "MX", "NI", "PA", "PE", "PR", "PY", "SV", "US", "UY", "VE"];
-
-/// The [`LANGS`] index for one tag: the exact tag ("pt-BR"), else its base language ("es" for
-/// "es_ES.UTF-8"), else a regional catalog of that language ("pt-BR" for "pt-PT"); Latin American
-/// Spanish ("es-MX") reads es-419. A Chinese tag reads Traditional (zh-Hant) for `Hant`, `TW`, `HK`
-/// or `MO` and Simplified (zh-Hans) otherwise; an explicit `Hans` always reads Simplified. A
-/// language the UI can't draw (CJK on the web without CJK faces built in) doesn't count.
+/// The [`LANGS`] index for one tag: the exact tag ("en-US"), else its base language ("en" for
+/// "en_GB.UTF-8"); `None` when no catalog has it.
 fn resolve_one(want: &str) -> Option<usize> {
     let tag = want.trim().split(['.', '@']).next().unwrap_or("").replace('_', "-");
     let base = tag.split('-').next().unwrap_or("");
-    let has = |subtags: &[&str]| tag.split('-').skip(1).any(|t| subtags.iter().any(|s| s.eq_ignore_ascii_case(t)));
-    let zh = |code: &str| {
-        LANGS.iter().position(|l| l.code.eq_ignore_ascii_case(code)).filter(|i| LANGS.get(*i).is_some_and(|l| crate::cjk::can_show(l.code)))
-    };
-    if base.eq_ignore_ascii_case("zh") {
-        let traditional = has(&["Hant"]) || (!has(&["Hans"]) && has(&["TW", "HK", "MO"]));
-        return zh(if traditional { "zh-Hant" } else { "zh-Hans" });
-    }
     let find = |t: &str| LANGS.iter().position(|l| l.code.eq_ignore_ascii_case(t));
-    let alias = (base.eq_ignore_ascii_case("es") && has(LATIN_AMERICA)).then(|| find("es-419")).flatten();
-    let regional = || LANGS.iter().position(|l| !base.is_empty() && l.code.split('-').next().is_some_and(|b| b.eq_ignore_ascii_case(base)));
-    alias.or_else(|| find(&tag)).or_else(|| find(base)).or_else(regional).filter(|i| LANGS.get(*i).is_some_and(|l| crate::cjk::can_show(l.code)))
+    find(&tag).or_else(|| find(base))
 }
 
 /// Look `key` up in one of the sorted catalog tables.
@@ -115,13 +86,12 @@ fn find(table: &'static [(&'static str, Text)], key: &str) -> Option<&'static Te
     table.binary_search_by(|(k, _)| (*k).cmp(key)).ok().and_then(|i| table.get(i)).map(|(_, t)| t)
 }
 
-/// Language `lang`, the catalog it overlays ("es" under "es-419"), then English.
+/// Language `lang`, then English.
 fn chain(lang: usize) -> impl Iterator<Item = &'static Lang> {
-    let parent = LANGS.get(lang).map_or(0, |l| l.parent);
-    [lang, parent, 0].into_iter().filter_map(|i| LANGS.get(i))
+    [lang, 0].into_iter().filter_map(|i| LANGS.get(i))
 }
 
-/// `key`'s entry in language `lang`, else in the catalog it overlays, else in English.
+/// `key`'s entry in language `lang`, else in English.
 fn lookup(lang: usize, key: &str) -> Option<&'static Text> {
     chain(lang).find_map(|l| find(l.ui, key))
 }
@@ -160,61 +130,21 @@ pub fn trn(key: &str, n: usize, args: &[(&str, &dyn Display)]) -> String {
     fill(text, &all)
 }
 
-/// Pick a plural using the catalog that supplies the text: an English fallback keeps English's
-/// rule, even when the selected language is Russian.
+/// The text for count `n`: the `one` form when English's rule takes it, else `other`.
 fn counted(lang: usize, key: &str, n: usize) -> &str {
     chain(lang)
         .find_map(|l| {
             find(l.ui, key).map(|text| match text {
                 Text::Plain(s) => *s,
-                Text::Plural(Forms { one, few, many, other }) => match plural(l.code, n) {
-                    Plural::One => one.unwrap_or(other),
-                    Plural::Few => few.unwrap_or(other),
-                    Plural::Many => many.unwrap_or(other),
-                    Plural::Other => other,
-                },
+                Text::Plural(Forms { one, other }) => one.filter(|_| takes_one(n)).unwrap_or(other),
             })
         })
         .unwrap_or(key)
 }
 
-#[derive(Debug, PartialEq, Eq)]
-enum Plural {
-    One,
-    Few,
-    Many,
-    Other,
-}
-
-/// CLDR integer rules. Existing one/other catalogs may omit the extra forms.
-fn plural(code: &str, n: usize) -> Plural {
-    match code {
-        "cs" if n == 1 => Plural::One,
-        "cs" if (2..=4).contains(&n) => Plural::Few,
-        "cs" => Plural::Other,
-        "pl" if n == 1 => Plural::One,
-        "ru" if n % 10 == 1 && n % 100 != 11 => Plural::One,
-        "ru" | "pl" if (2..=4).contains(&(n % 10)) && !(12..=14).contains(&(n % 100)) => Plural::Few,
-        "ru" | "pl" => Plural::Many,
-        "bs" if n % 10 == 1 && n % 100 != 11 => Plural::One,
-        "bs" if (2..=4).contains(&(n % 10)) && !(12..=14).contains(&(n % 100)) => Plural::Few,
-        "bs" => Plural::Other,
-        "ja" | "ko" | "th" | "zh-Hans" | "zh-Hant" | "vi" => Plural::Other,
-        "fr" | "pt-BR" if n <= 1 => Plural::One,
-        _ if n == 1 => Plural::One,
-        _ => Plural::Other,
-    }
-}
-
-// CLDR's million-count "many" in French, Spanish and Portuguese still reads their existing
-// "other" wording. Czech supplies separate few forms; Russian and Polish supply few/many forms;
-// Bosnian takes Russian's one and few and reads "other" for the rest (CLDR has no "many" there).
-
-/// Whether count `n` takes the "one" form: 0 and 1 in French and Brazilian Portuguese, never in
-/// Japanese, Korean, Thai, Chinese and Vietnamese (no plural forms: always "other"), 1 elsewhere (CLDR's integer rules).
-#[cfg(test)]
-fn plural_one(lang: usize, n: usize) -> bool {
-    plural(LANGS.get(lang).map_or("en", |l| l.code), n) == Plural::One
+/// English's plural rule (CLDR, integer counts): 1 takes the "one" form, every other count "other".
+fn takes_one(n: usize) -> bool {
+    n == 1
 }
 
 /// Replace each `{name}` in `text` with its argument, in one pass (an argument's own braces stay).

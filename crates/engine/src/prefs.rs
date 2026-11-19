@@ -47,8 +47,9 @@ pub struct Prefs {
     /// The height asked for the main window's pages list, dragged at its lower edge (`None`: a
     /// share of the panel; the interface keeps it within its limits).
     pub pages_height: Option<f32>,
-    /// The interface language: a language code ("en", "es", "pt-BR") or "system" (the OS or browser
-    /// language). Languages without a catalog show English.
+    /// The interface language: a language code ("en", "en-GB") or "system" (the OS or browser
+    /// language). The UI ships in English only, so a saved language without a catalog ("es",
+    /// "ja", from before #34) shows English.
     pub language: String,
     /// The name comments are signed with (and whose comments count as yours).
     pub user_name: String,

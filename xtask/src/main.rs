@@ -1,9 +1,7 @@
 //! Project tasks: `cargo xtask <task>`.
 //!
-//! - `ci`      fmt check, clippy -D warnings, tests, the translation report, layers, assets, docs
+//! - `ci`      fmt check, clippy -D warnings, tests, layers, assets, docs
 //! - `test`    the workspace tests (nextest when installed) and doctests
-//! - `i18n-report` the UI strings, command labels and menu wordings each language lacks (never fails
-//!   on them: a missing translation reads English)
 //! - `layers`  crate dependency layering check
 //! - `assets`  every file under assets/ has a row in ATTRIBUTION.md
 //! - `docs`    no table row twice and no status-line item listed twice in docs/*.md (what a merge
@@ -38,7 +36,6 @@ fn main() -> ExitCode {
     let ok = match task {
         "ci" => ci(),
         "test" => test(),
-        "i18n-report" => i18n_report(),
         "layers" => layers::check(&root()),
         "assets" => assets(),
         "docs" => docs_check::check(&root()),
@@ -46,7 +43,7 @@ fn main() -> ExitCode {
         "icon" => icon::generate(&root()),
         "bench" => bench(args.get(1).map_or("1000,10000,50000", String::as_str)),
         _ => {
-            eprintln!("tasks: ci, test, i18n-report, layers, assets, docs, version [set X.Y.Z], icon, bench [SIZES]");
+            eprintln!("tasks: ci, test, layers, assets, docs, version [set X.Y.Z], icon, bench [SIZES]");
             task == "help"
         }
     };
@@ -57,7 +54,6 @@ fn ci() -> bool {
     run(cargo().args(["fmt", "--all", "--check"]))
         && run(cargo().args(["clippy", "--workspace", "--all-targets", "--keep-going", "--", "-D", "warnings"]))
         && test()
-        && i18n_report()
         && layers::check(&root())
         && assets()
         && docs_check::check(&root())
@@ -75,12 +71,6 @@ fn test() -> bool {
         run(cargo().args(["test", "--workspace", "--lib", "--bins", "--tests"]))
     };
     units && run(cargo().args(["test", "--workspace", "--doc"]))
-}
-
-/// Prints what each language's catalog lacks, from the test that lists it. `--workspace --lib`
-/// reuses the binaries `test` built.
-fn i18n_report() -> bool {
-    run(cargo().args(["test", "-q", "--workspace", "--lib", "--", "--exact", "i18n::tests::missing_translations_report", "--nocapture"]))
 }
 
 /// Engine/render timings (`figcraft-cli perf`) and UI frame timings (an ignored test driving the

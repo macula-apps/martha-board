@@ -14,7 +14,7 @@ fn preference_actions_open_preferences_without_changing_values() {
     ui.app.session.prefs.language = "en".into();
     ui.app.session.prefs.publish_server = "wss://example.test/".into();
     let before = ui.app.session.prefs.clone();
-    for id in ["pref.language", "pref.userName", "pref.publishServer", "pref.nudge"] {
+    for id in ["pref.userName", "pref.publishServer", "pref.nudge"] {
         ui.app.ui.preferences = false;
         menus::invoke(&mut ui.app, id);
         assert!(ui.app.ui.preferences, "{id} did not open Preferences");

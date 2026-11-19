@@ -30,7 +30,7 @@ replaced.
 | L6 | `figcraft-mcp` | ~2.4k | MCP server (JSON-RPC over stdio), headless or bridged to a running app |
 | L6 | `figcraft-collab-net` | ~3.0k | Live sessions over the network: the WebSocket transport (tungstenite, a reader and a writer thread per connection), the hub that runs a collaboration core server per open file for the session host the app embeds and for `figcraft-server` (behind a `Backend`), the joining and managing clients (publishing), invite links, presence relay and limits; the browser client; the only crate allowed networking dependencies |
 | apps | `figcraft`, `figcraft-cli` | | Desktop app (eframe + wgpu) and command line |
-| tools | `xtask` | | `ci`, `test`, `i18n-report`, `layers`, `assets`, `docs`, `version`, `icon`, `bench` |
+| tools | `xtask` | | `ci`, `test`, `layers`, `assets`, `docs`, `version`, `icon`, `bench` |
 
 ## Data model
 

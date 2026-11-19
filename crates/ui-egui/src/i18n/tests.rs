@@ -1,10 +1,9 @@
-//! The catalog checks: every key the code looks up is in the English catalog, no catalog has keys
-//! the code doesn't use, and placeholders match English. A missing translation reads English and
-//! fails nothing: [`missing_translations_report`] lists them (`cargo xtask i18n-report`).
+//! The catalog checks: English is the one catalog (#34), every key the code looks up is in it and it
+//! has no keys the code doesn't use; a language without a catalog reads English.
 
 use std::collections::BTreeSet;
 
-use super::{Forms, LANGS, Lang, Plural, Text, chain, counted, fill, find, lookup, plural, plural_one, resolve, writes_right_to_left};
+use super::{Forms, LANGS, Lang, Text, counted, fill, lookup, resolve, takes_one, writes_right_to_left};
 
 /// Keys looked up from data rather than written as `tr("…")` in the code: the main menu's
 /// submenu names (the engine's menu catalog) and labels of engine and document enums.
@@ -144,16 +143,6 @@ fn dynamic_labels() -> Vec<&'static str> {
     v
 }
 
-/// Ids of main-menu items whose label isn't the command's (besides a closing "…").
-fn menu_worded_differently() -> BTreeSet<&'static str> {
-    let bare = |s: &'static str| s.trim_end_matches('…');
-    figcraft_engine::catalog::MENU
-        .iter()
-        .filter(|m| figcraft_engine::find_command(m.id).is_some_and(|c| bare(c.label) != bare(m.label)))
-        .map(|m| m.id)
-        .collect()
-}
-
 /// The string literals passed to `tr`, `trf`, `trn` and `tr_noop` in this crate's sources.
 fn used_keys() -> BTreeSet<String> {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
@@ -233,19 +222,15 @@ fn string_literal(s: &str) -> Option<String> {
     None
 }
 
-fn placeholders(s: &str) -> BTreeSet<&str> {
-    s.split('{').skip(1).filter_map(|p| p.split_once('}').map(|(name, _)| name)).collect()
-}
-
 fn forms(t: &Text) -> Vec<&'static str> {
     match t {
         Text::Plain(s) => vec![s],
-        Text::Plural(Forms { one, few, many, other }) => one.iter().chain(few).chain(many).copied().chain([*other]).collect(),
+        Text::Plural(Forms { one, other }) => one.iter().copied().chain([*other]).collect(),
     }
 }
 
-/// The browser build bakes in every catalog: a row is a key and a two-word entry, not an entry
-/// with room for four strings.
+/// The build bakes the catalog in: a row is a key and a two-word entry, not an entry with room for
+/// every plural form.
 #[test]
 fn a_catalog_row_is_four_words() {
     assert_eq!(std::mem::size_of::<Text>(), 2 * std::mem::size_of::<usize>());
@@ -281,64 +266,11 @@ fn english_text_is_its_key_except_plurals() {
     assert!(english().commands.is_empty() && english().menu.is_empty(), "English command labels come from the engine");
 }
 
-/// The ids `[commands]` entries translate: every command and every main-menu item.
-fn command_ids() -> BTreeSet<&'static str> {
-    figcraft_engine::all_commands()
-        .iter()
-        .map(|c| c.id)
-        .chain(figcraft_engine::catalog::MENU.iter().map(|m| m.id).filter(|id| !id.is_empty()))
-        .collect()
-}
-
+/// The UI ships in English only (#34): a catalog put back in `locales/` fails here, so bringing a
+/// language back is a decision, not a stray file.
 #[test]
-fn catalogs_have_known_keys_and_matching_placeholders() {
-    let en = english();
-    let ids = command_ids();
-    for lang in LANGS {
-        assert!(!lang.name.is_empty(), "{}: [meta] name is missing", lang.code);
-        for (k, t) in lang.ui {
-            let src = find(en.ui, k).unwrap_or_else(|| panic!("{}: unknown key {k:?}", lang.code));
-            let want = placeholders(forms(src).last().unwrap());
-            for (i, form) in forms(t).iter().enumerate() {
-                let got = placeholders(form);
-                // A "one" form may spell the count out ("una capa").
-                let ok = if matches!(t, Text::Plural(Forms { one: Some(_), .. })) && i == 0 { got.is_subset(&want) } else { got == want };
-                assert!(ok, "{}: {k:?} has placeholders {got:?}, English has {want:?}", lang.code);
-            }
-            assert_eq!(matches!(t, Text::Plural(_)), matches!(src, Text::Plural(_)), "{}: {k:?} plural or not as in English", lang.code);
-        }
-        for (id, t) in lang.commands.iter().chain(lang.menu) {
-            assert!(ids.contains(id), "{}: unknown command id {id:?}", lang.code);
-            assert!(matches!(t, Text::Plain(s) if !s.trim().is_empty()), "{}: {id:?} is empty or plural", lang.code);
-        }
-        for (id, _) in lang.menu {
-            assert!(menu_worded_differently().contains(id), "{}: [menu] {id:?} reads like the command; [commands] covers it", lang.code);
-        }
-    }
-}
-
-/// What each language lacks: UI strings, command labels and menu wordings that read as in English
-/// because neither its catalog nor the one it overlays has them. It prints them and always passes.
-#[test]
-fn missing_translations_report() {
-    let ids = command_ids();
-    let worded = menu_worded_differently();
-    for (i, lang) in LANGS.iter().enumerate().filter(|(_, l)| l.code != "en") {
-        let own = || chain(i).filter(|l| l.code != "en");
-        let ui: Vec<_> = english().ui.iter().map(|(k, _)| *k).filter(|k| own().all(|l| find(l.ui, k).is_none())).collect();
-        let commands: Vec<_> = ids.iter().filter(|id| own().all(|l| find(l.commands, id).is_none())).collect();
-        let menu: Vec<_> = worded.iter().filter(|id| own().all(|l| find(l.menu, id).is_none())).collect();
-        println!("{}: {} UI strings, {} command labels, {} menu wordings missing", lang.code, ui.len(), commands.len(), menu.len());
-        for k in ui {
-            println!("  {k:?}");
-        }
-        for id in commands {
-            println!("  [commands] {id}");
-        }
-        for id in menu {
-            println!("  [menu] {id}");
-        }
-    }
+fn english_is_the_only_catalog() {
+    assert_eq!(LANGS.iter().map(|l| l.code).collect::<Vec<_>>(), [english().code]);
 }
 
 #[test]
@@ -346,14 +278,10 @@ fn lookups_fall_back_to_english_and_fill_placeholders() {
     assert_eq!(fill("Delete {name}?", &[("name", &"Frame {1}")]), "Delete Frame {1}?");
     assert_eq!(fill("{a} and {b", &[("a", &1)]), "1 and {b");
     assert!(lookup(0, "no such key").is_none());
-    assert_eq!(resolve("system", Some("es_ES.UTF-8")), resolve("es", None));
-    assert_eq!(resolve("system", None), 0);
-    assert_eq!(resolve("xx-YY", None), 0);
-    let es = resolve("es-419", None);
-    assert_ne!(es, 0, "Spanish is baked in");
-    // A key Spanish lacks reads English; Spanish entries read Spanish.
-    let (k, t) = LANGS[es].ui.first().unwrap();
-    assert!(matches!(lookup(es, k), Some(x) if std::ptr::eq(x, t)));
+    // English entries read English, through any language index (a stale one too).
+    let (k, t) = english().ui.first().unwrap();
+    assert!(matches!(lookup(0, k), Some(x) if std::ptr::eq(x, t)));
+    assert!(matches!(lookup(LANGS.len(), k), Some(x) if std::ptr::eq(x, t)));
 }
 
 #[test]
@@ -364,186 +292,64 @@ fn a_live_failure_the_ui_knows_is_read_back_for_translation() {
     assert!(matches!(crate::live::failure_text("Couldn't reach the server"), std::borrow::Cow::Borrowed(_)));
 }
 
+/// A system language or a saved preference naming a language whose catalog left in #34 (or never
+/// had one) reads English, the system's list and regional tags included; English tags read English.
 #[test]
-fn system_languages_pick_the_first_one_with_a_catalog() {
-    let code = |pref: &str, system: Option<&str>| LANGS[resolve(pref, system)].code;
-    assert_eq!(code("system", Some("fr-CA")), "fr");
-    assert_eq!(code("system", Some("de_CH.UTF-8")), "de");
-    assert_eq!(code("system", Some("cs_CZ.UTF-8")), "cs");
-    assert_eq!(code("system", Some("cs-CZ,en-US")), "cs");
-    assert_eq!(code("cs", None), "cs");
-    assert_eq!(code("system", Some("pt-BR")), "pt-BR");
-    assert_eq!(code("system", Some("tr_TR.UTF-8")), "tr");
-    assert_eq!(code("system", Some("id_ID.UTF-8")), "id");
-    assert_eq!(code("system", Some("vi_VN.UTF-8")), "vi");
-    // Portugal's Portuguese and a bare "pt" read the Brazilian catalog.
-    assert_eq!(code("system", Some("pt-PT")), "pt-BR");
-    assert_eq!(code("pt", None), "pt-BR");
-    // An OS list: the first language there is a catalog for (English counts). Hindi has no
-    // catalog (Dutch gained one; `hi` keeps exercising the no-catalog path).
-    assert_eq!(code("system", Some("hi-IN,de-DE,en-US")), "de");
-    assert_eq!(code("system", Some("hi-IN, en-US,fr-FR")), "en");
-    assert_eq!(code("system", Some("hi,da")), "en");
-    assert_eq!(code("system", Some("hi,sv")), "sv");
-    assert_eq!(code("fr", Some("de-DE")), "fr", "a chosen language beats the system's");
-}
-
-#[test]
-fn italian_is_picked_for_italian_locales() {
-    let code = |pref: &str, system: Option<&str>| LANGS[resolve(pref, system)].code;
-    for tag in ["it", "it-IT", "it-CH", "it_IT.UTF-8"] {
-        assert_eq!(code("system", Some(tag)), "it", "{tag}");
+fn a_removed_or_unknown_language_reads_english() {
+    let en = 0;
+    assert_eq!(LANGS[en].code, english().code);
+    for removed in ["nl_BE.UTF-8", "ar", "ar_EG.UTF-8", "ja", "ja-JP", "es-419", "es_MX.UTF-8", "zh-Hant", "pt-BR", "fr-CA", "ru", "xx-YY", "", " "] {
+        assert_eq!(resolve(removed, None), en, "preference {removed:?}");
+        assert_eq!(resolve("system", Some(removed)), en, "system {removed:?}");
+        assert_eq!(resolve("", Some(removed)), en, "no preference, system {removed:?}");
     }
-    let it = LANGS.iter().position(|l| l.code == "it").unwrap();
-    assert_eq!(LANGS[it].name, "Italiano");
-    assert!(LANGS[it].draft);
-    assert!(!plural_one(it, 0) && plural_one(it, 1) && !plural_one(it, 2));
-}
-
-#[test]
-fn swedish_is_picked_for_swedish_locales() {
-    let code = |pref: &str, system: Option<&str>| LANGS[resolve(pref, system)].code;
-    for tag in ["sv", "sv-SE", "sv-FI", "sv_SE.UTF-8"] {
-        assert_eq!(code("system", Some(tag)), "sv", "{tag}");
-    }
-    let sv = LANGS.iter().position(|l| l.code == "sv").unwrap();
-    assert!(!plural_one(sv, 0) && plural_one(sv, 1) && !plural_one(sv, 2));
-}
-
-#[test]
-fn bosnian_tags_and_integer_plurals() {
-    let code = |pref: &str, system: Option<&str>| LANGS[resolve(pref, system)].code;
-    for tag in ["bs", "bs-BA", "bs-Latn-BA", "bs_BA.UTF-8"] {
-        assert_eq!(code("system", Some(tag)), "bs", "{tag}");
-    }
-    let bs = LANGS.iter().position(|l| l.code == "bs").unwrap();
-    assert_eq!(LANGS[bs].name, "Bosanski");
-    assert!(LANGS[bs].draft);
-    for n in [1, 21, 31, 101, 1001] {
-        assert_eq!(plural("bs", n), Plural::One, "{n}");
-    }
-    for n in [2, 3, 4, 22, 24, 102] {
-        assert_eq!(plural("bs", n), Plural::Few, "{n}");
-    }
-    for n in [0, 5, 11, 12, 14, 20, 111, 112] {
-        assert_eq!(plural("bs", n), Plural::Other, "{n}");
-    }
-    // "one" covers 21 and 31 too, so every form keeps the count.
-    for (key, text) in LANGS[bs].ui {
-        if let Text::Plural(Forms { one, few, other, .. }) = text {
-            for form in [*one, *few, Some(*other)].into_iter().flatten() {
-                assert!(form.contains("{n}"), "{key}: {form}");
-            }
-        }
-    }
-    let layers = [1, 3, 5, 21].map(|n| fill(counted(bs, "{n} layers", n), &[("n", &n)]));
-    assert_eq!(layers, ["1 sloj", "3 sloja", "5 slojeva", "21 sloj"]);
-}
-
-#[test]
-fn latin_american_spanish_overlays_spanish() {
-    let code = |pref: &str, system: Option<&str>| LANGS[resolve(pref, system)].code;
-    for tag in ["es-419", "es-MX", "es-AR", "es_CO.UTF-8", "es-US", "es-Latn-MX"] {
-        assert_eq!(code("system", Some(tag)), "es-419", "{tag}");
-    }
-    for tag in ["es", "es-ES", "es_ES.UTF-8", "es-GQ"] {
-        assert_eq!(code("system", Some(tag)), "es", "{tag}");
-    }
-    let es = LANGS.iter().position(|l| l.code == "es").unwrap();
-    let la = LANGS.iter().position(|l| l.code == "es-419").unwrap();
-    assert_eq!(LANGS[la].parent, es);
-    assert!(es < la, "the picker lists Español first");
-    // Its own wording, else Spanish's, else English's.
-    for (k, _) in LANGS[es].ui.iter().filter(|(k, _)| find(LANGS[la].ui, k).is_none()) {
-        assert!(lookup(la, k).is_some_and(|t| std::ptr::eq(t, find(LANGS[es].ui, k).unwrap())), "{k:?}");
-    }
-    let undo = |i: usize| chain(i).find_map(|l| find(l.commands, "edit.undo")).map(forms);
-    assert_eq!(undo(la), undo(es), "command labels fall back too");
-    // An overlay lists only what differs from the catalog under it.
-    for lang in LANGS.iter().filter(|l| l.parent != 0) {
-        let under = &LANGS[lang.parent];
-        for (table, base) in [(lang.ui, under.ui), (lang.commands, under.commands), (lang.menu, under.menu)] {
-            for (k, t) in table {
-                let same = find(base, k).is_some_and(|b| forms(b) == forms(t));
-                assert!(!same, "{}: {k:?} reads as in {}", lang.code, under.code);
-            }
-        }
+    assert_eq!(resolve("system", Some("ja-JP,ar,nl-BE")), en, "a system list of removed languages");
+    assert_eq!(resolve("system", None), en);
+    for tag in ["en", "EN", "en-US", "en_GB.UTF-8", "en-Latn-GB"] {
+        assert_eq!(resolve(tag, None), en, "{tag}");
+        assert_eq!(resolve("system", Some(tag)), en, "{tag}");
     }
 }
 
+/// A preferences file saved with a language whose catalog left in #34 still loads, keeps its other
+/// preferences, and shows English; `pref.language` still takes such a code without an error.
 #[test]
-fn french_and_portuguese_count_zero_as_singular() {
-    let one = |code: &str, n: usize| plural_one(LANGS.iter().position(|l| l.code == code).unwrap(), n);
-    for code in ["fr", "pt-BR"] {
-        assert!(one(code, 0) && one(code, 1) && !one(code, 2), "{code}");
+fn a_preferences_file_naming_a_removed_language_loads_and_reads_english() {
+    for (removed, saved) in [
+        ("ar", r#"{"language": "ar", "user_name": "Ada", "theme": "dark"}"#),
+        ("ja", r#"{"language": "ja", "user_name": "Ada", "theme": "dark"}"#),
+        ("es-419", r#"{"language": "es-419", "user_name": "Ada", "theme": "dark"}"#),
+        ("system", r#"{"language": "system", "user_name": "Ada", "theme": "dark"}"#),
+    ] {
+        let prefs: figcraft_engine::Prefs = serde_json::from_str(saved).unwrap_or_else(|e| panic!("{saved}: {e}"));
+        assert_eq!((prefs.language.as_str(), prefs.user_name.as_str(), prefs.theme.as_str()), (removed, "Ada", "dark"));
+        assert_eq!(LANGS[resolve(&prefs.language, Some("nl_BE.UTF-8"))].code, english().code, "{removed}");
     }
-    for code in ["en", "es", "de", "cs", "pl"] {
-        for n in [0, 1, 2, 3, 4, 5, 21] {
-            assert_eq!(one(code, n), n == 1, "{code}: {n}");
-        }
+    let mut s = figcraft_engine::Session::new();
+    for removed in ["ar", "ja", "es-419", "nl"] {
+        s.execute("pref.language", &serde_json::json!({"language": removed})).unwrap();
+        assert_eq!(s.prefs.language, removed);
+        assert_eq!(LANGS[resolve(&s.prefs.language, None)].code, english().code, "{removed}");
     }
 }
 
-#[test]
-fn japanese_korean_chinese_and_vietnamese_have_no_plural_forms() {
-    let code = |pref: &str, system: Option<&str>| LANGS[resolve(pref, system)].code;
-    assert_eq!(code("system", Some("ja-JP")), "ja");
-    assert_eq!(code("system", Some("ko_KR.UTF-8")), "ko");
-    assert_eq!(code("system", Some("vi-VN")), "vi");
-    assert_eq!(code("system", Some("ja,en-US")), "ja");
-    assert_eq!(LANGS[resolve("vi", None)].name, "Tiếng Việt");
-    assert!(LANGS[resolve("vi", None)].draft);
-    for code in ["ja", "ko", "th", "zh-Hans", "zh-Hant", "vi"] {
-        let lang = LANGS.iter().position(|l| l.code == code).unwrap();
-        assert!(!plural_one(lang, 0) && !plural_one(lang, 1) && !plural_one(lang, 2), "{code}");
-        let ones: Vec<_> = LANGS[lang].ui.iter().filter(|(_, t)| matches!(t, Text::Plural(Forms { one: Some(_), .. }))).map(|(k, _)| k).collect();
-        assert!(ones.is_empty(), "{code}: plural entries give only `other`: {ones:?}");
-    }
-}
-
-#[test]
-fn georgian_is_picked_for_georgian_locales() {
-    let code = |pref: &str, system: Option<&str>| LANGS[resolve(pref, system)].code;
-    for tag in ["ka", "ka-GE", "ka_GE.UTF-8"] {
-        assert_eq!(code("system", Some(tag)), "ka", "{tag}");
-    }
-}
-
-#[test]
-fn arabic_tags_and_count_neutral_forms() {
-    let ar = LANGS.iter().position(|l| l.code == "ar").unwrap();
-    assert_eq!(LANGS[ar].name, "العربية");
-    for tag in ["ar", "ar-SA", "ar_EG.UTF-8", "ar_AE@arabic"] {
-        assert_eq!(resolve("system", Some(tag)), ar, "{tag}");
-        assert_eq!(resolve(tag, None), ar, "{tag}");
-    }
-    let counts = [0, 1, 2, 3, 10, 11, 99, 100, 102, 103, 111, 200, 1000];
-    for (key, text) in LANGS[ar].ui {
-        if let Text::Plural(Forms { one, few, many, other }) = text {
-            assert!(one.is_none() && few.is_none() && many.is_none(), "{key}: count-neutral wording uses only other");
-            for n in counts {
-                assert_eq!(counted(ar, key, n), *other, "{key}, {n}");
-                assert!(fill(other, &[("n", &n)]).contains(&n.to_string()));
-            }
-        }
-    }
-}
-
+/// Mirroring reads the language code alone, with no catalog behind it: the window mirrors for a
+/// right-to-left language as soon as one is baked in, and English reads left to right.
 #[test]
 fn right_to_left_languages_mirror_the_window() {
     for code in ["ar", "ar-SA", "AR", "he", "he-IL", "fa", "ur", "ckb", "yi"] {
         assert!(writes_right_to_left(code), "{code}");
     }
-    for code in ["en", "", "es-419", "zh-Hans", "tr", "ru", "arn", "hey"] {
+    for code in ["en", "", "nl", "nl_BE", "ja", "es-419", "zh-Hans", "tr", "ru", "arn", "hey"] {
         assert!(!writes_right_to_left(code), "{code}");
     }
-    // Every catalog that mirrors is one of them, and the Arabic one does.
-    assert!(LANGS.iter().any(|l| l.code == "ar" && writes_right_to_left(l.code)));
-    assert!(!writes_right_to_left(LANGS[0].code), "English reads left to right");
+    assert!(!writes_right_to_left(english().code), "English reads left to right");
 }
 
+/// Release builds embed craft-fonts' Noto Sans Arabic (`theme::install_fonts`' built-in faces) for
+/// Arabic people type: it draws every letter of the basic Arabic alphabet.
 #[test]
-fn the_built_in_arabic_face_draws_the_arabic_catalog() {
+fn the_built_in_arabic_face_draws_arabic_letters() {
     if !figcraft_text::CRAFT_FONTS.iter().any(|f| f.family == "Noto Sans Arabic" && f.style == "Regular") {
         eprintln!("built without craft-fonts' Noto Sans Arabic; skipping");
         return;
@@ -551,90 +357,23 @@ fn the_built_in_arabic_face_draws_the_arabic_catalog() {
     let Some(face) = figcraft_text::face_with_char('ع', &["Noto Sans Arabic"]) else {
         panic!("the supplied Noto Sans Arabic face must draw Arabic");
     };
-    let ar = &LANGS[LANGS.iter().position(|l| l.code == "ar").unwrap()];
-    let letters: BTreeSet<char> = ar
-        .ui
-        .iter()
-        .chain(ar.commands)
-        .chain(ar.menu)
-        .flat_map(|(_, t)| forms(t))
-        .flat_map(str::chars)
-        .filter(|c| matches!(u32::from(*c), 0x0600..=0x06FF))
-        .collect();
-    assert!(letters.len() > 28);
-    let missing: String = letters.iter().filter(|c| !face.has_char(**c)).collect();
-    assert!(missing.is_empty(), "Arabic catalog glyphs missing from the embedded face: {missing:?}");
+    // Hamza to Ghain and Feh to Yeh: the letters Arabic text is written in (tatweel and the
+    // Persian letters between them left out).
+    let missing: String = ('\u{0621}'..='\u{063A}').chain('\u{0641}'..='\u{064A}').filter(|c| !face.has_char(*c)).collect();
+    assert!(missing.is_empty(), "Arabic letters missing from the embedded face: {missing:?}");
 }
 
 /// Release builds embed craft-fonts' Noto Sans Georgian (`theme::install_fonts`' built-in faces),
-/// since Inter and egui's fonts have no Georgian: it draws every Georgian letter the catalog uses.
+/// since Inter and egui's fonts have no Georgian: it draws every letter of the modern (Mkhedruli)
+/// alphabet people type.
 #[test]
-fn the_built_in_georgian_face_draws_the_georgian_catalog() {
+fn the_built_in_georgian_face_draws_georgian_letters() {
     let Some(face) = figcraft_text::find_face("Noto Sans Georgian", "Regular").filter(|f| f.family == "Noto Sans Georgian") else {
         eprintln!("built without craft-fonts' Noto Sans Georgian; skipping");
         return;
     };
-    let ka = &LANGS[LANGS.iter().position(|l| l.code == "ka").unwrap()];
-    let georgian = |c: &char| matches!(u32::from(*c), 0x10A0..=0x10FF | 0x1C90..=0x1CBF | 0x2D00..=0x2D2F);
-    let mut letters: BTreeSet<char> = BTreeSet::new();
-    for (_, t) in ka.ui.iter().chain(ka.commands).chain(ka.menu) {
-        letters.extend(forms(t).into_iter().flat_map(str::chars).filter(georgian));
-    }
-    assert!(letters.len() > 30, "{letters:?}");
-    let missing: String = letters.iter().filter(|c| !face.has_char(**c)).collect();
+    let missing: String = ('\u{10D0}'..='\u{10F0}').filter(|c| !face.has_char(*c)).collect();
     assert!(missing.is_empty(), "no glyph for {missing:?}");
-}
-
-#[test]
-fn chinese_tags_pick_simplified_or_traditional() {
-    let code = |pref: &str, system: Option<&str>| LANGS[resolve(pref, system)].code;
-    for tag in ["zh-CN", "zh_CN.UTF-8", "zh-SG", "zh-Hans", "zh-Hans-CN", "zh-Hans-HK", "zh"] {
-        assert_eq!(code("system", Some(tag)), "zh-Hans", "{tag}");
-    }
-    // Taiwan, Hong Kong, Macau and Hant read Traditional Chinese, never Simplified.
-    for tag in ["zh-TW", "zh-HK", "zh-MO", "zh-Hant", "zh-Hant-TW", "zh_TW.UTF-8", "zh-Hant-HK"] {
-        assert_eq!(code("system", Some(tag)), "zh-Hant", "{tag}");
-        assert_eq!(code(tag, None), "zh-Hant", "{tag}");
-    }
-    // An explicit Hans still reads Simplified, whatever the region.
-    assert_eq!(code("system", Some("zh-Hans-TW")), "zh-Hans");
-    assert_eq!(code("system", Some("zh-TW,ja-JP")), "zh-Hant");
-    assert_eq!(code("system", Some("ja-JP,zh-TW")), "ja");
-}
-
-#[test]
-fn traditional_chinese_is_a_draft_in_the_taiwan_design_terms() {
-    let zh = LANGS.iter().position(|l| l.code == "zh-Hant").expect("locales/zh-Hant.toml is baked in");
-    assert_eq!(LANGS[zh].name, "繁體中文（台灣）");
-    assert!(LANGS[zh].draft, "a machine-drafted catalog stays a draft until a native speaker reviews it");
-    // Spot checks for the Taiwan design terms the catalog is written in.
-    assert!(matches!(lookup(zh, "Canvas"), Some(Text::Plain("畫布"))));
-    assert!(matches!(lookup(zh, "Layers"), Some(Text::Plain("圖層"))));
-    assert!(matches!(lookup(zh, "Frame"), Some(Text::Plain("框架"))));
-    assert!(matches!(lookup(zh, "Component"), Some(Text::Plain("元件"))));
-    assert!(matches!(lookup(zh, "Constraints"), Some(Text::Plain("約束"))));
-    assert!(matches!(lookup(zh, "Fill"), Some(Text::Plain("填色"))));
-    assert!(matches!(lookup(zh, "Stroke"), Some(Text::Plain("邊框"))));
-    assert!(matches!(lookup(zh, "Export"), Some(Text::Plain("匯出"))));
-    assert!(matches!(lookup(zh, "Version"), Some(Text::Plain("版本"))));
-}
-
-/// Changing the preference and reading it back keeps the Chinese tag; the tag still resolves to
-/// the same catalog after the preferences are saved and loaded (a restart).
-#[test]
-fn traditional_chinese_switches_and_the_preference_persists() {
-    let mut s = figcraft_engine::Session::new();
-    s.execute("pref.language", &serde_json::json!({"language": "zh-TW"})).unwrap();
-    assert_eq!(s.prefs.language, "zh-TW");
-    assert_eq!(LANGS[resolve(&s.prefs.language, None)].code, "zh-Hant");
-    let saved = serde_json::to_string(&s.prefs).unwrap();
-    let loaded: figcraft_engine::Prefs = serde_json::from_str(&saved).unwrap();
-    assert_eq!(loaded.language, "zh-TW");
-    assert_eq!(LANGS[resolve(&loaded.language, None)].code, "zh-Hant");
-    s.execute("pref.language", &serde_json::json!({"language": "zh-Hans"})).unwrap();
-    assert_eq!(LANGS[resolve(&s.prefs.language, None)].code, "zh-Hans");
-    s.execute("pref.language", &serde_json::json!({"language": "zh-Hant"})).unwrap();
-    assert_eq!(LANGS[resolve(&s.prefs.language, None)].code, "zh-Hant");
 }
 
 #[test]
@@ -646,72 +385,31 @@ fn the_key_scanner_reads_rust_literals() {
     assert_eq!(literals(r#"self.warn("a note"); s.warn(format!("{n}")); forewarn("no")"#, &["warn("]), vec!["a note"]);
 }
 
+/// English's plural rule: 1 takes the `one` form, 0 and every other count `other`, and a key the
+/// catalog lacks reads as itself.
 #[test]
-fn czech_integer_plurals() {
-    assert_eq!(plural("cs", 1), Plural::One);
-    for n in [2, 3, 4] {
-        assert_eq!(plural("cs", n), Plural::Few, "{n}");
+fn english_counts_take_one_only_for_one() {
+    assert!(takes_one(1));
+    for n in [0, 2, 11, 21, 1_000_000] {
+        assert!(!takes_one(n), "{n}");
     }
-    for n in [0, 5, 11, 12, 21, 22, 100, 1_000_000] {
-        assert_eq!(plural("cs", n), Plural::Other, "{n}");
+    let Some(Text::Plural(Forms { one: Some(one), other })) = lookup(0, "{n} layers") else {
+        panic!("\"{{n}} layers\" has a one form in en.toml");
+    };
+    assert_eq!(counted(0, "{n} layers", 1), *one);
+    for n in [0, 2, 21] {
+        assert_eq!(counted(0, "{n} layers", n), *other, "{n}");
     }
-}
-
-#[test]
-fn russian_language_tags_and_integer_plurals() {
-    let ru = LANGS.iter().position(|l| l.code == "ru").unwrap();
-    for tag in ["ru", "ru-RU", "ru_RU.UTF-8", "RU", "ru-BY", "ru-Cyrl-RU"] {
-        assert_eq!(resolve(tag, None), ru, "{tag}");
-        assert_eq!(resolve("system", Some(tag)), ru, "{tag}");
-    }
-    assert_eq!(resolve("system", Some("hi,ru-RU,en-US")), ru);
-    for n in [1, 21, 31, 101, 1_001] {
-        assert_eq!(plural("ru", n), Plural::One, "{n}");
-    }
-    for n in [2, 3, 4, 22, 23, 24, 102, 104, 1_002] {
-        assert_eq!(plural("ru", n), Plural::Few, "{n}");
-    }
-    for n in [0, 5, 10, 11, 12, 13, 14, 19, 20, 25, 100, 111, 112, 114, 1_000_000] {
-        assert_eq!(plural("ru", n), Plural::Many, "{n}");
-    }
-}
-
-#[test]
-fn polish_integer_plurals() {
-    assert_eq!(plural("pl", 1), Plural::One);
-    for n in [2, 3, 4, 22, 23, 24, 102, 104, 1_002] {
-        assert_eq!(plural("pl", n), Plural::Few, "{n}");
-    }
-    for n in [0, 5, 10, 11, 12, 13, 14, 19, 20, 21, 25, 31, 100, 101, 111, 112, 114, 1_000_000] {
-        assert_eq!(plural("pl", n), Plural::Many, "{n}");
-    }
-}
-
-#[test]
-fn plural_fallback_uses_the_language_of_its_catalog() {
-    // A plural es-419 doesn't overlay reads Spanish's entry under Spanish's rule.
-    let es = LANGS.iter().position(|l| l.code == "es").unwrap();
-    let la = LANGS.iter().position(|l| l.code == "es-419").unwrap();
-    for n in [1, 21] {
-        assert_eq!(counted(la, "{n} layers", n), counted(es, "{n} layers", n), "{n}");
-    }
-    // Unsupported optional categories use other; existing one/other languages are unchanged.
-    for code in ["en", "es", "de"] {
-        for n in [0, 2, 11, 21, 1_000_000] {
-            assert_eq!(plural(code, n), Plural::Other, "{code}: {n}");
-        }
-        assert_eq!(plural(code, 1), Plural::One, "{code}");
-    }
-    assert_eq!(counted(0, "{n} layers", 21), "{n} layers");
     assert_eq!(counted(0, "unknown {n}", 21), "unknown {n}");
+    assert!(english().ui.iter().flat_map(|(_, t)| forms(t)).all(|f| !f.is_empty()));
 }
 
 #[test]
 fn the_language_preference_takes_language_codes() {
     let mut s = figcraft_engine::Session::new();
     assert_eq!(s.prefs.language, "system");
-    s.execute("pref.language", &serde_json::json!({"language": "es-419"})).unwrap();
-    assert_eq!(s.prefs.language, "es-419");
+    s.execute("pref.language", &serde_json::json!({"language": "en-GB"})).unwrap();
+    assert_eq!(s.prefs.language, "en-GB");
     for bad in ["", "../es", "es--ES", "abcdefghi"] {
         assert!(s.execute("pref.language", &serde_json::json!({"language": bad})).is_err(), "{bad:?}");
     }

@@ -1,6 +1,6 @@
 //! Chinese, Japanese, Korean, Bengali and Thai text in the UI. egui's own fonts and Inter have no glyphs
 //! for them, so the UI adds a face per script it needs: the UI language's, the scripts in the open file's names
-//! and comments, the language picker's and typed text. Desktop finds them among the installed
+//! and comments, and typed text. Desktop finds them among the installed
 //! fonts (the system font scan), only once one is needed, so English users load none; the web
 //! build has only the CJK faces built in from craft-fonts (`FIGCRAFT_EMBED_CJK`), else none (no
 //! Bengali or Thai face is built in, so the web leaves them out).
@@ -111,35 +111,6 @@ pub fn traditional(code: &str) -> bool {
     base.eq_ignore_ascii_case("zh") && (has(&["Hant"]) || (!has(&["Hans"]) && has(&["TW", "HK", "MO"])))
 }
 
-/// Whether the UI can draw language `code`: always on desktop (a system face is found when it's
-/// needed; tofu at worst), on the web only with built-in faces for its scripts (Georgian: craft-fonts'
-/// Noto Sans Georgian). The language picker and the system language skip a language it can't.
-pub fn can_show(code: &str) -> bool {
-    shows(code, cfg!(target_arch = "wasm32"))
-}
-
-/// [`can_show`] in a desktop or (`web`) a web build.
-fn shows(code: &str, web: bool) -> bool {
-    if !web {
-        return true;
-    }
-    if code.split('-').next() == Some("ka") {
-        return figcraft_text::face_with_char('ა', &["Noto Sans Georgian"]).is_some();
-    }
-    if code.split('-').next() == Some("ar") {
-        // Web cannot borrow the desktop's Arabic faces. Its current font budget excludes
-        // Arabic; keep the catalog out until an embedded Arabic fallback is supplied.
-        return figcraft_text::face_with_char('ع', &["Noto Sans Arabic"]).is_some();
-    }
-    if code.split('-').next() == Some("ta") {
-        // Desktop draws Tamil with a system face (#2018); the web has none until craft-fonts
-        // carries Noto Sans Tamil.
-        return figcraft_text::face_with_char('த', &["Noto Sans Tamil"]).is_some();
-    }
-    let need = language(code);
-    need == 0 || samples(need, 0, traditional(code)).iter().all(|(c, families)| figcraft_text::face_with_char(*c, families).is_some())
-}
-
 /// A character standing for each script in `need`, with the families to look for it in, the UI
 /// language's script (`ui`, see [`language`]) first. Han reads as Chinese (a simplified character,
 /// Simplified or Traditional Chinese faces first as the UI language says) in a Chinese UI, and
@@ -213,32 +184,6 @@ mod tests {
         assert!(!traditional("zh-Hans") && !traditional("zh-CN") && !traditional("zh-Hans-TW") && !traditional("zh") && !traditional("ja"));
         assert_eq!(language("bn"), BENGALI);
         assert_eq!(language("fr"), 0);
-        assert!(["en", "es", "es-419", "fr", "de", "pt-BR", "tr", "id", "vi", "bs"].iter().all(|c| can_show(c)));
-    }
-
-    #[test]
-    fn the_web_offers_georgian_only_with_its_face() {
-        assert!(shows("ka", false), "desktop always lists Georgian");
-        let face = figcraft_text::face_with_char('ა', &["Noto Sans Georgian"]).is_some();
-        assert_eq!(shows("ka", true), face);
-        assert_eq!(shows("ka-GE", true), face);
-        assert!(shows("en", true) && shows("tr", true));
-    }
-
-    #[test]
-    fn the_web_offers_arabic_only_with_its_face() {
-        assert!(shows("ar", false));
-        let face = figcraft_text::face_with_char('ع', &["Noto Sans Arabic"]).is_some();
-        assert_eq!(shows("ar", true), face);
-        assert_eq!(shows("ar-SA", true), face);
-    }
-
-    #[test]
-    fn the_web_offers_tamil_only_with_its_face() {
-        assert!(shows("ta", false), "desktop always lists Tamil");
-        let face = figcraft_text::face_with_char('த', &["Noto Sans Tamil"]).is_some();
-        assert_eq!(shows("ta", true), face);
-        assert_eq!(shows("ta-IN", true), face);
     }
 
     /// The UI language's script leads the fallback order; the others follow.

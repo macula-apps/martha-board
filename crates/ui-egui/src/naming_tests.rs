@@ -28,7 +28,7 @@ fn retired(text: &str) -> bool {
 fn entry_texts(text: &Text) -> Vec<&str> {
     match text {
         Text::Plain(value) => vec![*value],
-        Text::Plural(forms) => [forms.one, forms.few, forms.many].into_iter().flatten().chain([forms.other]).collect(),
+        Text::Plural(forms) => forms.one.into_iter().chain([forms.other]).collect(),
     }
 }
 
