@@ -1,12 +1,12 @@
 use super::clock::{AUTO_SAVE_RETRY_SECS, AUTO_SAVE_SECS, AUTOSAVE_SECS, CJK_CHANGES, FrameClock, TOAST_SECS, ToastClock, repaint_in};
 use super::open::OPEN_EXTENSIONS;
 use super::services::{DialogFuture, PickFuture, Picked, RepaintWaker, Services};
-use super::state::{LEFT_PANEL, LeftTab, MOBILE_STRIP, MobilePanel, NARROW_WIDTH, PANEL_DEFAULT, RIGHT_PANEL, RightTab, TitleBar, fit_panels};
+use super::state::{LEFT_PANEL, LeftTab, MOBILE_STRIP, MobilePanel, NARROW_WIDTH, PANEL_DEFAULT, RIGHT_PANEL, TitleBar, fit_panels};
 use super::{
     Arc, Done, FigApp, NodeId, OsStr, Path, PathBuf, PendingAck, PendingDialog, Poll, Session, TaskContext, UiState, Value, Waker, a11y, branch_ui,
     canvas, cjk, comments, cursors, dialogs, frame_stats, home, home_recents, i18n, icons, import_report, json, layers, live, menus, missing_fonts,
-    online, plugins_ui, present, render_worker, right, selection_spacing, shortcuts, style_picker, tabs, theme, toolbar, ui_scale, updates_ui,
-    variable_ui, versions, widgets, windows,
+    online, plugins_ui, render_worker, right, selection_spacing, shortcuts, style_picker, tabs, theme, toolbar, ui_scale, updates_ui, variable_ui,
+    versions, widgets, windows,
 };
 
 mod clipboard;
@@ -250,26 +250,10 @@ impl FigApp {
         }
         theme::set_doc_profile(&ctx, self.session.doc().map_or(figcraft_color::ColorProfile::Srgb, |d| d.color_profile));
         widgets::set_nudge(&ctx, self.session.prefs.nudge_small, self.session.prefs.nudge_big);
-        self.end_pen_outside_design();
-        tabs::relink_presents(self);
         tabs::tab_bar(self, ui);
         // Control/window work and this pass's physical tab click may have replaced the owner.
         // A shared field ID in that replacement must never consume the old commit marker.
         let field_save = shortcuts::revalidate_field_save(self, &ctx, field_save);
-        if self.ui.present.is_some() {
-            // A close request can arrive while the presenter fills the window. Let its unsaved
-            // changes dialog take Escape and draw above the player just as it does in the editor.
-            dialogs::keys(self, &ctx);
-            present::show(self, ui);
-            dialogs::show(self, &ctx);
-            updates_ui::show(self, &ctx);
-            // What went wrong while presenting (a widget's plugin failing) shows over it.
-            self.toast_ui(&ctx);
-            windows::requests(self, &ctx);
-            shortcuts::clear_field_save_marker(&ctx);
-            self.observe_ime(&ctx, false);
-            return;
-        }
         if !self.has_files() || self.ui.home {
             let docs = &self.session.docs;
             self.canvas.drop_closed(|uid| docs.iter().any(|d| d.uid == uid));
@@ -369,8 +353,7 @@ impl FigApp {
                 // each side of the panel (240 pt by default). The edge is drawn in `right_panel`.
                 .frame(egui::Frame::NONE.fill(t.panel))
                 .show(ui, |ui| {
-                    let label = right_tab_label(self.ui.right_tab);
-                    a11y::region(&mut self.ui.nav, ui, a11y::Region::Properties, egui::accesskit::Role::Pane, label);
+                    a11y::region(&mut self.ui.nav, ui, a11y::Region::Properties, egui::accesskit::Role::Pane, i18n::tr("Design"));
                     right::right_panel(self, ui)
                 });
         }
@@ -415,9 +398,7 @@ impl FigApp {
             self.panels_unsaved = false;
             self.services.save_prefs(&self.session.prefs);
         }
-        // Before the shortcuts: keys the hovered pane's prototype uses don't reach the editor, and
-        // the arrows step through comment threads with the Comment tool.
-        present::show_pane(self, &ctx);
+        // Before the shortcuts: the arrows step through comment threads with the Comment tool.
         comments::keys(self, &ctx);
         branch_ui::keys(self, &ctx);
         live::dialog_keys(self, &ctx);
@@ -427,7 +408,6 @@ impl FigApp {
         variable_ui::picker(self, &ctx);
         style_picker::show(self, &ctx);
         self.end_unwanted_text_preview(&ctx);
-        self.end_pen_outside_design();
         dialogs::show(self, &ctx);
         updates_ui::show(self, &ctx);
         // A scrub that changed speed (the pointer moved up or down) says so at the bottom.
@@ -450,16 +430,8 @@ impl FigApp {
         self.session.live_sync_in(|uid| uid.map_or(0, |u| windows.of(u)) == windows.current);
         // The canvas editor's IME context is observed exactly once per pass, after every command
         // this pass ran (shortcuts, menus, dialogs, window requests and live sync). A focused panel
-        // field or an open palette owns the platform IME instead; the early `home`/present paths
-        // above make the same single idle observation.
+        // field or an open palette owns the platform IME instead; the early `home` path
+        // above makes the same single idle observation.
         self.observe_ime(&ctx, !typing && !self.field_focus && self.ui.palette.is_none());
-    }
-}
-
-/// The right panel's tab name, which its accessibility region reads.
-pub(crate) fn right_tab_label(tab: RightTab) -> &'static str {
-    match tab {
-        RightTab::Design => i18n::tr("Design"),
-        RightTab::Prototype => i18n::tr("Prototype"),
     }
 }

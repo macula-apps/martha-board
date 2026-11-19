@@ -110,7 +110,6 @@ pub static MENU: &[MenuItem] = &[
     m!("View/Panels", "Layers", "view.layers"),
     m!("View/Panels", "Assets", "view.assets"),
     m!("View/Panels", "Design", "view.design"),
-    m!("View/Panels", "Prototype", "view.prototype"),
     m!("View", SEP, ""),
     m!("View", "Zoom in", "view.zoomIn"),
     m!("View", "Zoom out", "view.zoomOut"),

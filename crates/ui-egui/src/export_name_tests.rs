@@ -31,7 +31,7 @@ pub(crate) fn painted(u: &mut Ui) -> Vec<(String, Rect)> {
 /// button's label and box, and the panel's box.
 fn export_label(name: &str, width: f32) -> (String, Rect, Rect) {
     let mut s = Session::new();
-    let f = crate::present_tests::id(&s.execute("frame.create", &json!({"x": 0, "y": 0, "width": 856, "height": 1089})).unwrap());
+    let f = crate::headless_tests::id(&s.execute("frame.create", &json!({"x": 0, "y": 0, "width": 856, "height": 1089})).unwrap());
     s.execute("export.add", &json!({"ids": [f]})).unwrap();
     s.execute("node.set", &json!({"id": f, "props": {"name": name}})).unwrap();
     s.execute("select.set", &json!({"ids": [f]})).unwrap();

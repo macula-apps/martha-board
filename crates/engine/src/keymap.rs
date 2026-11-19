@@ -38,11 +38,10 @@ pub enum Group {
     Transform,
     Arrange,
     Components,
-    Prototype,
 }
 
 impl Group {
-    pub const ALL: [Group; 12] = [
+    pub const ALL: [Group; 11] = [
         Group::Essential,
         Group::Tools,
         Group::View,
@@ -54,7 +53,6 @@ impl Group {
         Group::Transform,
         Group::Arrange,
         Group::Components,
-        Group::Prototype,
     ];
 
     pub fn label(self) -> &'static str {
@@ -70,7 +68,6 @@ impl Group {
             Group::Transform => "Transform",
             Group::Arrange => "Arrange",
             Group::Components => "Components",
-            Group::Prototype => "Prototype",
         }
     }
 }
@@ -222,8 +219,6 @@ pub static KEYS: &[Binding] = &[
     k(View, "view.assets", &["Alt+2"]).label("Assets panel"),
     k(View, "libraries.open", &["Alt+3"]),
     k(View, "view.design", &["Alt+8"]).label("Design panel"),
-    k(View, "view.prototype", &["Alt+9"]).label("Prototype panel"),
-    k(View, "view.designPrototype", &["Shift+E"]),
     k(View, "view.minimize", &["Shift+Cmd+\\"]),
     k(View, "view.nextRegion", &["F6"]).win(&["F6", "Ctrl+F6"]).label("Focus the next region (toolbar, layers, canvas, properties)").both(),
     k(View, "view.previousRegion", &["Shift+F6"]).label("Focus the previous region").both(),
@@ -341,9 +336,6 @@ pub static KEYS: &[Binding] = &[
     k(Components, "component.detach", &["Alt+Cmd+B"]),
     k(Components, "component.goToMain", &["Ctrl+Alt+Cmd+K"]).win(&["Ctrl+Alt+Shift+K"]),
     k(Components, "view.assets", &["Shift+I"]).label("Insert a component (Assets)"),
-    // Prototype
-    k(Prototype, "proto.present", &["Alt+Cmd+Enter"]).label("Present"),
-    k(Prototype, "proto.preview", &["Shift+Space"]).label("Preview in the canvas"),
 ];
 
 /// Pointer gestures and held keys the panel lists next to the bindings (handled by the canvas, not
@@ -378,12 +370,6 @@ pub static GESTURES: &[(Group, &str, &str, &str)] = &[
     (Arrange, "Edit padding on all sides", "⌘ click a padding field", "Ctrl+click a padding field"),
     (Arrange, "Set hug contents", "Double-click an edge of an auto layout frame", "Double-click an edge of an auto layout frame"),
     (Arrange, "Set fill container", "⌥ double-click an edge of an auto layout child", "Alt+double-click an edge of an auto layout child"),
-    (Prototype, "Presenting: next frame", "→, Space or N", "→, Space or N"),
-    (Prototype, "Presenting: previous frame", "←", "←"),
-    (Prototype, "Presenting: restart", "R", "R"),
-    (Prototype, "Presenting: cycle the size options", "Z", "Z"),
-    (Prototype, "Presenting: comments", "C or ⇧C", "C or Shift+C"),
-    (Prototype, "Presenting: full screen", "F", "F"),
     (View, "Next or previous control in the focused region", "⇥ / ⇧⇥", "Tab / Shift+Tab"),
     (View, "Move along the toolbar or the layer rows", "← → ↑ ↓", "← → ↑ ↓"),
     (View, "Back to the canvas from a focused region", "Esc", "Esc"),

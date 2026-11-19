@@ -457,8 +457,8 @@ fn sections_go_on_the_page_or_in_sections() {
 
 #[test]
 fn top_level_frames_are_screens_and_export_whole() {
-    // Documented: top-level frames (on the page or in sections) are the screens of prototypes and
-    // the boards that export; a nested frame is neither on its own.
+    // Documented: top-level frames (on the page or in sections) are the boards that export; a
+    // nested frame is not one on its own.
     let mut s = Session::new();
     let page = s.page().unwrap();
     let a = frame(&mut s, 0.0, 0.0, 100.0, 200.0, None);

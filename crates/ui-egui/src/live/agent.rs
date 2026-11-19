@@ -50,7 +50,7 @@ mod tests {
     use serde_json::json;
 
     use super::shown;
-    use crate::present_tests::Ui;
+    use crate::headless_tests::Ui;
 
     fn rect(u: &mut Ui, agent: Option<&str>) {
         let mut p = json!({"command": "shape.rectangle", "params": {"x": 0, "y": 0, "width": 40, "height": 40}});

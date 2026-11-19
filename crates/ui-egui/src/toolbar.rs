@@ -33,8 +33,8 @@ const GAP: f32 = 8.0;
 const DIVIDER: f32 = 1.0;
 /// The mode switcher's marks: smaller than the tools' (13–14 pt).
 const MODE_GLYPH: f32 = 14.0;
-/// The mode switcher's buttons: Draw, Design and Prototype.
-const MODE_CELLS: f32 = 3.0;
+/// The mode switcher's buttons: Draw and Design.
+const MODE_CELLS: f32 = 2.0;
 
 /// `GLYPH`'s box centred in `r`.
 fn glyph_rect(r: Rect) -> Rect {
@@ -155,7 +155,7 @@ fn main_width(groups: &[Group], board: bool) -> f32 {
 }
 
 /// The main toolbar pill: the tool groups with their flyouts, Actions, then the
-/// Draw · Design · Prototype mode switcher (on a board, its two buttons).
+/// Draw · Design mode switcher (on a board, its two buttons).
 fn main_toolbar(app: &mut FigApp, ui: &mut Ui, canvas: Rect, t: &Tokens, board: bool) {
     let groups = if board { BOARD_GROUPS } else { GROUPS };
     let width = main_width(groups, board);
@@ -172,7 +172,7 @@ fn main_toolbar(app: &mut FigApp, ui: &mut Ui, canvas: Rect, t: &Tokens, board: 
     divider(ui, t, x, cy);
     x += DIVIDER + GAP;
     if board {
-        // Boards have no prototypes; the Design panel is hidden until asked for.
+        // The Design panel is hidden on a board until asked for.
         x = crate::board_picker::button(app, ui, pos2(x, cy), rect.min.y, t) + GAP;
         let r = Rect::from_center_size(pos2(x + TOOL_CELL / 2.0, cy), vec2(TOOL_CELL, TOOL_CELL));
         let tip = crate::shortcuts::tip(tr("Design panel"), "view.design");
@@ -276,14 +276,10 @@ fn actions_button(app: &mut FigApp, ui: &mut Ui, x: f32, cy: f32, t: &Tokens) ->
     x + TOOL_CELL + GAP
 }
 
-/// The mode switcher from `x`: Draw · Design · Prototype.
+/// The mode switcher from `x`: Draw · Design.
 fn mode_switcher(app: &mut FigApp, ui: &mut Ui, x: f32, cy: f32, t: &Tokens) {
-    let modes = [(Icon::Pencil, tr("Draw")), (Icon::Frame, tr("Design")), (Icon::Prototype, tr("Prototype"))];
-    let active = match app.ui.right_tab {
-        crate::RightTab::Design if app.session.tool.tool == ToolId::Pencil => 0,
-        crate::RightTab::Design => 1,
-        crate::RightTab::Prototype => 2,
-    };
+    let modes = [(Icon::Pencil, tr("Draw")), (Icon::Frame, tr("Design"))];
+    let active = usize::from(app.session.tool.tool != ToolId::Pencil);
     let seg = Rect::from_min_size(pos2(x, cy - TOOL_CELL / 2.0), vec2(MODE_CELLS * TOOL_CELL, TOOL_CELL));
     ui.painter().rect_filled(seg, CornerRadius::same(5), t.field);
     for (i, (icon, tip)) in modes.iter().enumerate() {
@@ -310,18 +306,10 @@ fn mode_switcher(app: &mut FigApp, ui: &mut Ui, x: f32, cy: f32, t: &Tokens) {
 
 /// Mode `i` of the switcher chosen.
 fn pick_mode(app: &mut FigApp, i: usize) {
-    match i {
-        0 => {
-            app.ui.right_tab = crate::RightTab::Design;
-            app.run("tool.set", json!({"tool": "pencil"}));
-        }
-        1 => {
-            app.ui.right_tab = crate::RightTab::Design;
-            if app.session.tool.tool == ToolId::Pencil {
-                app.run("tool.set", json!({"tool": "move"}));
-            }
-        }
-        _ => app.ui.right_tab = crate::RightTab::Prototype,
+    if i == 0 {
+        app.run("tool.set", json!({"tool": "pencil"}));
+    } else if app.session.tool.tool == ToolId::Pencil {
+        app.run("tool.set", json!({"tool": "move"}));
     }
 }
 

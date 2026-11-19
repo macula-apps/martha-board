@@ -43,7 +43,7 @@ impl egui::DroppedFile for Dropped {
 fn layer(with_image: bool) -> (Ui, NodeId) {
     let mut s = Session::new();
     let r = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 80, "height": 80, "props": {"fill": "#00ff00"}})).unwrap();
-    let id = crate::present_tests::id(&r);
+    let id = crate::headless_tests::id(&r);
     if with_image {
         let data = base64::engine::general_purpose::STANDARD.encode(png(1));
         s.execute("image.place", &json!({"data": data, "target": id, "mode": "fit"})).unwrap();

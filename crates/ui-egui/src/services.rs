@@ -48,11 +48,6 @@ pub trait Services {
         None
     }
     fn open_url(&mut self, _url: &str) {}
-    /// Open `url` in place of the app where the platform has a place for it (a browser's own tab:
-    /// the prototype is left); elsewhere as [`open_url`](Self::open_url) does.
-    fn open_url_here(&mut self, url: &str) {
-        self.open_url(url);
-    }
     /// Show the file at `path` in the platform's file manager (Finder, Explorer), selected where the
     /// platform can.
     fn reveal_path(&mut self, _path: &std::path::Path) {}
@@ -73,12 +68,6 @@ pub trait Services {
     /// The OS or browser language as a tag ("es-ES"), for the "system" language preference.
     fn system_language(&self) -> Option<String> {
         None
-    }
-    /// The controller buttons held now on any controller: bit i is standard gamepad layout index i
-    /// (0 the bottom face button … 16 home; `figcraft_doc::proto::GAMEPAD_BUTTONS`). The prototype
-    /// player asks every frame while its prototype has gamepad triggers.
-    fn gamepad_held(&mut self) -> u32 {
-        0
     }
     /// The fonts installed on this computer can be asked for and haven't been (the browser's Local
     /// Font Access; the desktop app sees them anyway).

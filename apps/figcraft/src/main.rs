@@ -24,7 +24,6 @@ compile_error!("Windows GNU builds must set windows_slim_errors to keep UI Autom
 mod apple_events;
 mod args;
 mod control_server;
-mod gamepad;
 mod graphics;
 mod recovery;
 mod services;

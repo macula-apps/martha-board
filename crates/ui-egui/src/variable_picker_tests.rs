@@ -1,5 +1,5 @@
-//! The variable picker ("Select variable" on every bindable field, aliases, styles and prototype
-//! actions) drawn headless: its list follows its rows while it is open — a search that narrows it
+//! The variable picker ("Select variable" on every bindable field, aliases and styles) drawn
+//! headless: its list follows its rows while it is open — a search that narrows it
 //! shrinks the picker, clearing the search grows it back — and it stays on the screen (#2043: egui
 //! offers an area the size it had last frame, so the list used to stay a few rows high).
 

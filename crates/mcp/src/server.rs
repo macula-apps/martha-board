@@ -29,7 +29,7 @@ const MAX_LINE: usize = 32 * 1024 * 1024;
 
 /// The `instructions` string sent on initialize.
 pub const INSTRUCTIONS: &str = "FigCraft is an interface design tool: pages hold frames, \
-groups, shapes, text, components and instances, with auto layout, styles, variables and prototyping. \
+groups, shapes, text, components and instances, with auto layout, styles and variables. \
 Coordinates are page units (1 unit = 1 px at 100% zoom), x right and y DOWN. create_node and set_properties \
 take x/y RELATIVE TO THE PARENT (the page when there is no parent, so page coordinates); inspect_document \
 reports both x/y relative to the parent frame (groups don't count) and absoluteBounds in page coordinates. Children of an auto-layout frame are \

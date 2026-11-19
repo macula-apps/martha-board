@@ -11,7 +11,7 @@ use egui::{Event, Pos2, RawInput, Rect, ViewportId, vec2};
 use figcraft_engine::Session;
 use serde_json::{Value, json};
 
-use crate::present_tests::id;
+use crate::headless_tests::id;
 use crate::{ControlRequest, FigApp, NoServices};
 
 /// The shortest repaint delay that counts as idle (a blinking caret wakes twice a second; nothing
@@ -121,64 +121,6 @@ fn the_comments_panel_draws_no_frames_while_idle() {
     h.run("comment.add", json!({"x": 50, "y": 50, "text": "Looks good", "author": "Ada", "anchor": true}));
     h.run("tool.comment", json!({}));
     h.assert_idle("the comments panel");
-}
-
-#[test]
-fn the_prototype_curve_preview_plays_then_rests() {
-    let mut s = Session::new();
-    let a = id(&s.execute("frame.create", &json!({"x": 0, "y": 0, "width": 200, "height": 300})).unwrap());
-    let b = id(&s.execute("frame.create", &json!({"x": 300, "y": 0, "width": 200, "height": 300})).unwrap());
-    s.execute("proto.interaction.add", &json!({"id": a, "dest": b, "transition": {"type": "dissolve"}, "durationMs": 300})).unwrap();
-    s.execute("select.set", &json!({"ids": [a]})).unwrap();
-    let mut h = Harness::new(s);
-    h.app.ui.right_tab = crate::RightTab::Prototype;
-    crate::proto_panel::open_editor(&h.ctx, Some((a, 0)));
-    // It plays when it shows (the dot moves: frames at animation pace) …
-    h.frame(vec![]);
-    h.frame(vec![]);
-    assert!(h.frame(vec![]) < Duration::from_millis(50), "the curve preview plays when it opens");
-    // … then rests …
-    h.assert_idle("the interaction editor");
-    // … and plays again when it shows again.
-    crate::proto_panel::open_editor(&h.ctx, None);
-    h.frame(vec![]);
-    crate::proto_panel::open_editor(&h.ctx, Some((a, 0)));
-    h.frame(vec![]);
-    h.frame(vec![]);
-    assert!(h.frame(vec![]) < Duration::from_millis(50), "the curve preview plays when it shows again");
-    h.assert_idle("the interaction editor, again");
-}
-
-#[test]
-fn presenting_a_still_frame_draws_no_frames_while_idle() {
-    let mut s = Session::new();
-    let a = id(&s.execute("frame.create", &json!({"x": 0, "y": 0, "width": 200, "height": 300})).unwrap());
-    let mut h = Harness::new(s);
-    h.run("proto.present", json!({"start": a}));
-    assert!(h.app.ui.present.is_some());
-    h.assert_idle("the presenter");
-}
-
-#[test]
-fn an_after_delay_wakes_the_presenter_when_due_even_under_an_overlay() {
-    let mut s = Session::new();
-    let a = id(&s.execute("frame.create", &json!({"x": 0, "y": 0, "width": 200, "height": 300})).unwrap());
-    let b = id(&s.execute("frame.create", &json!({"x": 300, "y": 0, "width": 200, "height": 300})).unwrap());
-    let o = id(&s.execute("frame.create", &json!({"x": 600, "y": 0, "width": 100, "height": 100})).unwrap());
-    let delay = |ms: u64, action: Value| json!({"id": a, "trigger": {"type": "afterDelay", "ms": ms}, "action": action});
-    s.execute("proto.interaction.add", &delay(2000, json!({"type": "navigate", "dest": b}))).unwrap();
-    s.execute("proto.interaction.add", &delay(100, json!({"type": "openOverlay", "dest": o}))).unwrap();
-    let mut h = Harness::new(s);
-    h.run("proto.present", json!({"start": a}));
-    h.settle();
-    let presenter = || h.app.ui.present.as_ref().map(crate::present::Presenter::inspect).unwrap();
-    assert_eq!(presenter()["overlays"], json!([o]), "the overlay opened after 100 ms");
-    // The 2 s timer belongs to the frame under the overlay, which can't fire it while the overlay
-    // is open: once it's past due the presenter doesn't spin waiting for it.
-    h.time += 3.0;
-    h.assert_idle("an overlay over a frame with a pending delay");
-    let presenter = h.app.ui.present.as_ref().map(crate::present::Presenter::inspect).unwrap();
-    assert_eq!(presenter["current"], json!(a), "{presenter}");
 }
 
 #[test]
@@ -304,23 +246,13 @@ fn animated_gif() -> String {
 }
 
 #[test]
-fn an_animated_gif_wakes_only_the_presenter_and_only_at_its_frames() {
+fn an_animated_gif_on_the_canvas_draws_no_frames_while_idle() {
     let mut s = Session::new();
     let a = id(&s.execute("frame.create", &json!({"x": 0, "y": 0, "width": 200, "height": 200})).unwrap());
     s.execute("image.place", &json!({"data": animated_gif(), "parent": a, "x": 10, "y": 10, "width": 100, "height": 100})).unwrap();
     s.execute("select.set", &json!({"ids": []})).unwrap();
     let mut h = Harness::new(s);
     h.assert_idle("an animated GIF on the canvas (it shows its first frame)");
-    h.run("proto.present", json!({"start": a}));
-    let delays: Vec<Duration> = (0..30).map(|_| h.frame(vec![])).collect();
-    // Past the first frames (the presenter opening), it wakes for the GIF's next frame: no sooner
-    // than needed, never later than one GIF frame (plus the display frame egui wakes early by).
-    for d in &delays[5..] {
-        assert!(*d <= Duration::from_millis(100 + 17), "{delays:?}");
-    }
-    assert!(delays[5..].iter().any(|d| *d > Duration::from_millis(20)), "it doesn't draw every frame: {delays:?}");
-    h.app.ui.present = None;
-    h.assert_idle("the presenter closed");
 }
 
 #[test]

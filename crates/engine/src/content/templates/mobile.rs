@@ -1,6 +1,5 @@
 //! Mobile app: four screens of an invented trail app ("Ridgeline Trails") built with auto layout
-//! from three components (a button, a trail card, a tab bar with two variants), linked into a
-//! prototype flow.
+//! from three components (a button, a trail card, a tab bar with two variants).
 
 use figcraft_doc::NodeId;
 use serde_json::json;
@@ -33,14 +32,10 @@ pub(super) fn build(k: &mut Kit) -> Result<()> {
     let page = k.add_page("Components")?;
     let parts = Parts { button: button(k, page)?, card: trail_card(k, page)?, tabs: tab_bar(k, page)? };
     k.go(screens)?;
-    let (welcome, start) = welcome(k, screens, &parts)?;
-    let (explore, first_card, explore_tabs) = explore(k, screens, &parts)?;
-    let (detail, back) = detail(k, screens, &parts)?;
-    let (profile, profile_tabs) = profile(k, screens, &parts)?;
-    for (from, to) in [(start, explore), (first_card, detail), (back, explore), (explore_tabs, profile), (profile_tabs, explore)] {
-        k.link(from, to)?;
-    }
-    k.flow(welcome, "Onboarding")
+    welcome(k, screens, &parts)?;
+    explore(k, screens, &parts)?;
+    detail(k, screens, &parts)?;
+    profile(k, screens, &parts)
 }
 
 fn button(k: &mut Kit, page: NodeId) -> Result<NodeId> {
@@ -93,7 +88,7 @@ fn body(k: &mut Kit, screen: NodeId, gap: f64, top: f64) -> Result<NodeId> {
     k.stack(screen, "Content", V, gap, json!([top, 24, 24, 24]), json!({"sizingH": "fill", "sizingV": "fill"}))
 }
 
-fn welcome(k: &mut Kit, page: NodeId, parts: &Parts) -> Result<(NodeId, NodeId)> {
+fn welcome(k: &mut Kit, page: NodeId, parts: &Parts) -> Result<()> {
     let s = screen(k, page, "Welcome", 0)?;
     k.scene(s, "Picture", [W, 440.0], json!({"sizingH": "fill"}))?;
     let content = body(k, s, 0.0, 32.0)?;
@@ -103,9 +98,9 @@ fn welcome(k: &mut Kit, page: NodeId, parts: &Parts) -> Result<(NodeId, NodeId)>
     k.para(words, "Find your next trail", "Heading/L", INK)?;
     k.para(words, "Maps, distances and notes for quiet walks and long climbs, saved for when there is no signal.", "Body/M", MUTED)?;
     let actions = k.stack(content, "Actions", V, 16.0, json!(0), json!({"sizingH": "fill", "crossAlign": "center"}))?;
-    let start = k.instance(parts.button, actions, json!({"Label": "Get started"}), json!({"sizingH": "fill"}))?;
+    k.instance(parts.button, actions, json!({"Label": "Get started"}), json!({"sizingH": "fill"}))?;
     k.text(actions, "I already have an account", "Label/M", PRIMARY)?;
-    Ok((s, start))
+    Ok(())
 }
 
 fn avatar(k: &mut Kit, parent: NodeId, size: f64, style: &str) -> Result<NodeId> {
@@ -114,7 +109,7 @@ fn avatar(k: &mut Kit, parent: NodeId, size: f64, style: &str) -> Result<NodeId>
     Ok(a)
 }
 
-fn explore(k: &mut Kit, page: NodeId, parts: &Parts) -> Result<(NodeId, NodeId, NodeId)> {
+fn explore(k: &mut Kit, page: NodeId, parts: &Parts) -> Result<()> {
     let s = screen(k, page, "Explore", 1)?;
     let content = body(k, s, 20.0, 56.0)?;
     let header = k.stack(content, "Header", H, 12.0, json!(0), json!({"sizingH": "fill", "mainAlign": "spaceBetween", "crossAlign": "center"}))?;
@@ -136,16 +131,14 @@ fn explore(k: &mut Kit, page: NodeId, parts: &Parts) -> Result<(NodeId, NodeId, 
     k.text(title, "Popular this week", "Heading/S", INK)?;
     k.text(title, "See all", "Label/M", PRIMARY)?;
     let list = k.stack(content, "Trails", V, 12.0, json!(0), json!({"sizingH": "fill"}))?;
-    let mut first = None;
     for (name, details) in TRAILS {
-        let card = k.instance(parts.card, list, json!({"Name": name, "Details": details}), json!({"sizingH": "fill"}))?;
-        first.get_or_insert(card);
+        k.instance(parts.card, list, json!({"Name": name, "Details": details}), json!({"sizingH": "fill"}))?;
     }
-    let tabs = k.instance(parts.tabs, s, json!({"Current": "Explore"}), json!({"sizingH": "fill"}))?;
-    Ok((s, first.unwrap_or(list), tabs))
+    k.instance(parts.tabs, s, json!({"Current": "Explore"}), json!({"sizingH": "fill"}))?;
+    Ok(())
 }
 
-fn detail(k: &mut Kit, page: NodeId, parts: &Parts) -> Result<(NodeId, NodeId)> {
+fn detail(k: &mut Kit, page: NodeId, parts: &Parts) -> Result<()> {
     let s = screen(k, page, "Trail", 2)?;
     k.scene(s, "Picture", [W, 300.0], json!({"sizingH": "fill"}))?;
     let back = k.tile(s, 44.0, 22.0)?;
@@ -167,10 +160,10 @@ fn detail(k: &mut Kit, page: NodeId, parts: &Parts) -> Result<(NodeId, NodeId)> 
     k.text(about, "About this trail", "Heading/S", INK)?;
     k.para(about, "A shaded loop through old cedars that opens onto the ridge at the halfway point. Bring water: the spring near the trailhead dries up in late summer.", "Body/M", MUTED)?;
     k.instance(parts.button, content, json!({"Label": "Start hike"}), json!({"sizingH": "fill"}))?;
-    Ok((s, back))
+    Ok(())
 }
 
-fn profile(k: &mut Kit, page: NodeId, parts: &Parts) -> Result<(NodeId, NodeId)> {
+fn profile(k: &mut Kit, page: NodeId, parts: &Parts) -> Result<()> {
     let s = screen(k, page, "Profile", 3)?;
     let content = body(k, s, 24.0, 72.0)?;
     let who = k.stack(content, "Who", V, 6.0, json!(0), json!({"sizingH": "fill", "crossAlign": "center"}))?;
@@ -190,6 +183,6 @@ fn profile(k: &mut Kit, page: NodeId, parts: &Parts) -> Result<(NodeId, NodeId)>
         k.text_with(row, label, "Body/M", INK, json!({"sizingH": "fill"}))?;
         k.icon(row, &glyphs::CHEVRON_RIGHT, 16.0, MUTED)?;
     }
-    let tabs = k.instance(parts.tabs, s, json!({"Current": "Profile"}), json!({"sizingH": "fill"}))?;
-    Ok((s, tabs))
+    k.instance(parts.tabs, s, json!({"Current": "Profile"}), json!({"sizingH": "fill"}))?;
+    Ok(())
 }

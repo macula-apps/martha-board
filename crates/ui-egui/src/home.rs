@@ -71,11 +71,10 @@ const GAP: f32 = 20.0;
 const FIRST_RUN: usize = 4;
 
 /// The Getting started tips: (title, what to do, the command whose shortcut shows).
-const TIPS: [(&str, &str, &str); 6] = [
+const TIPS: [(&str, &str, &str); 5] = [
     (tr_noop("Draw a frame"), tr_noop("Pick the Frame tool, then drag on the canvas or choose a device size"), "tool.frame"),
     (tr_noop("Add auto layout"), tr_noop("Select layers and they space themselves as their content changes"), "layout.add"),
     (tr_noop("Make a component"), tr_noop("Turn a layer into a component, reuse it, and change every copy at once"), "component.create"),
-    (tr_noop("Prototype"), tr_noop("Link frames on the Prototype tab, then present the flow"), "proto.present"),
     (tr_noop("Share with a code"), tr_noop("Start sharing with the Share button, then pass on the code it gives"), "collab.share"),
     (tr_noop("Export"), tr_noop("Export frames and layers as PNG, JPG, SVG or PDF"), "file.export"),
 ];

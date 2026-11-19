@@ -10,9 +10,9 @@ use figcraft_doc::NodeId;
 use figcraft_engine::Session;
 use serde_json::json;
 
+use crate::headless_tests::id;
 use crate::layers_drag_tests::Ui;
 use crate::live_tests::{flat, has_text, text_center};
-use crate::present_tests::id;
 
 /// A 200×100 image layer at (0, 0) and a plain rectangle beside it; the image is selected.
 fn setup() -> (Ui, NodeId, NodeId) {

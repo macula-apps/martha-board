@@ -1,8 +1,7 @@
 //! Every 24 pt icon button paints its glyph at 16 pt, the size `icons::button` draws (#2238, after
 //! the Design panel's in #2227). The panels' own buttons: the Layers panel's header and the Assets
 //! panel's back button. The tests of the other panels sit beside
-//! them (`present/tests.rs`, and the `icon_size_tests` modules of `versions`, `proto_panel`,
-//! `online` and the style picker).
+//! them (the `icon_size_tests` modules of `versions`, `online` and the style picker).
 
 use figcraft_engine::Session;
 

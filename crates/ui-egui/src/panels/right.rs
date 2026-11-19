@@ -1,4 +1,4 @@
-//! The right panel: Design and Prototype tabs.
+//! The right panel: the Design panel.
 
 use std::sync::Arc;
 
@@ -12,6 +12,7 @@ use figcraft_doc::{
 use figcraft_engine::cmd::lists::{moved_index, removed_index};
 use serde_json::{Value, json};
 
+use crate::FigApp;
 use crate::a11y::{self, Tip};
 use crate::i18n::{tr, trf, trn};
 use crate::icons::{self, Icon};
@@ -19,7 +20,6 @@ use crate::list_drag::{ListDrag, move_flags, remove_flags};
 use crate::style_picker::{self, StyleSlot};
 use crate::theme::{Tokens, regular, semibold};
 use crate::widgets::{self, Edit, FIELD_H, FieldEdit, Lead, PAD};
-use crate::{FigApp, RightTab};
 
 mod effects;
 mod menu;
@@ -113,8 +113,8 @@ impl FigApp {
     }
 }
 
-/// Draw the right panel: people, present and share controls, Design/Prototype tabs and zoom
-/// menu, then route the scroll area to comments, frame presets, design or prototype.
+/// Draw the right panel: people and share controls, the Design heading and zoom menu, then
+/// route the scroll area to comments, frame presets or design.
 pub fn right_panel(app: &mut FigApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     // The panel's edge, drawn here: the frame has no stroke (a stroke counts as margin and would
@@ -125,7 +125,7 @@ pub fn right_panel(app: &mut FigApp, ui: &mut Ui) {
     let x = if app.ui.mirrored { edge.max.x } else { edge.min.x };
     ui.painter().vline(x, edge.y_range(), Stroke::new(1.0, t.border));
     let w = ui.available_width();
-    // Top bar: people (you and the others in a live session), present, share.
+    // Top bar: people (you and the others in a live session), share.
     let (top, _) = ui.allocate_exact_size(vec2(w, 48.0), Sense::hover());
     // As wide as its label needs (longer in some languages).
     let label = ui.painter().layout_no_wrap(tr("Share").to_string(), semibold(11.5), t.accent_on);
@@ -135,57 +135,14 @@ pub fn right_panel(app: &mut FigApp, ui: &mut Ui) {
     ui.painter().rect_filled(share, CornerRadius::same(6), if sresp.hovered() { t.accent_hover } else { t.accent });
     ui.painter().galley(share.center() - label.size() / 2.0, label, t.accent_on);
     crate::live::share_popover(app, &sresp);
-    // Play presents; its chevron opens the play menu (present, or preview in a pane).
-    let play = Rect::from_min_size(pos2(share.min.x - 50.0, top.center().y - 14.0), vec2(42.0, 28.0));
-    let (tri_r, chev_r) =
-        (Rect::from_min_max(play.min, pos2(play.max.x - 16.0, play.max.y)), Rect::from_min_max(pos2(play.max.x - 16.0, play.min.y), play.max));
-    let present_keys = crate::toolbar::pretty_shortcut(crate::shortcuts::shortcut("proto.present").unwrap_or(""));
-    let presp = ui.interact(tri_r, ui.scope_id().with("play"), Sense::click()).tip(format!("{}  {present_keys}", tr("Present")));
-    let mresp = ui.interact(chev_r, ui.scope_id().with("play_menu"), Sense::click()).tip(tr("Present or preview"));
-    if presp.hovered() || mresp.hovered() {
-        ui.painter().rect_filled(play, CornerRadius::same(5), t.hover);
-    }
-    let tri = Rect::from_center_size(play.center() - vec2(7.0, 0.0), vec2(16.0, 16.0));
-    let c = tri.center();
-    ui.painter().add(egui::Shape::closed_line(vec![c + vec2(-5.0, -7.0), c + vec2(7.0, 0.0), c + vec2(-5.0, 7.0)], Stroke::new(1.4, t.icon)));
-    icons::paint(ui.painter(), Rect::from_center_size(play.center() + vec2(12.0, 0.0), vec2(10.0, 10.0)), Icon::Chevron, t.icon_secondary);
-    crate::live::people_bar(app, ui, Rect::from_min_max(pos2(top.min.x + 12.0, top.min.y), pos2(play.min.x - 6.0, top.max.y)));
-    if presp.clicked() {
-        app.run("proto.present", json!({}));
-    }
-    menu_popup(&mresp).width(200.0).show(|ui| {
-        if menu_item(ui, tr("Present"), &present_keys) {
-            app.run("proto.present", json!({}));
-            ui.close();
-        }
-        let (label, cmd) = if app.ui.preview.is_some() { (tr("Close preview"), "proto.closePreview") } else { (tr("Preview"), "proto.preview") };
-        if menu_item(ui, label, "") {
-            app.run(cmd, json!({}));
-            ui.close();
-        }
-    });
-    // Tabs row.
+    crate::live::people_bar(app, ui, Rect::from_min_max(pos2(top.min.x + 12.0, top.min.y), pos2(share.min.x - 6.0, top.max.y)));
+    // Heading row: the panel's name, then the zoom menu.
     let (tabs, _) = ui.allocate_exact_size(vec2(w, 40.0), Sense::hover());
     ui.painter().line_segment([tabs.left_top(), tabs.right_top()], Stroke::new(1.0, t.border));
-    let mut x = tabs.min.x + 8.0;
-    for (tab, label) in [(RightTab::Design, tr("Design")), (RightTab::Prototype, tr("Prototype"))] {
-        let galley = ui.painter().layout_no_wrap(label.into(), semibold(11.0), t.text);
-        let r = Rect::from_min_size(pos2(x, tabs.center().y - 12.0), vec2(galley.size().x + 16.0, 24.0));
-        let resp = ui.interact(r, ui.scope_id().with(("rtab", label)), Sense::click());
-        let active = app.ui.right_tab == tab;
-        a11y::tab(&resp, label, active);
-        if active {
-            ui.painter().rect_filled(r, CornerRadius::same(5), t.hover);
-        }
-        ui.painter().galley(pos2(r.min.x + 8.0, r.center().y - galley.size().y / 2.0), galley, if active { t.text } else { t.text_secondary });
-        if resp.clicked() {
-            if app.ui.right_tab != tab {
-                crate::proto_panel::open_editor(ui.ctx(), None);
-            }
-            app.ui.right_tab = tab;
-        }
-        x = r.max.x + 2.0;
-    }
+    let galley = ui.painter().layout_no_wrap(tr("Design").into(), semibold(11.0), t.text);
+    let r = Rect::from_min_size(pos2(tabs.min.x + 8.0, tabs.center().y - 12.0), vec2(galley.size().x + 16.0, 24.0));
+    ui.painter().rect_filled(r, CornerRadius::same(5), t.hover);
+    ui.painter().galley(pos2(r.min.x + 8.0, r.center().y - galley.size().y / 2.0), galley, t.text);
     // Zoom menu.
     let zoom = app.session.ds().map(|d| d.view.zoom).unwrap_or(1.0);
     let zr = Rect::from_min_size(pos2(tabs.max.x - 64.0, tabs.center().y - 12.0), vec2(56.0, 24.0));
@@ -244,11 +201,11 @@ pub fn right_panel(app: &mut FigApp, ui: &mut Ui) {
             ui.add_space(80.0);
             return;
         }
-        match app.ui.right_tab {
-            // The Frame tool shows the frame presets.
-            RightTab::Design if app.session.tool.tool == figcraft_engine::ToolId::Frame => crate::frame_presets::panel(app, ui),
-            RightTab::Design => design(app, ui),
-            RightTab::Prototype => crate::proto_panel::prototype(app, ui),
+        // The Frame tool shows the frame presets.
+        if app.session.tool.tool == figcraft_engine::ToolId::Frame {
+            crate::frame_presets::panel(app, ui);
+        } else {
+            design(app, ui);
         }
         ui.add_space(80.0);
         a11y::scroll_focus(&mut app.ui.nav, ui);

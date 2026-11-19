@@ -412,30 +412,6 @@ fn css_never_names_a_calculation_it_leaves_out() {
     assert!(css.contains("--ink-too: var(--ink);"), "an alias that always resolves stays a reference: {css}");
 }
 
-/// A calculation is a variable's value, not a literal an expression may hold: nothing would check
-/// what it reads. Every way an expression arrives refuses one.
-#[test]
-fn prototype_expressions_refuse_a_calculation_literal() {
-    let mut s = seeds();
-    let btn = rect(&mut s, 0.0);
-    let dest = idv(&ex(&mut s, "frame.create", json!({"x": 200, "y": 0, "width": 100, "height": 100})));
-    ex(&mut s, "proto.interaction.add", json!({"id": btn, "dest": dest}));
-    let calc = json!({"value": {"type": "colorAlpha", "value": {"variable": "ink", "opacity": 9}}});
-    let msg = err(&mut s, "proto.evaluate", json!({"expr": calc}));
-    assert!(msg.contains("Not a value"), "evaluate: {msg}");
-    let set = json!({"type": "setVariable", "variable": "edge", "value": null, "expr": calc});
-    let msg = err(&mut s, "proto.action.add", json!({"id": btn, "index": 0, "action": set}));
-    assert!(msg.contains("Not a value"), "set variable action: {msg}");
-    let added = ex(
-        &mut s,
-        "proto.action.add",
-        json!({"id": btn, "index": 0, "action": {"type": "conditional", "blocks": [{"expression": "size > 1", "actions": []}]}}),
-    );
-    let same = json!({"op": {"op": "equals", "args": [{"value": {"type": "alias", "value": "ink"}}, calc]}});
-    let msg = err(&mut s, "proto.conditional.setCondition", json!({"id": btn, "index": 0, "path": added["path"], "block": 0, "condition": same}));
-    assert!(msg.contains("Not a value"), "condition: {msg}");
-}
-
 #[test]
 fn profile_conversion_reaches_the_colours_stored_in_a_calculation() {
     // A mix of identical literals shows that colour; after a converting profile change the

@@ -263,7 +263,6 @@ fn overridable_properties_stay_through_main_edits_and_reset() {
     type Row = (&'static str, Layer, &'static str, Value, Option<Value>, fn(&Node) -> String, &'static str);
     let grid = serde_json::to_value(LayoutGrid::default()).unwrap();
     let export = serde_json::to_value(ExportSetting::next_after(None)).unwrap();
-    let click = json!({"trigger": {"type": "onClick"}, "actions": [{"type": "back"}]});
     let rows: Vec<Row> = vec![
         (
             "fill",
@@ -392,15 +391,6 @@ fn overridable_properties_stay_through_main_edits_and_reset() {
             Some(json!({"exports": [export.clone(), export.clone()]})),
             |n| n.exports.len().to_string(),
             "\"add, edit, or remove export settings\"",
-        ),
-        (
-            "prototype interactions",
-            Layer::Bg,
-            "interactions",
-            json!({"interactions": [click.clone()]}),
-            Some(json!({"interactions": [click.clone(), click.clone()]})),
-            |n| n.interactions.len().to_string(),
-            "interactions on an instance win over the inherited ones",
         ),
         (
             "opacity",

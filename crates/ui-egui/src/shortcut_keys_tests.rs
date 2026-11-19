@@ -134,31 +134,6 @@ fn symbols_typed_with_shift_on_other_layouts_count_without_it() {
 }
 
 #[test]
-fn presentation_keys() {
-    let mut s = Session::new();
-    let a = id(s.execute("node.create", &json!({"type": "frame", "name": "A", "x": 0, "y": 0, "width": 300, "height": 200})).unwrap());
-    let b = id(s.execute("node.create", &json!({"type": "frame", "name": "B", "x": 400, "y": 0, "width": 300, "height": 200})).unwrap());
-    let mut u = Ui::new(s);
-    u.app.run("proto.present", json!({"start": a}));
-    u.frame(vec![]);
-    let current = |u: &Ui| u.app.inspect()["presenter"]["current"].clone();
-    assert_eq!(current(&u), json!(a));
-    press(&mut u, Key::N, Modifiers::NONE);
-    assert_eq!(current(&u), json!(b), "N: next frame");
-    press(&mut u, Key::ArrowLeft, Modifiers::NONE);
-    assert_eq!(current(&u), json!(a));
-    press(&mut u, Key::Space, Modifiers::NONE);
-    assert_eq!(current(&u), json!(b), "Space: next frame");
-    let out = press(&mut u, Key::F, Modifiers::NONE);
-    let cmds = out.viewport_output.get(&ViewportId::ROOT).map(|v| v.commands.clone()).unwrap_or_default();
-    assert!(cmds.contains(&ViewportCommand::Fullscreen(true)), "F: full screen, {cmds:?}");
-    let comments = u.app.ui.present_view.comments;
-    press(&mut u, Key::C, Modifiers::NONE);
-    assert_eq!(u.app.ui.present_view.comments, !comments, "C: comments");
-    assert!(u.app.ui.present.is_some(), "still presenting");
-}
-
-#[test]
 fn multiplayer_cursors_key_hides_and_shows_others_cursors() {
     use crate::live_tests::{Harness, cursor};
     use figcraft_engine::live::Event as LiveEvent;

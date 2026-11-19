@@ -154,7 +154,7 @@ fn search_and_kind_filter_the_grid_and_nothing_found_offers_a_way_back() {
     let s = settle(&mut u);
     assert!(has_text(&s, "Icon set starter") && !has_text(&s, "Dashboard"));
     // Descriptions and kinds match too, whatever the case.
-    u.app.ui.home_view.query = "  PROTOTYPE ".into();
+    u.app.ui.home_view.query = "  TRAIL APP ".into();
     let s = settle(&mut u);
     assert!(has_text(&s, "Mobile app") && !has_text(&s, "Landing page"));
     u.app.ui.home_view.query.clear();
@@ -430,7 +430,7 @@ fn the_getting_started_card_closes_stays_closed_and_comes_back_from_help() {
     let mut u = first_run();
     let s = settle(&mut u);
     assert!(has_text(&s, "Getting started"));
-    for tip in ["Draw a frame", "Add auto layout", "Make a component", "Prototype", "Share with a code", "Export"] {
+    for tip in ["Draw a frame", "Add auto layout", "Make a component", "Share with a code", "Export"] {
         assert!(has_text(&s, tip), "{tip}");
     }
     // Shortcuts come from the keymap.

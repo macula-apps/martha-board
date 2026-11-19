@@ -2,7 +2,7 @@
 //! a scrub and an arrow key move a value, and the Design panel's fields driven through egui
 //! headless: scrubbing by the label with and without Shift and Alt, arrow keys, arithmetic on
 //! commit, Tab and Shift+Tab, Escape, fields showing "Mixed", and one undo step per scrub or
-//! commit (the colour picker's, the prototype panel's and the Scale panel's fields too).
+//! commit (the colour picker's and the Scale panel's fields too).
 
 use egui::accesskit::Role;
 use egui::{Event, Id, Key, Modifiers, Pos2, pos2};
@@ -682,8 +682,6 @@ fn scrubbing_colour_picker_fields_is_live_and_one_undo_step() {
     assert_eq!(undo_steps(&u), steps + 2, "alpha");
 }
 
-/// Asserts scrubbing a prototype delay sets the value once when released and adds one undo
-/// step.
 #[test]
 fn lch_and_oklch_picker_fields_edit_lightness_keeping_hue() {
     for (model, name, l) in [(4usize, "LCH", "lch_l"), (5, "OKLCH", "oklch_l")] {
@@ -762,30 +760,6 @@ fn lch_keeps_the_typed_chroma_while_the_colour_is_out_of_srgb() {
     assert!(lch.c > 50.0 && (lch.h - hue as f32).abs() < 2.0, "blue again: {lch:?} (hue {hue})");
 }
 
-#[test]
-fn scrubbing_a_prototype_delay_sets_it_once_when_let_go() {
-    let mut s = Session::new();
-    let f1 = id(s.execute("frame.create", &json!({"x": 0, "y": 0, "width": 200, "height": 300})).unwrap());
-    let f2 = id(s.execute("frame.create", &json!({"x": 300, "y": 0, "width": 200, "height": 300})).unwrap());
-    let it = json!({"id": f1, "trigger": {"type": "afterDelay", "ms": 500}, "action": {"type": "navigate", "dest": f2}});
-    s.execute("proto.interaction.add", &it).unwrap();
-    s.execute("select.set", &json!({"ids": [f1]})).unwrap();
-    let mut u = Ui::new(s);
-    u.app.ui.right_tab = crate::RightTab::Prototype;
-    crate::proto_panel::open_editor(&u.ctx, Some((f1, 0)));
-    for _ in 0..3 {
-        u.frame(vec![]);
-    }
-    let steps = undo_steps(&u);
-    let from = lead(&u, Id::unique(("proto_delay", f1, 0usize)));
-    drag(&mut u, from, 30.0, Modifiers::NONE);
-    let ms = match u.app.session.doc().unwrap().node(f1).unwrap().interactions[0].trigger {
-        figcraft_doc::proto::Trigger::AfterDelay { ms } => ms,
-        _ => panic!("still after a delay"),
-    };
-    assert_eq!((ms, undo_steps(&u)), (650, steps + 1));
-}
-
 /// Asserts scrubbing the scale panel's width scales the layer live in one undo step.
 #[test]
 fn scrubbing_the_scale_panel_width_scales_live_in_one_undo_step() {
@@ -859,55 +833,55 @@ fn ctrl_enter_in_the_scale_field_keeps_the_scale_tool() {
     assert_eq!(u.app.session.tool.tool, figcraft_engine::ToolId::Scale);
 }
 
-/// An Enter on the first frame the panel is back from another tab (the field not yet focused again)
-/// doesn't end the tool on a stale "had the keyboard" flag.
+/// An Enter on the first frame the panel is shown again after the UI was hidden (the field not yet
+/// focused again) doesn't end the tool on a stale "had the keyboard" flag.
 #[test]
-fn enter_on_the_first_frame_back_from_another_tab_keeps_the_scale_tool() {
+fn enter_on_the_first_frame_the_panel_is_shown_again_keeps_the_scale_tool() {
     let (mut u, _) = scale_setup();
     key(&mut u, Key::K, Modifiers::NONE);
     u.frame(vec![]);
     assert!(scale_field_focused(&u));
-    u.app.ui.right_tab = crate::state::RightTab::Prototype;
+    u.app.run("view.toggleUi", json!({"on": true}));
     u.frame(vec![]);
     u.frame(vec![]);
-    u.app.ui.right_tab = crate::state::RightTab::Design;
+    u.app.run("view.toggleUi", json!({"on": false}));
     key(&mut u, Key::Enter, Modifiers::NONE);
     u.frame(vec![]);
     assert_eq!(u.app.session.tool.tool, figcraft_engine::ToolId::Scale);
 }
 
-/// The Scale tool chosen again while the Design tab was away (Prototype tab, Move, then K): the
-/// field takes the keyboard again when the Design tab comes back.
+/// The Scale tool chosen again while the panel was hidden (Hide UI, Move, then the Scale tool): the
+/// field takes the keyboard again when the panel is shown again.
 #[test]
-fn the_scale_field_takes_the_keyboard_again_after_another_tab() {
+fn the_scale_field_takes_the_keyboard_again_when_the_panel_is_shown_again() {
     let (mut u, _) = scale_setup();
     key(&mut u, Key::K, Modifiers::NONE);
     u.frame(vec![]);
     assert!(scale_field_focused(&u));
-    u.app.ui.right_tab = crate::state::RightTab::Prototype;
+    u.app.run("view.toggleUi", json!({"on": true}));
     u.frame(vec![]);
     u.app.run("tool.set", json!({"tool": "move"}));
     u.frame(vec![]);
     u.app.run("tool.set", json!({"tool": "scale"}));
     u.frame(vec![]);
-    u.app.ui.right_tab = crate::state::RightTab::Design;
+    u.app.run("view.toggleUi", json!({"on": false}));
     u.frame(vec![]);
     u.frame(vec![]);
     assert!(scale_field_focused(&u), "the field has the keyboard again");
 }
 
-/// A value typed and left unsettled when the panel went away is dropped: back again, the field
+/// A value typed and left unsettled when the panel was hidden is dropped: shown again, the field
 /// shows the fresh value with all of its text selected, so typing replaces it.
 #[test]
-fn the_scale_field_comes_back_fresh_with_its_text_selected() {
+fn the_scale_field_comes_back_fresh_with_its_text_selected_when_the_panel_is_shown_again() {
     let (mut u, r) = scale_setup();
     key(&mut u, Key::K, Modifiers::NONE);
     u.frame(vec![]);
     u.frame(vec![Event::Text("7".to_string())]);
-    u.app.ui.right_tab = crate::state::RightTab::Prototype;
+    u.app.run("view.toggleUi", json!({"on": true}));
     u.frame(vec![]);
     u.frame(vec![]);
-    u.app.ui.right_tab = crate::state::RightTab::Design;
+    u.app.run("view.toggleUi", json!({"on": false}));
     u.frame(vec![]);
     u.frame(vec![]);
     assert!(scale_field_focused(&u));

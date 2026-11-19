@@ -617,7 +617,6 @@ fn traditional_chinese_is_a_draft_in_the_taiwan_design_terms() {
     assert!(matches!(lookup(zh, "Stroke"), Some(Text::Plain("邊框"))));
     assert!(matches!(lookup(zh, "Export"), Some(Text::Plain("匯出"))));
     assert!(matches!(lookup(zh, "Version"), Some(Text::Plain("版本"))));
-    assert!(matches!(lookup(zh, "Prototype"), Some(Text::Plain("原型"))));
 }
 
 /// Changing the preference and reading it back keeps the Chinese tag; the tag still resolves to

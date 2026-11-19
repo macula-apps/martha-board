@@ -117,7 +117,6 @@ impl AboutTab {
 /// The About window's width, the same on every tab (the Contributors table needs the room).
 pub const ABOUT_WIDTH: f32 = 660.0;
 
-/// The About window's tab row, drawn like the Design / Prototype tabs of the right panel.
 /// A row of tabs (the About window's, the shortcuts panel's): the current one highlighted.
 pub(crate) fn tab_strip<T: Copy + PartialEq>(ui: &mut egui::Ui, t: &Tokens, tabs: &[T], label: fn(T) -> &'static str, current: &mut T) {
     ui.horizontal(|ui| {

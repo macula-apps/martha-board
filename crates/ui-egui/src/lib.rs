@@ -27,7 +27,6 @@ pub mod live;
 pub mod menus;
 pub mod pending_open;
 pub mod popover;
-pub mod present;
 pub mod shortcuts;
 pub mod tabs;
 pub mod theme;
@@ -123,6 +122,8 @@ mod guide_release_tests;
 mod guide_snap_tests;
 #[cfg(test)]
 mod header_icon_size_tests;
+#[cfg(test)]
+mod headless_tests;
 #[cfg(test)]
 mod home_recents_tests;
 #[cfg(test)]
@@ -225,26 +226,10 @@ mod popover_tests;
 #[cfg(test)]
 mod popup_width_tests;
 #[cfg(test)]
-mod present_links_tests;
-#[cfg(test)]
-mod present_tab_tests;
-#[cfg(test)]
-mod present_tests;
-#[cfg(test)]
-mod present_view_tests;
-#[cfg(test)]
 mod property_menu_tests;
 mod property_rows;
 #[cfg(test)]
 mod property_rows_tests;
-#[cfg(test)]
-mod proto_editor_tests;
-#[cfg(test)]
-mod proto_reorder_tests;
-#[cfg(test)]
-mod proto_responsive_tests;
-#[cfg(test)]
-mod proto_variant_connect_tests;
 #[cfg(test)]
 mod region_fill_rows_tests;
 #[cfg(test)]
@@ -332,7 +317,6 @@ pub use canvas::guides;
 pub use canvas::handles;
 pub use canvas::live_text;
 pub use canvas::measure_overlay;
-pub use canvas::proto_canvas;
 pub use canvas::render_worker;
 use canvas::selection_spacing;
 pub use canvas::widget_bar;
@@ -354,8 +338,6 @@ pub use panels::frame_presets;
 pub use panels::layers;
 pub use panels::layout_panel;
 pub use panels::list_drag;
-pub use panels::proto_editor;
-pub use panels::proto_panel;
 pub use panels::right;
 pub use panels::scale_panel;
 pub use panels::section_panel;
@@ -400,9 +382,7 @@ pub use services::{
     egui_copy_text, unreadable,
 };
 use services::{DialogDone, PickFuture, Picked, RepaintWaker};
-pub use state::{
-    AutoSaveEncoding, CANVAS_MIN, LEFT_PANEL, LeftTab, MobilePanel, NARROW_WIDTH, PANEL_DEFAULT, RIGHT_PANEL, RightTab, TitleBar, fit_panels,
-};
+pub use state::{AutoSaveEncoding, CANVAS_MIN, LEFT_PANEL, LeftTab, MobilePanel, NARROW_WIDTH, PANEL_DEFAULT, RIGHT_PANEL, TitleBar, fit_panels};
 
 /// A native dialog in flight. The app keeps working while it is open, so its result goes to the
 /// file and window it was opened for, not to whichever is in front when it closes.
@@ -441,9 +421,6 @@ pub struct UiState {
     pub right_width: f32,
     /// The right sidebar as drawn this frame, after fitting the window.
     pub right_panel_rect: Option<egui::Rect>,
-    pub right_tab: RightTab,
-    /// The tab of the previous frame, to see the right panel change mode.
-    pub last_right_tab: RightTab,
     pub left_tab: LeftTab,
     pub pages_open: bool,
     /// Pages panel search: open, and the case-insensitive name filter.
@@ -499,16 +476,6 @@ pub struct UiState {
     pub icon_gallery: bool,
     /// A message at the bottom of the window and how long it has been showing.
     pub toast: Option<(String, ToastClock)>,
-    pub present: Option<present::Presenter>,
-    pub presents: Vec<present::PresentTab>,
-    /// The tab shown last. It is on screen while `present` has a value.
-    pub present_active: Option<u64>,
-    pub present_next: u64,
-    /// The full-window presenter's options (how it sizes the prototype), kept between
-    /// presentations.
-    pub present_view: present::PresentView,
-    /// The prototype preview pane floating over the canvas, when open.
-    pub preview: Option<present::Pane>,
     pub picker: Option<colorpicker::PickerTarget>,
     /// Crop mode (`image.crop`): the layer and the index of the image fill whose crop handles
     /// show on the canvas until Enter, Escape or a click outside the image.
@@ -657,7 +624,7 @@ pub struct UiState {
 }
 
 impl Default for UiState {
-    /// Seed the default UI state (panel widths, tabs, pages, Home, presenters, pickers and
+    /// Seed the default UI state (panel widths, tabs, pages, Home, pickers and
     /// dialogs off, and the rest of the transient UI fields); `FigApp::new` overrides panel
     /// widths and the pages height from preferences.
     fn default() -> Self {
@@ -665,8 +632,6 @@ impl Default for UiState {
             left_width: PANEL_DEFAULT,
             right_width: PANEL_DEFAULT,
             right_panel_rect: None,
-            right_tab: RightTab::Design,
-            last_right_tab: RightTab::Design,
             left_tab: LeftTab::File,
             pages_open: true,
             page_search: false,
@@ -700,12 +665,6 @@ impl Default for UiState {
             title_bar: TitleBar::Native,
             icon_gallery: false,
             toast: None,
-            present: None,
-            presents: Vec::new(),
-            present_active: None,
-            present_next: 1,
-            present_view: present::PresentView::default(),
-            preview: None,
             picker: None,
             crop: None,
             picker_popover: None,

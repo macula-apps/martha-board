@@ -41,8 +41,6 @@ pub(super) fn overlays(app: &FigApp, painter: &egui::Painter, t: &Tokens) -> Vec
             labels.push((*c, q.map(|p| app.to_page(p))));
         }
     }
-    // Prototype connections.
-    crate::proto_canvas::draw(app, painter);
     // Hover outline (measuring outlines the measured box in red instead).
     if let Some(h) = ds.hover
         && !sel.contains(&h)

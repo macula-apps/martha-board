@@ -77,8 +77,6 @@ pub use reshape::selected_connector_handles;
 
 /// Why a board command refuses on a design file.
 pub const NEEDS_BOARD: &str = "this is for boards: make one with File ▸ New board";
-/// Why prototyping refuses on a board.
-pub const NOT_ON_BOARDS: &str = "boards have no prototypes: use a design file for those";
 
 /// A sticky note's side (it grows taller for long notes).
 pub const STICKY: f64 = 200.0;
@@ -273,16 +271,6 @@ pub fn is_board(doc: &Document) -> bool {
 /// Refuse `cmd` unless the active file is a board.
 pub(crate) fn require(s: &Session, cmd: &str) -> Result<()> {
     if s.doc().is_ok_and(is_board) { Ok(()) } else { Err(EngineError::Disabled(cmd.into(), NEEDS_BOARD.into())) }
-}
-
-/// Prototyping: not on boards.
-fn design_only(cmd: &str) -> bool {
-    cmd.starts_with("proto.") || matches!(cmd, "view.prototype" | "view.designPrototype")
-}
-
-/// Refuse `cmd` on a board when it is prototyping.
-pub(crate) fn refuse_on_board(s: &Session, cmd: &str) -> Result<()> {
-    if design_only(cmd) && s.doc().is_ok_and(is_board) { Err(EngineError::Disabled(cmd.into(), NOT_ON_BOARDS.into())) } else { Ok(()) }
 }
 
 fn board_tool(s: &mut Session, t: ToolId) -> Result<Value> {

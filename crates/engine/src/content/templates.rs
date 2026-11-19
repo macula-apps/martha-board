@@ -4,8 +4,8 @@
 //! own ([`glyphs`]).
 //!
 //! Each template is real, editable content: shared colour and text styles, auto layout,
-//! components with properties and instances of them, variables with modes, constraints and
-//! prototype links. Building one is deterministic: the same document every time.
+//! components with properties and instances of them, variables with modes and constraints.
+//! Building one is deterministic: the same document every time.
 
 mod dashboard;
 mod design_system;
@@ -73,7 +73,7 @@ pub static TEMPLATES: &[Template] = &[
     Template {
         id: "mobile-app",
         name: "Mobile app",
-        description: "Four screens of a trail app with components and a prototype flow",
+        description: "Four screens of a trail app with components",
         kind: Kind::App,
         size: "390 × 844",
         make: mobile::build,

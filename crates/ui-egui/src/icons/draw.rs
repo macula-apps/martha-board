@@ -904,17 +904,6 @@ fn draw(p: &P, icon: Icon) {
             p.line(3.0, 11.5, 14.0, 11.5);
             p.head((3.0, 11.5), PI, 2.8);
         }
-        Prototype => {
-            p.circle(4.5, 11.5, 2.0);
-            p.line(6.0, 10.0, 13.0, 3.0);
-            p.poly(&[(8.5, 2.5), (13.5, 2.5), (13.5, 7.5)], false);
-        }
-        Preview => {
-            // A window with a title strip and a play triangle in it.
-            p.rect(2.5, 2.5, 13.5, 13.5, 1.0);
-            p.line(3.0, 5.5, 13.0, 5.5);
-            p.fill(&[(6.5, 7.5), (10.5, 10.0), (6.5, 12.5)]);
-        }
         AbsolutePosition => {
             // The frame, a small layer near its top-right corner, and the two offsets pinning it.
             p.rect(2.5, 2.5, 13.5, 13.5, 1.0);

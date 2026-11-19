@@ -92,9 +92,6 @@ fn report(layers: usize) {
     b.app.session.set_selection(first.into_iter().collect());
     rows.push(("idle frame, one layer selected", b.mean(30, |_| vec![])));
     b.app.session.set_selection(vec![]);
-    b.app.ui.right_tab = crate::RightTab::Prototype;
-    rows.push(("idle frame, Prototype tab", b.mean(30, |_| vec![])));
-    b.app.ui.right_tab = crate::RightTab::Design;
     // Every screen expanded in the layers panel.
     let page = b.app.session.page().unwrap();
     let screens = b.app.session.doc().unwrap().node(page).unwrap().children.clone();
@@ -339,23 +336,4 @@ fn layer_rows_follow_edits_undo_pages_expansion_and_filter() {
     // Collapsing hides the children again.
     expanded.clear();
     assert_eq!(ids(&rows(&ctx, &doc3, page, &expanded, "")), vec![frame]);
-}
-
-#[test]
-fn prototype_sources_follow_edits_and_undo() {
-    let ctx = egui::Context::default();
-    let mut s = Session::new();
-    let page = s.page().unwrap();
-    let id = |v: serde_json::Value| NodeId(v["id"].as_u64().unwrap());
-    let a = id(s.execute("node.create", &json!({"type": "frame", "x": 0, "y": 0, "width": 100, "height": 100})).unwrap());
-    let b = id(s.execute("node.create", &json!({"type": "frame", "x": 200, "y": 0, "width": 100, "height": 100})).unwrap());
-    let before = s.ds().unwrap().doc.clone();
-    assert!(crate::proto_canvas::sources(&ctx, &before, page).is_empty());
-    s.execute("proto.interaction.add", &json!({"ids": [a], "dest": b})).unwrap();
-    let after = s.ds().unwrap().doc.clone();
-    assert_eq!(*crate::proto_canvas::sources(&ctx, &after, page), vec![a]);
-    assert!(Arc::ptr_eq(&crate::proto_canvas::sources(&ctx, &after, page), &crate::proto_canvas::sources(&ctx, &after, page)));
-    s.undo().unwrap();
-    let undone = s.ds().unwrap().doc.clone();
-    assert!(crate::proto_canvas::sources(&ctx, &undone, page).is_empty());
 }

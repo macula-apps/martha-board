@@ -73,7 +73,7 @@ fn other_layers_preview_themselves() {
 #[test]
 fn export_rows_offer_a_size_for_images_only() {
     let mut s = Session::new();
-    let r = crate::present_tests::id(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 80})).unwrap());
+    let r = crate::headless_tests::id(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 80})).unwrap());
     s.execute("select.set", &json!({"ids": [r]})).unwrap();
     s.execute("export.add", &json!({"ids": [r]})).unwrap();
     let mut u = crate::layers_drag_tests::Ui::new(s);
@@ -124,7 +124,7 @@ pub(crate) fn click(u: &mut crate::layers_drag_tests::Ui, p: egui::Pos2) {
 fn the_format_dropdown_offers_android_vector_drawable() {
     assert!(figcraft_doc::ExportFormat::ALL.contains(&figcraft_doc::ExportFormat::VectorDrawable));
     let mut s = Session::new();
-    let r = crate::present_tests::id(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 80})).unwrap());
+    let r = crate::headless_tests::id(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 80})).unwrap());
     s.execute("select.set", &json!({"ids": [r]})).unwrap();
     s.execute("export.add", &json!({"ids": [r]})).unwrap();
     let mut u = crate::layers_drag_tests::Ui::new(s);
@@ -143,7 +143,7 @@ fn the_format_dropdown_offers_android_vector_drawable() {
 #[test]
 fn the_export_dialog_has_an_xml_preset() {
     let mut s = Session::new();
-    let r = crate::present_tests::id(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 80})).unwrap());
+    let r = crate::headless_tests::id(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 80})).unwrap());
     s.execute("select.set", &json!({"ids": [r]})).unwrap();
     let mut u = crate::layers_drag_tests::Ui::new(s);
     u.frame(vec![]);
@@ -158,8 +158,8 @@ fn the_export_dialog_has_an_xml_preset() {
 #[test]
 fn advanced_options_offer_the_bounding_box_for_text_layers() {
     let mut s = Session::new();
-    let r = crate::present_tests::id(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 80})).unwrap());
-    let t = crate::present_tests::id(&s.execute("text.create", &json!({"text": "Hi", "x": 200, "y": 0})).unwrap());
+    let r = crate::headless_tests::id(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 80})).unwrap());
+    let t = crate::headless_tests::id(&s.execute("text.create", &json!({"text": "Hi", "x": 200, "y": 0})).unwrap());
     s.execute("export.add", &json!({"ids": [r]})).unwrap();
     s.execute("export.add", &json!({"ids": [t]})).unwrap();
     let mut u = crate::layers_drag_tests::Ui::new(s);
@@ -187,7 +187,7 @@ fn advanced_options_offer_the_bounding_box_for_text_layers() {
 #[test]
 fn advanced_options_offer_a_color_profile_for_images() {
     let mut s = Session::new();
-    let r = crate::present_tests::id(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 80})).unwrap());
+    let r = crate::headless_tests::id(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 80})).unwrap());
     s.execute("export.add", &json!({"ids": [r]})).unwrap();
     s.execute("select.set", &json!({"ids": [r]})).unwrap();
     let mut u = crate::layers_drag_tests::Ui::new(s);

@@ -1,7 +1,5 @@
 //! Sections: hiding their contents, wrapping layers in a new one, "Changed" after ready for dev,
-//! and frames in sections as prototype screens.
-
-use std::collections::HashMap;
+//! and frames in sections as top-level frames.
 
 use serde_json::{Value, json};
 
@@ -81,7 +79,7 @@ fn wrap_in_new_section() {
 }
 
 #[test]
-fn frames_in_sections_are_prototype_screens() {
+fn frames_in_sections_are_top_level_frames() {
     let mut s = Session::new();
     let page = s.page().unwrap();
     let sec = section(&mut s, 0.0, 0.0, 800.0, 400.0);
@@ -96,20 +94,4 @@ fn frames_in_sections_are_prototype_screens() {
     assert_eq!(doc.top_level_frame(sec), None);
     assert_eq!(doc.top_frames(page), vec![b, a, loose], "reading order, sections looked into");
     assert_eq!(doc.sections_in(page), vec![sec, inner]);
-    // Flows can start there.
-    let v = s.execute("proto.flow.add", &json!({"start": b})).unwrap();
-    assert_eq!(v["start"], json!(b));
-    // Navigating to a section shows its first frame, then the one shown last.
-    let doc = s.doc().unwrap();
-    let mut visited = HashMap::new();
-    assert_eq!(crate::proto_run::navigate_target(doc, sec, &visited), Some(b));
-    crate::proto_run::remember_sections(doc, a, &mut visited);
-    assert_eq!(crate::proto_run::navigate_target(doc, sec, &visited), Some(a));
-    assert_eq!(crate::proto_run::navigate_target(doc, inner, &visited), Some(b), "a was never shown in the inner section");
-    assert_eq!(crate::proto_run::navigate_target(doc, child, &visited), Some(b), "a layer goes to its frame");
-    let empty = {
-        let e = section(&mut s, 0.0, 900.0, 50.0, 50.0);
-        (e, s.doc().unwrap())
-    };
-    assert_eq!(crate::proto_run::navigate_target(empty.1, empty.0, &visited), None);
 }

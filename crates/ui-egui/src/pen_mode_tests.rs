@@ -1,22 +1,13 @@
-//! Leaving Design with a pen path open (#307): the path ends as Escape ends it, the tool goes back
-//! to Move, and the canvas of Prototype or Inspect takes no more pen points. Driven by the panel
-//! keys and by the toolbar's mode switcher.
+//! The toolbar's mode switcher with a pen path open (#307): Design, the mode already shown, leaves
+//! the path going on, and a press on the switcher never reaches the canvas under it.
 
 use egui::accesskit::Role;
-use egui::{Event, Key, Modifiers, Pos2, pos2};
+use egui::{Pos2, pos2};
 use figcraft_engine::Session;
 use figcraft_engine::tools::ToolId;
 use serde_json::json;
 
-use crate::RightTab;
 use crate::layers_drag_tests::Ui;
-
-fn press(u: &mut Ui, key: Key, modifiers: Modifiers) {
-    u.frame(vec![
-        Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers },
-        Event::Key { key, physical_key: None, pressed: false, repeat: false, modifiers },
-    ]);
-}
 
 fn click(u: &mut Ui, p: Pos2) {
     u.button(p, true);
@@ -51,46 +42,12 @@ fn drawing() -> Ui {
 }
 
 #[test]
-fn switching_mode_ends_the_pen_path_as_escape_does() {
-    let mut esc = drawing();
-    press(&mut esc, Key::Escape, Modifiers::NONE);
-    assert!(esc.app.session.tool.pen.is_none());
-    let finished = layers(&esc);
-    assert_eq!(finished, 1, "Escape keeps the two-anchor path");
-
-    // Shift+E is Prototype.
-    let mut u = drawing();
-    press(&mut u, Key::E, Modifiers::SHIFT);
-    assert_eq!(u.app.ui.right_tab, RightTab::Prototype);
-    assert!(u.app.session.tool.pen.is_none(), "the path is finished");
-    assert_eq!(u.app.session.tool.tool, ToolId::Move, "back to Move");
-    assert_eq!(layers(&u), finished, "the path is kept as Escape keeps it");
-    // The canvas takes no more pen points.
-    click(&mut u, pos2(800.0, 300.0));
-    assert!(u.app.session.tool.pen.is_none(), "a click starts no path");
-    assert_eq!(layers(&u), finished, "a click adds nothing");
-}
-
-#[test]
-fn the_mode_switcher_ends_the_pen_path_too() {
-    let finished = {
-        let mut esc = drawing();
-        press(&mut esc, Key::Escape, Modifiers::NONE);
-        layers(&esc)
-    };
-    let mut u = drawing();
-    let at = mode_button(&mut u, "Prototype");
-    click(&mut u, at);
-    assert_eq!(u.app.ui.right_tab, RightTab::Prototype);
-    assert!(u.app.session.tool.pen.is_none(), "the path is finished");
-    assert_eq!(u.app.session.tool.tool, ToolId::Move, "back to Move");
-    assert_eq!(layers(&u), finished, "the path is kept as Escape keeps it");
+fn the_mode_switchers_design_button_keeps_the_pen_path() {
     // Design is already the mode while the pen draws: pressing it again leaves nothing, so the
     // path goes on.
     let mut u = drawing();
     let at = mode_button(&mut u, "Design");
     click(&mut u, at);
-    assert_eq!(u.app.ui.right_tab, RightTab::Design);
     assert!(u.app.session.tool.pen.is_some(), "Design: the path goes on");
     assert_eq!(u.app.session.tool.tool, ToolId::Pen, "Design: still the pen");
 }
@@ -98,7 +55,7 @@ fn the_mode_switcher_ends_the_pen_path_too() {
 #[test]
 fn a_press_on_the_mode_switcher_does_not_reach_the_canvas() {
     // The switcher floats over the canvas: the pen must not place an anchor under it.
-    for label in ["Prototype", "Design"] {
+    for label in ["Draw", "Design"] {
         let mut u = Ui::new(Session::new());
         u.app.run("tool.set", json!({"tool": "pen"}));
         let at = mode_button(&mut u, label);

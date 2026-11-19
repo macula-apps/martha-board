@@ -9,8 +9,8 @@ use figcraft_engine::live::{Event as LiveEvent, Presence, editing_hint};
 use serde_json::json;
 
 use crate::canvas::TextOnScreen;
+use crate::headless_tests::id;
 use crate::live_tests::{HANA, Harness, filled, has_text};
-use crate::present_tests::id;
 
 /// In a session with Hana; a text layer "Hello world" in the shared file.
 fn session() -> (Harness, NodeId) {

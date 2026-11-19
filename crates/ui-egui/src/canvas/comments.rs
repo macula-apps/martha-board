@@ -831,12 +831,8 @@ fn escape(app: &mut FigApp, ctx: &egui::Context) -> bool {
 }
 
 /// The draft's composer next to its pin at `at` (screen), kept inside `bounds`; posting adds the
-/// comment (on `page` when given, else the current one) and shows its thread. The editor and the
-/// presenter both draw it here.
-///
-/// `target` is the page and the presented frame when called from the presenter: the comment then
-/// anchors within that frame. A comment that fails to post leaves the draft and its text.
-fn draft_composer(app: &mut FigApp, ctx: &egui::Context, at: Pos2, bounds: Rect, target: Option<(NodeId, NodeId)>) {
+/// comment and shows its thread. A comment that fails to post leaves the draft and its text.
+fn draft_composer(app: &mut FigApp, ctx: &egui::Context, at: Pos2, bounds: Rect) {
     let Some((x, y, mut text)) = app.ui.comments.draft.clone() else { return };
     let t = Tokens::get(ctx);
     let people = app.session.doc().map(|d| d.comment_people()).unwrap_or_default();
@@ -851,11 +847,7 @@ fn draft_composer(app: &mut FigApp, ctx: &egui::Context, at: Pos2, bounds: Rect,
     });
     app.ui.comments.mention = pick;
     if post {
-        let mut params = json!({"x": x, "y": y, "text": text.trim(), "anchor": true});
-        if let (Some((page, frame)), Some(o)) = (target, params.as_object_mut()) {
-            o.insert("page".into(), json!(page));
-            o.insert("within".into(), json!(frame));
-        }
+        let params = json!({"x": x, "y": y, "text": text.trim(), "anchor": true});
         if let Some(r) = app.run("comment.add", params) {
             app.ui.comments.draft = None;
             if let Some(id) = r.get("id").and_then(Value::as_u64) {
@@ -876,7 +868,7 @@ pub fn popovers(app: &mut FigApp, ctx: &egui::Context) {
     }
     let canvas = app.canvas.rect;
     if let Some((x, y, _)) = app.ui.comments.draft {
-        draft_composer(app, ctx, app.to_screen(x, y), canvas, None);
+        draft_composer(app, ctx, app.to_screen(x, y), canvas);
         return;
     }
     let Some(open) = app.ui.comments.open else { return };
@@ -1204,77 +1196,5 @@ pub fn panel(app: &mut FigApp, ui: &mut Ui) {
     }
     if let Some(id) = go {
         app.run("comment.open", json!({"id": id, "view": "center"}));
-    }
-}
-
-// ---------------------------------------------------------------------------------------------
-// The presenter.
-
-/// Pins on the presented `frame` (placed by the player's `place`, inside `clip`) while the
-/// presenter shows comments, and the open thread's popover (read and reply).
-pub fn presenter(app: &mut FigApp, ctx: &egui::Context, frame: NodeId, place: crate::present::Place, clip: Rect) {
-    if escape(app, ctx) {
-        return;
-    }
-    let Ok(ds) = app.session.ds() else { return };
-    let doc = ds.doc.clone();
-    let Some(fb) = doc.world_bounds(frame) else { return };
-    let me = me(app);
-    let open = app.ui.comments.open;
-    // The frame as designed maps onto the frame as presented.
-    let to_screen = |(x, y): (f64, f64)| place.pt(place.page_min.0 + x - fb.x0, place.page_min.1 + y - fb.y0);
-    let q = Query { frame: Some(frame), filter: app.ui.comments.filter, ..Query::default() };
-    let mut list = cc::query(&doc, &q, &me);
-    list.reverse();
-    if let Some(c) = open.and_then(|o| doc.comment(o)).filter(|c| cc::frame_of(&doc, c) == Some(frame) && !list.iter().any(|x| x.id == c.id)) {
-        list.push(c);
-    }
-    let pins: Vec<Pin> = list.iter().map(|c| Pin::of(c, &me, to_screen(c.position(&doc)))).filter(|p| clip.contains(p.at)).collect();
-    let mut clicked = None;
-    for p in &pins {
-        let r = pin_rect(p.at);
-        egui::Area::new(Id::unique(("present_comment_pin", p.id))).order(egui::Order::Foreground).fixed_pos(r.min).show(ctx, |ui| {
-            let (rr, resp) = ui.allocate_exact_size(r.size(), Sense::click());
-            paint_pin(ui.painter(), rr, p, open == Some(p.id) || resp.hovered());
-            if resp.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
-                clicked = Some(p.id);
-            }
-        });
-    }
-    if let Some(id) = clicked {
-        toggle(app, id);
-    }
-    // A click on the presented frame (not on a pin or a popover) starts a comment there: the
-    // presented point back to the frame as designed.
-    let frame_rect = place.rect(fb).intersect(clip);
-    let click = ctx.input(|i| if i.pointer.primary_clicked() { i.pointer.interact_pos() } else { None });
-    // The draft's own pin isn't interactable, so a click on it would start a new draft and lose
-    // the typed text: it is left alone.
-    let draft_pin = app.ui.comments.draft.as_ref().map(|(x, y, _)| pin_rect(to_screen((*x, *y))));
-    if clicked.is_none()
-        && let Some(q) = click.filter(|q| frame_rect.contains(*q) && !draft_pin.is_some_and(|r| r.contains(*q)))
-        && ctx.layer_id_at(q).is_none_or(|l| l.order == egui::Order::Background)
-    {
-        let pt = place.page(q);
-        start_draft(app, fb.x0 + (pt.x - place.page_min.0), fb.y0 + (pt.y - place.page_min.1));
-    }
-    if let Some((x, y, _)) = app.ui.comments.draft {
-        let at = to_screen((x, y));
-        let r = pin_rect(at);
-        egui::Area::new(Id::unique("present_comment_draft_pin")).order(egui::Order::Foreground).fixed_pos(r.min).interactable(false).show(
-            ctx,
-            |ui| {
-                let (rr, _) = ui.allocate_exact_size(r.size(), Sense::hover());
-                ui.painter().rect_filled(rr, BUBBLE, ACCENT);
-                ui.painter().circle_filled(rr.center(), 3.0, crate::theme::ACCENT_ON);
-            },
-        );
-        draft_composer(app, ctx, at, ctx.content_rect(), doc.page_of(frame).map(|page| (page, frame)));
-        return;
-    }
-    match app.ui.comments.open.and_then(|o| pins.iter().find(|p| p.id == o)) {
-        Some(p) => thread(app, ctx, p.id, p.at, ctx.content_rect()),
-        // A thread on another frame (or none) closes.
-        None => app.ui.comments.close(),
     }
 }

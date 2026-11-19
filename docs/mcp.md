@@ -399,7 +399,7 @@ a later step can use `{"$step": 0, "field": "ids/0"}` to target the first match.
 | Tool | What it does |
 |---|---|
 | `list_commands {filter?}` | Every command: id, label, menu, shortcut, undoable, params doc. |
-| `run_command {command, params}` | Run any command (e.g. `align.left`, `layout.add`, `component.create`, `instance.place` (drop an instance at a page point into the frame or auto layout slot under it), `component.exposeInstance` / `instance.exposed` (nested instance properties on instances), `component.makeSlot` / `instance.slotInsert` / `instance.resetSlot` (slots, below), `style.create`, `variable.bind`, `variable.update` (rename, describe, scope), `variable.set` with `{alias}` or a colour calculation (`{alpha}`, `{mix}`), `variable.renameMode` / `variable.removeMode`, `variable.deleteCollection`, `proto.interaction.add`). |
+| `run_command {command, params}` | Run any command (e.g. `align.left`, `layout.add`, `component.create`, `instance.place` (drop an instance at a page point into the frame or auto layout slot under it), `component.exposeInstance` / `instance.exposed` (nested instance properties on instances), `component.makeSlot` / `instance.slotInsert` / `instance.resetSlot` (slots, below), `style.create`, `variable.bind`, `variable.update` (rename, describe, scope), `variable.set` with `{alias}` or a colour calculation (`{alpha}`, `{mix}`), `variable.renameMode` / `variable.removeMode`, `variable.deleteCollection`). |
 | `batch {commands: [{command, params}], label?}` | Several commands as one undo step (`command.batch`), which keeps one copy of the document however many steps there are (an `edit.undo` step undoes the batch's edits so far together); all-or-nothing for open documents and their document state. Failed inner commands are removed from the journal; preferences, clipboard, tool state and UI requests are not rolled back. A step can use what an earlier step returned: name it with `"as": "card"` and `{"$ref": "card"}` anywhere in a later step's params becomes the `id` in its result (`{"$step": n}` does the same by zero-based position); `"field"` takes another key or a slash path such as `ids/0` (see Step references below). |
 | `create_node {type, x, y, width, height, parent, index, name, text, path, props}` | Create a frame, rectangle, ellipse, polygon, star, line, arrow, text, vector, section, component or slice; returns `{id, node}`. |
 | `set_properties {ids, props}` | `node.set` on layers (geometry, fills, strokes, effects, corner radius, auto layout, sizing, constraints, masks (`isMask`, `maskType: alpha\|vector\|luminance`), a section's `sectionContentsHidden`, text…); returns the updated layers. |
@@ -447,7 +447,7 @@ returns the starter templates, each `{id, name, description, kind, size}` (`kind
 {template, name?}}` builds one as a new, unsaved document, makes it the active one and returns
 `{index, template}`; open documents are left alone. The templates are built in code from the same
 commands an agent uses (frames with auto layout, components and instances, colour and text styles,
-variables with Light and Dark modes, prototype links), so everything in them is editable; their
+variables with Light and Dark modes), so everything in them is editable; their
 content is synthetic. Building one takes from about 10 ms to about 190 ms. Without `template` the
 command returns `{templates}` (in the app it also shows the home screen's Templates tab).
 `help.gettingStarted {show?}` shows (or with `show: false` closes) the home screen's Getting started
@@ -499,7 +499,7 @@ page is light; `inspect_document` says `kind: "board"`). Board objects are ordin
 `board` entry `get_node` shows (`{type: sticky|shape|connector|label|stamp|ink|mindNode, …}`; a connector may say
 `branch: true`), so the usual
 commands move, resize, recolour, copy, delete and undo them. On a design file the board commands
-refuse; on a board `proto.*` and `view.prototype` refuse. Each of these is
+refuse. Each of these is
 one undo step and returns the ids it made:
 
 - `board.sticky {x, y, text?, color?, author?, parent?}` → `{id, text}`: a sticky note (a square
@@ -631,9 +631,7 @@ design file they refuse.
 in a section, with some room around them), `section.toggleContents {ids?, hidden?}` (a section
 hiding its contents shows only its name and outline; its layers aren't drawn or hit, and the layers
 panel dims them), `object.resizeToFit`.
-Frames in sections are top-level frames (flows can start there; `proto.flow.add`); a "Navigate to"
-whose destination is a section shows the frame of it shown last in the presentation, else its
-first.
+Frames in sections are top-level frames.
 
 `transform.nudge {dx, dy}` (arrow keys) moves auto layout children one place instead of nudging:
 along the flow, to the previous/next row of a wrapping layout, to the neighbouring grid cell, and,
@@ -644,7 +642,7 @@ frame around flows that way (a list of rows: Down moves an item into the row bel
 
 The default shortcuts live in one table (`figcraft_engine::keymap`), grouped like the public shortcut
 reference (Essential, Tools, View, Zoom, Text, Shape, Selection, Edit, Transform, Arrange,
-Components, Prototype) with the macOS keys and, where they differ, the Windows/Linux keys (for
+Components) with the macOS keys and, where they differ, the Windows/Linux keys (for
 example Use as mask is ⌃⌘M on macOS and Ctrl+Alt+M elsewhere; Bring to front ⌥⌘] and
 Ctrl+Shift+]). `list_commands` reports each command's first key for the platform the server runs
 on; `key` resolves keys the way the canvas does. Commands behind keys:
@@ -654,8 +652,7 @@ on; `key` resolves keys the way the canvas does. Commands behind keys:
   digits in quick succession does on the canvas.
 - `view.zoomAt {x, y, out?, width?, height?}`: the zoom tool (hold Z on the canvas; Alt zooms out).
   A point zooms one step in (or out) keeping that page point in place; an area fills the view.
-- `view.designPrototype` (`Shift+E`) and `view.leftSidebar`
-  (`Shift+Cmd+\`) switch the right panel's tab or hide the left sidebar in the app (no-ops headless).
+- `view.leftSidebar` (`Shift+Cmd+\`) hides the left sidebar in the app (a no-op headless).
 - `doc.nextTab` / `doc.previousTab` (`Ctrl+Tab` / `Ctrl+Shift+Tab`): the next or previous open file.
 - Board tools (boards only): `tool.sticky` (`Q`), `tool.shape` (`B`), `tool.connector` (`X`),
   `tool.marker` (`M`), `tool.highlighter` (`U`), `tool.eraser` (`E`), `tool.stamp` (`W`), and
@@ -707,7 +704,7 @@ on; `key` resolves keys the way the canvas does. Commands behind keys:
 - Pages: `page.add {name?}` (a name starting with `-` adds a divider: an empty page shown as a line
   in the pages list, never opened and holding no layers), `page.list` (each page's `divider`),
   `page.rename`, `page.move {id, index}`, `page.duplicate` ("Copy of …", after its source, with its colour,
-  flows (starting at the copied frames), prototype settings and guides),
+  the flows (starting at the copied frames) and prototype settings a file carries, and guides),
   `page.delete` (the last page that isn't a divider stays), `page.setOpening {id?}` (the page the
   file opens on for everyone who opens or joins it, the current page when none is named, a divider
   refused: a document change, so it syncs in a live session and undoes, #1817; the choice is saved
@@ -728,7 +725,7 @@ on; `key` resolves keys the way the canvas does. Commands behind keys:
   move its far corner (10 screen pixels a press), Enter selects (Shift+Enter adds, Cmd/Ctrl+Enter
   nested layers), Escape or a click drops it.
 - `pref.reduceMotion {on?}`: reduced motion (the interface's own animations off; the system's
-  accessibility setting turns it on too). Prototype transitions still play.
+  accessibility setting turns it on too).
 - `pref.uiScale {scale?}`: how large the whole interface is drawn, relative to the system's display
   scale: 1 (the default) is the system's own size on every screen, 1.25 means 125 %, not 125; from
   0.75 to 3 (outside the range it stops at the nearest end; `"auto"` is 1). Omit `scale` to read it.
@@ -846,96 +843,10 @@ right, left) and `oneSided`.
 
 ### Prototypes
 
-Interactions are `proto.interaction.add` / `set` / `remove` / `clear` (a navigate action can keep
-the scroll position with `preserveScroll: true`; `{type: "scrollTo", dest, offset?: [x, y]}` stops
-the layer that far from the top-left of the innermost frame scrolling it, e.g. below a fixed
-header; `delayMs` makes a mouse enter, leave, down or up trigger wait before it acts;
-`{type: "openOverlay", dest, position: "manual", offset?: [x, y]}` puts the overlay that far from
-the top-left of the layer that opens it, and right below that layer without an offset;
-`anchor: "triggerInside" | "triggerOutside"` measures any other position on the layer that opens
-the overlay instead of the screen, so `{position: "bottomLeft", anchor: "triggerOutside"}` opens a
-dropdown right under its button, left edges lined up). A key trigger takes a key or a combination (`{type: "keyPress", key: "Shift+K"}`; Ctrl,
-Alt, Shift and Cmd, all held and no others) or a controller button (`key: "Gamepad A"`; `Gamepad`
-followed by `A`, `B`, `X`, `Y`, `LB`, `RB`, `LT`, `RT`, `View`, `Menu`, `LS`, `RS`, `Up`, `Down`,
-`Left`, `Right` or `Home`: the standard layout, face buttons by position), which the player reads
-from controllers on Windows and in the browser and which the control channel presses with
-`ui.input {events: [{gamepad: "A"}]}`. Widgets react to clicks in the player, on its own copy of
-the file (see [plugins.md](plugins.md)). In the player, an "on drag" trigger with a move, push
-or slide animation starts only for a drag that way, and the animation follows the pointer until it
-lets go; spring easings play until they settle (their duration follows from the spring, not
-`durationMs`); an overlay's after-delay timer starts when it opens; instances of a component play
-the interactions on the variant they show unless they have their own for that trigger; fixed
-layers draw above the content scrolling under them. Variable actions: `{type: "setVariable",
-variable, value}` sets a value, or with `expr` an expression computed when it runs;
-`{type: "setVariableMode", collection, mode}` switches a collection's mode for the prototype (ids or
-names; modes chosen on layers inside the screen still win); `{type: "conditional", blocks:
-[{condition?, actions}]}` runs the first block whose condition holds (a block without one is the
-"else"). Expressions are `{value: {type: number|string|boolean|color|alias, value}}` (`alias` reads
-a variable) or `{op: {op, args}}` with `add` (text joins when a string is involved), `subtract`,
-`multiply`, `divide`, `equals`, `notEqual`, `less`, `lessOrEqual`, `greater`, `greaterOrEqual`,
-`and`, `or`, `not` and `negate`; `{inMode: {variable, mode}}` reads a variable's value in one mode
-of its collection whichever mode is chosen, and `{mode: {collection}}` gives the name of the mode a
-collection is in where the interaction runs (as text; it follows set variable mode actions).
-Variables, collections and modes may be given by name; they are stored by id.
-`proto.evaluate {expression | expr, id?}` computes an expression without changing anything, with
-variables in the modes where layer `id`'s interaction would run (default: the default modes) →
-`{value, type, text}`; it fails with what's wrong, like the interaction commands. Expressions can also
-be written as text: `expression: "count + 1"`
-on a set variable action, or `expression: "count >= 3 and not done"` on a conditional block, in
-place of `expr` / `condition` (variables by name, `{name}` for any name; numbers, `"text"`,
-`true` / `false`, `#RRGGBB`; `or` / `||`, `and` / `&&`, `not` / `!`, `==` (or `=`), `!=`, `<`,
-`<=`, `>`, `>=`, `+` (joins text), `-`, `*`, `/` and brackets; `accent[Dark]` for a variable's
-value in a mode, `mode(Theme) == "Dark"` for a collection's current mode, names with brackets or
-spaces at their ends in quotes). Text expressions are checked: a
-condition must give true or false and a set variable's expression a value the variable can hold,
-otherwise the command fails with what's wrong (`Something is missing at the end`, `No variable
-\`x\``, `Can't compare a number with text`). Single actions, also inside conditionals, are edited
-with `proto.action.add {id?, index, path?, action}` (→ `{path}`), `proto.action.set {index, path,
-action}`, `proto.action.remove {index, path}` and `proto.action.move {index, path, to}`, where
-`index` is the interaction and `path` the action: `[i]` the interaction's action `i`, `[i, b, j]`
-action `j` of block `b` of the conditional action `i`, and so on (for `add`, where it goes:
-`[i, b, n]` appends to a block with `n` actions; default: after the last action). A conditional's
-blocks: `proto.conditional.addBlock {index, path, else?, expression? | condition?}` adds an else if
-(before the else; by default the first boolean variable equal to its value) or with `else: true`
-the else, `proto.conditional.setCondition {index, path, block, expression | condition}` and
-`proto.conditional.removeBlock {index, path, block}` (removing the if when only an else is left
-removes the whole conditional). Every one is an undo step and applies to all `ids` given (layers
-with the same interactions). Flows `proto.flow.add` / `rename` / `remove`,
-and the device, its rotation and the background `proto.settings {device?, background?,
-rotation?, color?, width?, height?, responsive?}` (`None`, `iPhone 16`, `iPhone 16 Pro Max`,
-`Android Compact`, `iPad mini`, `MacBook Air`, `Desktop` or `Custom size`, in any case; another
-name is an error that lists the devices, and nothing changes; `rotation` `portrait` or
-`landscape`, which turns phones and tablets; `color` one of the device's colours by name, e.g.
-`Black`, `White`, `Pink`, `Teal`, `Blue` for the iPhone 16 (an error lists them), `""` for the
-default; `width` / `height` set the custom size's screen, 1–10000 points, and pick `Custom size`,
-which is a bare screen without a body). Every call answers the page's settings as they are after
-it, so `proto.settings {}` reads them: `{device, background, rotation, color (the colour shown, null
-without a body), screen ({width, height} as presented, null without a device), customSize,
-responsive}`. On a device the presented frame is sized to the device's
-screen: a frame bigger than the screen scrolls through its whole size whatever its `overflow`, content
-past the frame's own edges scrolls only as its `overflow` allows (else it's clipped), and `fixed`
-layers stay on screen (pinned to the edges their constraints name). With `responsive: true` (saved
-in the file) the presented frame is instead resized to the device's screen, or without a device to
-the presenter's window at 100%, and its constraints and auto layout respond as when it is resized
-in the editor (an axis it hugs keeps hugging its content); the file's frames don't change. `proto.present {start?}` plays the prototype full-window and `proto.preview
-{start?}` in a resizable pane over the canvas that follows edits live; `proto.closePreview` closes
-it. `proto.presentOptions {scale?, deviceFrame?, hotspotHints?, hideUi?}` sets how the
-full-window presenter sizes the prototype (`fit` scales it down to fit, `fitWidth` fills the width,
-`fill` covers the window, `actual` shows it at 100%; what overflows pans), whether it draws the
-device, whether a click where nothing reacts briefly flashes the screen's hotspots (the layers with
-interactions, on by default; also in the presenter's Options menu); the options are kept for later presentations (in the presenter Z cycles them and R
-restarts). An Open link to an `http` or `https` address first shows a notice that the link leaves
-the prototype, with Open link, Cancel and "Don't show this again" (an `openUrl` action with
-`openInNewTab: false` then opens in the web build's own tab, leaving the prototype; the desktop app
-opens the browser either way); `proto.linkNotice {show?}`
-turns the notice on (the default) or off, kept with the desktop app's preferences (the web build
-keeps it until the page reloads). The player's state is
-in `inspect_ui` (`presenter`, `preview`: screen, scroll, `scale`, `zoom`, `pan`, the screen's
-`hotspots` and whether they are flashing, the `inspected` layer) when attached, and
-`ui.set {presentScroll: [x, y]}` scrolls its screen (see [control-protocol.md](control-protocol.md)).
-The presenter's Options menu offers Responsive next to the size options (without a device) or
-Responsive / Fixed size (on one), the same `proto.settings {responsive}`; its flow picker lists each
-flow with its description.
+Prototyping left MarthaBoard (#14): there are no `proto.*` commands, no Prototype tab and no
+player. A file that carries prototype interactions, flows and a page's prototype settings still
+opens and saves them unchanged, and `get_node` / `inspect_document` show them (`interactions`,
+`flows`); nothing sets them.
 
 ### Local libraries
 
@@ -1043,7 +954,7 @@ most when it can't be reached).
 - **What an instance overrides** (`node.set` / `text.set` on its layers; `get_node` lists
   `overrides`): fills, strokes, effects, opacity, visibility, layer names, corner radius, text
   content and text properties (font, size, spacing, resizing, lists…), auto layout padding, gap and
-  alignment, layout grids, export settings and prototype interactions; nested instances swap
+  alignment, layout grids and export settings; nested instances swap
   (`component`) and take property values (`props`). Each stays when the main changes that property
   and goes with `component.resetOverride {id, group}` or `component.resetInstance`.
 - **What it doesn't**: moving, rotating, resizing or re-constraining a layer inside an instance,
@@ -1920,7 +1831,6 @@ A name a tool or command doesn't take (`run_command {args}` for `params`, a step
 | `mobile_screen` | `screen` (required), `device` (default "iPhone 16"), `brand_color` |
 | `design_system` | `name`, `primary` |
 | `landing_page` | `product` (required), `width` (default 1440), `accent` |
-| `prototype_flow` | `screens` (comma-separated), `transition` |
 | `fix_comments` | `page` (default "all"), `auto_resolve` (default "yes"), `author` (default "AI") |
 | `watch_comments` | `minutes` (default 5) |
 

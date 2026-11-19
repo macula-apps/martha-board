@@ -78,7 +78,7 @@ impl Win {
         self.frame_with(events, false);
     }
 
-    /// `take_v`: something ahead of the app (a prototype's key trigger) consumes a V press.
+    /// `take_v`: something ahead of the app consumes a V press.
     fn frame_with(&mut self, events: Vec<Event>, take_v: bool) {
         self.time += 1.0 / 60.0;
         let input =

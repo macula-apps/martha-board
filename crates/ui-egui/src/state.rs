@@ -1,10 +1,4 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
-pub enum RightTab {
-    Design,
-    Prototype,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum LeftTab {
     File,
     Assets,

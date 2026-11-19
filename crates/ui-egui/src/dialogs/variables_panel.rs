@@ -958,8 +958,19 @@ fn detach(app: &mut FigApp, ui: &mut Ui, view: &View, v: &Variable, coll: &Colle
     if widgets::icon_button_at(ui, key, at, Icon::Detach, label) {
         let modes = [(coll.id.clone(), mode.to_string())].into_iter().collect();
         if let Some(resolved) = view.vars.resolve(&v.id, &modes) {
-            set(app, v, mode, crate::panels::proto_panel::value_json(&resolved));
+            set(app, v, mode, value_json(&resolved));
         }
+    }
+}
+
+/// A resolved value as `variable.set` takes it (`null` for one that is not a plain value).
+fn value_json(v: &VariableValue) -> Value {
+    match v {
+        VariableValue::Color(c) => json!(c.to_css_hex()),
+        VariableValue::Number(n) => json!(n),
+        VariableValue::Boolean(b) => json!(b),
+        VariableValue::String(s) => json!(s),
+        VariableValue::Alias(_) | VariableValue::ColorAlpha { .. } | VariableValue::ColorMix { .. } => Value::Null,
     }
 }
 

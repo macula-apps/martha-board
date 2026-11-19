@@ -91,11 +91,9 @@ fn the_board_toolbar_picks_tools_with_their_colours_shapes_and_stamps() {
 }
 
 #[test]
-fn a_boards_design_panel_opens_when_asked_for_and_prototyping_is_not_offered() {
+fn a_boards_design_panel_opens_when_asked_for() {
     let mut u = board();
-    u.app.ui.right_tab = crate::RightTab::Prototype;
     u.frame(vec![]);
-    assert_eq!(u.app.ui.right_tab, crate::RightTab::Design, "boards have no Prototype tab");
     let canvas = u.app.canvas.rect;
     assert!(canvas.max.x > 1400.0, "no right panel: the canvas reaches the window's edge ({canvas:?})");
     // The Design panel's button at the pill's right end.

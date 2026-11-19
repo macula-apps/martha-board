@@ -37,7 +37,7 @@ pub fn create_instance_at(doc: &mut Document, component: NodeId, parent: NodeId,
     root.dev_resources.clear();
     // Measurements belong to the layer they were placed on.
     root.measurements.clear();
-    // The main's interactions play on its instances in prototypes; the instance's own start empty.
+    // The main's prototype interactions (a file can carry them) stay its own; the instance's start empty.
     root.interactions.clear();
     // So do the variable modes the main sets (see `Document::inherited_modes`).
     root.var_modes.clear();

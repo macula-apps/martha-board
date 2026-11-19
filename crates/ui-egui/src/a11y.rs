@@ -329,7 +329,7 @@ fn keys(app: &mut FigApp, ctx: &Context) {
     {
         app.ui.nav.region = r;
     }
-    // Dialogs, the Actions palette and the presenter keep egui's own keyboard handling.
+    // Dialogs and the Actions palette keep egui's own keyboard handling.
     if blocked(app) {
         app.ui.nav.pending = None;
         return;
@@ -534,7 +534,7 @@ pub fn end(app: &mut FigApp, ctx: &Context) {
     }
 }
 
-/// Dialogs, the palette, the presenter and the home screen have no regions.
+/// Dialogs, the palette and the home screen have no regions.
 fn blocked(app: &FigApp) -> bool {
     let u = &app.ui;
     u.palette.is_some()
@@ -543,7 +543,6 @@ fn blocked(app: &FigApp) -> bool {
         || u.variables.is_some()
         || u.export_preview
         || u.color_profile.is_some()
-        || u.present.is_some()
         || u.home
         || u.find.is_some()
         || !app.has_files()
