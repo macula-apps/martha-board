@@ -41,7 +41,7 @@ fn a_fill_binding_names_the_stored_variable() {
 #[test]
 fn expressions_read_and_show_the_stored_variable() {
     let (mut s, _, surface, _) = renamed_like_an_id();
-    crate::variable_data::edit(&mut s, |doc| {
+    crate::test_variables::edit(&mut s, |doc| {
         let c = doc.variables.collections.iter_mut().find(|c| c.name == "Theme").unwrap();
         c.modes.push(figcraft_doc::Mode { id: format!("{}/mode2", c.id), name: "Dark".into() });
         Ok(())

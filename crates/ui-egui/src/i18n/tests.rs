@@ -137,8 +137,6 @@ fn dynamic_labels() -> Vec<&'static str> {
     v.extend(GESTURES.iter().flat_map(|(_, label, mac, other)| [*label, *mac, *other]));
     v.extend(DATA_LABELS);
     v.push(figcraft_engine::live::TOO_LARGE_TO_JOIN);
-    // The starter templates' names, descriptions and kinds.
-    v.extend(figcraft_engine::templates::TEMPLATES.iter().flat_map(|t| [t.name, t.description, t.kind.label()]));
     v
 }
 

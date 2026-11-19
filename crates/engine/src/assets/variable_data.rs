@@ -1,80 +1,12 @@
 //! Variable data a document keeps after the variables editor and the `variable.*` commands left
 //! the app (#16): files still carry collections, modes, values and bindings, draw their bound
 //! values and save them. Normalising keeps extended collections in step with what they extend
-//! ([`sync_extensions`]); what builds documents in code (the starter templates, tests) writes the
-//! data straight into the document ([`edit`], [`add_collection`], [`add_variable`], [`bind`],
-//! [`set_mode`]).
+//! ([`sync_extensions`]); tests write the data straight into the document
+//! ([`crate::test_variables`]).
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
-use figcraft_doc::{Collection, CollectionId, Document, Mode, ModeId, NodeId, Variable, VariableId, VariableType, VariableValue, Variables};
-
-use crate::{Result, Session};
-
-/// Edit the active document with `f`, then normalise it as a command's edit is: bound layers take
-/// their variables' values, text resizes, auto layout re-flows. Not an undo step.
-pub(crate) fn edit<T>(s: &mut Session, f: impl FnOnce(&mut Document) -> Result<T>) -> Result<T> {
-    let ds = s.ds_mut()?;
-    let before = ds.doc.clone();
-    let out = f(ds.doc_mut())?;
-    crate::derived::normalize(ds.doc_mut(), &before);
-    Ok(out)
-}
-
-/// A new collection `name` with `modes` (in order; the first is the default) → its id.
-pub(crate) fn add_collection(doc: &mut Document, name: &str, modes: &[&str]) -> CollectionId {
-    let id = doc.new_collection_id();
-    let modes = modes.iter().enumerate().map(|(i, m)| Mode { id: format!("{id}/mode{}", i + 1), name: (*m).to_string() }).collect();
-    doc.variables.collections.push(Collection { id: id.clone(), name: name.to_string(), modes, extends: None });
-    id
-}
-
-/// A new variable `name` of `kind` in collection `collection` (an id) with `values` by mode id;
-/// a mode without one takes the type's default → its id.
-pub(crate) fn add_variable(
-    doc: &mut Document,
-    collection: &str,
-    name: &str,
-    kind: VariableType,
-    mut values: BTreeMap<ModeId, VariableValue>,
-) -> VariableId {
-    let modes: Vec<ModeId> = doc.variables.collection_by_id(collection).map(|c| c.modes.iter().map(|m| m.id.clone()).collect()).unwrap_or_default();
-    for m in modes {
-        values.entry(m).or_insert_with(|| VariableValue::default_for(kind));
-    }
-    let id = doc.new_variable_id();
-    doc.variables.variables.push(Variable {
-        id: id.clone(),
-        name: name.to_string(),
-        collection: collection.to_string(),
-        kind,
-        values,
-        description: String::new(),
-        scopes: None,
-        hidden_from_publishing: false,
-        extends: None,
-        overrides: BTreeSet::new(),
-        code_syntax: Default::default(),
-    });
-    id
-}
-
-/// Bind `field` of layer `id` to `variable` (an id). A colour variable bound to a solid paint takes
-/// over the paint's colour alpha (see `rebind_paint_alpha`); normalising writes the value.
-pub(crate) fn bind(doc: &mut Document, id: NodeId, field: &str, variable: &str) -> Result<()> {
-    let n = doc.get_mut(id)?;
-    if n.bound.get(field).map(String::as_str) != Some(variable) {
-        crate::cmd::styles::rebind_paint_alpha(&mut n.fills, &mut n.strokes, field, true);
-    }
-    n.bound.insert(field.to_string(), variable.to_string());
-    Ok(())
-}
-
-/// Show layer `id` (a frame or page) and what it holds in `mode` of `collection` (ids).
-pub(crate) fn set_mode(doc: &mut Document, id: NodeId, collection: &str, mode: &str) -> Result<()> {
-    doc.get_mut(id)?.var_modes.insert(collection.to_string(), mode.to_string());
-    Ok(())
-}
+use figcraft_doc::{Collection, CollectionId, Document, ModeId, Variable, Variables};
 
 /// Keep extended collections in step with the collections they extend (after updating library
 /// copies, or when a file holding them is edited): the same modes, one inheriting variable per
@@ -166,26 +98,4 @@ fn extension_depth(vars: &Variables, c: &Collection) -> Option<usize> {
         at = next;
     }
     None
-}
-
-/// The variable type a template or test names: color, number, string or boolean.
-pub(crate) fn kind_of(name: &str) -> Option<VariableType> {
-    match name {
-        "color" => Some(VariableType::Color),
-        "number" => Some(VariableType::Number),
-        "string" => Some(VariableType::String),
-        "boolean" => Some(VariableType::Boolean),
-        _ => None,
-    }
-}
-
-/// A plain value of `kind` from JSON: a colour as "#RRGGBB[AA]", a number, a string (anything
-/// else as its JSON text) or a boolean; None when it isn't one.
-pub(crate) fn value_of(kind: VariableType, v: &serde_json::Value) -> Option<VariableValue> {
-    Some(match kind {
-        VariableType::Color => VariableValue::Color(crate::params::color_of(v)?),
-        VariableType::Number => VariableValue::Number(crate::params::f64_of(v)?),
-        VariableType::String => VariableValue::String(v.as_str().map(str::to_string).unwrap_or_else(|| v.to_string())),
-        VariableType::Boolean => VariableValue::Boolean(v.as_bool()?),
-    })
 }

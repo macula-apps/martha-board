@@ -415,25 +415,10 @@ without these options the output stays sparse. `outline: true` cannot be combine
 {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_node","arguments":{"id":3,"depth":2,"fields":["name","width","height"]}}}
 ```
 
-### Starter templates
+### Getting started tips
 
-An agent can start from a template instead of an empty page. `run_command {command: "template.list"}`
-returns the starter templates, each `{id, name, description, kind, size}` (`kind`: `app`, `website`,
-`kit` or `media`): `mobile-app`, `landing-page`, `dashboard`, `design-system`, `wireframe-kit`,
-`social-posts`, `slides` and `icon-set`. `run_command {command: "file.newFromTemplate", params:
-{template, name?}}` builds one as a new, unsaved document, makes it the active one and returns
-`{index, template}`; open documents are left alone. The templates are built in code from the same
-commands an agent uses (frames with auto layout and copies of them, colour and text styles,
-variables with Light and Dark modes), so everything in them is editable; their
-content is synthetic. Building one takes from about 10 ms to about 190 ms. Without `template` the
-command returns `{templates}` (in the app it also shows the home screen's Templates tab).
 `help.gettingStarted {show?}` shows (or with `show: false` closes) the home screen's Getting started
 tips; headless, it only sets the preference.
-
-```json
-{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"run_command","arguments":{"command":"file.newFromTemplate","params":{"template":"dashboard"}}}}
-{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"export","arguments":{"format":"png","path":"dashboard.png"}}}
-```
 
 ### Boards
 

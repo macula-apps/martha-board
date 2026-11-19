@@ -339,9 +339,9 @@ Invoke a menu item exactly like clicking it (this may open a dialog). Returns `{
 ### `ui.set {theme?, home?, homeSection?, homeSearch?, homeRecentsView?, homeRecentsSort?, homeRecentsOrder?, palette?, mainMenu?, focusRegion?, colorPicker?, layerFilter?, collapseLayers?, exportPreview?, colorProfileDialog?, stylePicker?, stylePickerEdit?, stylePickerView?, iconGallery?, contextMenu?, contextSelectLayer?, commentOpen?, commentDraft?, commentFilter?, commentSort?, commentSearch?, commentReply?, commentEdit?, resetFrameStats?}`
 
 Switch panels and modes: `theme`,
-`home` (bool), `homeSection` (`recents`, `online` or `templates`: which section the home screen shows, as `ui.inspect` reports it; opening
+`home` (bool), `homeSection` (`recents` or `online`: which section the home screen shows, as `ui.inspect` reports it; opening
 `online` asks each server once what became of your online files), `homeRecentsView` (`grid|list`), `homeRecentsSort` (`modified|name|created`) and `homeRecentsOrder` (`desc|asc`): how the home screen shows its recent files (kept in the preferences; `ui.inspect` reports them under `homeRecents` with each file and whether its picture is in), `palette` (bool: the Actions palette), `mainMenu` (bool, or a top-level menu such
-as `"Arrange"` to open the main menu with it open), `homeSearch` (text, at most 256 characters: filters locally known open, recent and online files plus starter templates in Home; an empty string returns to the selected section),
+as `"Arrange"` to open the main menu with it open), `homeSearch` (text, at most 256 characters: filters locally known open, recent and online files in Home; an empty string returns to the selected section),
 `focusRegion`
 (`toolbar|layers|canvas|properties`: give that region the keyboard as F6 would, on the next frame),
 `iconGallery` (bool:

@@ -75,7 +75,7 @@ fn a_collection_of_this_file_extends_and_follows_its_edits() {
 
     // New variables and modes, renames and mode moves in the parent arrive at once.
     tv::variable(&mut s, &theme, "gap", "number", &[json!(2)]);
-    crate::variable_data::edit(&mut s, |doc| {
+    crate::test_variables::edit(&mut s, |doc| {
         let c = doc.variables.collections.iter_mut().find(|c| c.id == theme).unwrap();
         c.modes.push(figcraft_doc::Mode { id: format!("{theme}/contrast"), name: "Contrast".into() });
         c.modes.swap(0, 1);
@@ -103,7 +103,7 @@ fn a_collection_of_this_file_extends_and_follows_its_edits() {
     std::fs::remove_dir_all(&d).ok();
 
     // The parent gone, the extension becomes a plain collection keeping its values.
-    crate::variable_data::edit(&mut s, |doc| {
+    crate::test_variables::edit(&mut s, |doc| {
         doc.variables.collections.retain(|c| c.id != theme);
         doc.variables.variables.retain(|v| v.collection != theme);
         Ok(())

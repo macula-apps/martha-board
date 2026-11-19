@@ -47,7 +47,6 @@ pub use canvas::snap;
 pub use canvas::textedit;
 pub use canvas::textpreview;
 pub use canvas::tools;
-pub use content::templates;
 pub use content::textfit;
 pub use selection::rename;
 pub use selection::selection_colors;
@@ -437,6 +436,8 @@ mod shapes_behaviour_tests;
 #[cfg(test)]
 mod shortcut_parity_tests;
 #[cfg(test)]
+mod starter_templates_left_tests;
+#[cfg(test)]
 mod stored_ids_tests;
 #[cfg(test)]
 mod stroke_cap_error_tests;
@@ -450,8 +451,6 @@ mod style_vars_tests;
 mod styles_behaviour_tests;
 #[cfg(test)]
 mod svg_import_tests;
-#[cfg(test)]
-mod templates_tests;
 #[cfg(test)]
 mod test_helpers;
 #[cfg(test)]

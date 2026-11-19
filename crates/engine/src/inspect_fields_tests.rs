@@ -20,7 +20,7 @@ fn create(s: &mut Session, params: Value) -> NodeId {
 /// #28) → (main, instance).
 fn component_and_instance(s: &mut Session, name: &str, [x, y, w, h]: [f64; 4], [ix, iy]: [f64; 2]) -> (NodeId, NodeId) {
     let page = s.page().unwrap();
-    crate::variable_data::edit(s, |doc| {
+    crate::test_variables::edit(s, |doc| {
         let kind = NodeKind::Component { description: String::new(), props: Default::default(), prop_order: Vec::new() };
         let main = doc.create(page, kind, name, x, y, w, h)?;
         let instance = doc.create(page, NodeKind::Instance { component: main, props: Default::default() }, name, ix, iy, w, h)?;

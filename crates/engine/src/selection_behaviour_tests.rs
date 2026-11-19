@@ -194,7 +194,7 @@ fn double_click_enters_one_level() {
     let k = scene(&mut s);
     // An instance as a file holds one (components have no commands since #28): its layer inside.
     let main = rect(&mut s, 800.0, 0.0, None);
-    let (inst, inst_child) = crate::variable_data::edit(&mut s, |doc| {
+    let (inst, inst_child) = crate::test_variables::edit(&mut s, |doc| {
         let inst =
             doc.create(k.f, figcraft_doc::NodeKind::Instance { component: main, props: Default::default() }, "Rectangle", 300.0, 200.0, 40.0, 40.0)?;
         let child = doc.create(inst, figcraft_doc::NodeKind::Rectangle, "Rectangle", 0.0, 0.0, 40.0, 40.0)?;

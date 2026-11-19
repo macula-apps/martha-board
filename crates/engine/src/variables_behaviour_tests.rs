@@ -51,7 +51,7 @@ fn aliases_resolve_through_chains() {
     let blue = tv::variable(&mut s, "Brand", "blue", "color", &[json!("#0000FF")]);
     let accent = tv::variable(&mut s, "Theme", "accent", "color", &[json!("#000000")]);
     let link = tv::variable(&mut s, "Theme", "link", "color", &[json!("#000000")]);
-    crate::variable_data::edit(&mut s, |doc| {
+    crate::test_variables::edit(&mut s, |doc| {
         let modes: Vec<String> = doc.variables.collection("Theme").unwrap().modes.iter().map(|m| m.id.clone()).collect();
         for m in &modes {
             tv::set_value(doc, &accent, m, VariableValue::Alias(blue.clone()));
@@ -81,7 +81,7 @@ fn modes_inherit_down_the_tree() {
     tv::bind(&mut s, &[r, free], "fill", "bg");
     // Auto again: the explicit mode is gone (as a file can hold it).
     fn auto(s: &mut Session, id: NodeId) {
-        crate::variable_data::edit(s, |doc| {
+        crate::test_variables::edit(s, |doc| {
             doc.get_mut(id)?.var_modes.clear();
             Ok(())
         })

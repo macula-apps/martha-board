@@ -151,10 +151,6 @@ impl FigApp {
                 }
                 "panel.versionHistory" => versions::open(self),
                 "home" => self.ui.home = true,
-                "home.templates" => {
-                    self.ui.home = true;
-                    self.ui.home_view.section = home::Section::Templates;
-                }
                 "home.gettingStarted" => {
                     self.ui.home = true;
                     self.ui.home_view.section = home::Section::Recents;
