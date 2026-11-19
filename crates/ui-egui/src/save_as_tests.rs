@@ -1,4 +1,4 @@
-//! Native Save as accepts both file formats; .fig copies preserve native save state.
+//! Native Save as writes .figcraft only; a .fig path is refused like any other extension.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -7,7 +7,6 @@ use std::sync::{Arc, Mutex};
 use figcraft_engine::Session;
 use serde_json::json;
 
-use crate::dialogs::file_saved;
 use crate::{DialogFuture, FigApp, Services};
 
 type Picks = Arc<Mutex<Vec<(String, String, Vec<String>)>>>;
@@ -73,11 +72,11 @@ fn toast(app: &FigApp) -> &str {
 }
 
 fn expected_picker() -> Vec<(String, String, Vec<String>)> {
-    vec![("Save as".into(), "Prototype.figcraft".into(), vec!["figcraft".into(), "fig".into()])]
+    vec![("Save as".into(), "Prototype.figcraft".into(), vec!["figcraft".into()])]
 }
 
 #[test]
-fn save_as_menu_and_first_save_open_the_platform_picker_directly_with_both_extensions() {
+fn save_as_menu_and_first_save_open_the_platform_picker_directly_with_the_native_extension() {
     for action in ["direct", "menu", "first"] {
         let (mut app, picks) = app(None);
         let before = app.session.doc().unwrap().clone();
@@ -129,45 +128,6 @@ fn native_paths_and_an_extensionless_default_save_native_files_and_show_the_writ
 }
 
 #[test]
-fn returned_fig_paths_export_real_copies_without_changing_native_save_state() {
-    let temp = Temp::new();
-    for name in ["copy.fig", "upper.FIG"] {
-        let path = temp.path(name);
-        let (mut app, picks) = app(Some(path.clone()));
-        let native = temp.path("working.figcraft").to_string_lossy().into_owned();
-        app.session.ds_mut().unwrap().path = Some(native.clone());
-        let before = app.session.doc().unwrap().clone();
-        app.save_as_dialog();
-        app.poll_dialog(&egui::Context::default());
-        assert_eq!(*picks.lock().unwrap(), expected_picker());
-        assert!(path.is_file());
-        assert_eq!(app.session.doc().unwrap(), &before);
-        assert_eq!(app.session.ds().unwrap().path.as_deref(), Some(native.as_str()));
-        assert!(app.session.ds().unwrap().is_dirty());
-        assert_eq!(toast(&app), format!("Exported {name}"));
-        let mut reopened = Session::empty();
-        reopened.execute("file.open", &json!({"path": path})).unwrap();
-        assert_eq!(reopened.doc().unwrap().nodes().count(), before.nodes().count());
-    }
-}
-
-#[test]
-fn a_fig_copy_reports_actual_engine_warnings_and_keeps_the_original_content() {
-    let temp = Temp::new();
-    let (mut app, _) = app(Some(temp.path("comments.fig")));
-    app.run("comment.add", json!({"x": 10, "y": 20, "text": "Synthetic comment"})).unwrap();
-    let before = app.session.doc().unwrap().clone();
-    app.save_as_dialog();
-    app.poll_dialog(&egui::Context::default());
-    assert!(temp.path("comments.fig").is_file());
-    assert_eq!(toast(&app), "Exported comments.fig; 1 kind of content was left out");
-    assert_eq!(app.session.doc().unwrap(), &before);
-    assert_eq!(app.session.doc().unwrap().comments.len(), 1);
-    assert!(app.session.ds().unwrap().path.is_none());
-    assert!(app.session.ds().unwrap().is_dirty());
-}
-
-#[test]
 fn cancelling_the_platform_dialog_preserves_document_selection_path_and_dirty_state() {
     let (mut app, picks) = app(None);
     app.session.ds_mut().unwrap().path = Some("working.figcraft".into());
@@ -186,7 +146,7 @@ fn cancelling_the_platform_dialog_preserves_document_selection_path_and_dirty_st
 #[test]
 fn unsupported_extensions_are_rejected_without_overwriting_the_chosen_file() {
     let temp = Temp::new();
-    for name in ["wrong.svg", "wrong.png"] {
+    for name in ["wrong.svg", "wrong.png", "wrong.fig"] {
         let path = temp.path(name);
         std::fs::write(&path, b"existing document").unwrap();
         let (mut app, _) = app(Some(path.clone()));
@@ -197,7 +157,7 @@ fn unsupported_extensions_are_rejected_without_overwriting_the_chosen_file() {
         assert_eq!(app.session.doc().unwrap(), &before);
         assert!(app.session.ds().unwrap().path.is_none());
         assert!(app.session.ds().unwrap().is_dirty());
-        assert_eq!(toast(&app), "Use the .figcraft or .fig extension.");
+        assert_eq!(toast(&app), "Use the .figcraft extension.");
     }
 }
 
@@ -217,18 +177,6 @@ fn adding_the_default_extension_never_overwrites_another_existing_path_without_c
 }
 
 #[test]
-fn fig_save_results_report_the_actual_name_and_plural_warning_count_without_marking_native_state_saved() {
-    let (mut app, _) = app(None);
-    let before = app.session.doc().unwrap().clone();
-    app.session.ds_mut().unwrap().path = Some("working.figcraft".into());
-    file_saved(&mut app, &json!({"format": "fig", "path": "written.fig", "warnings": ["synthetic warning", "another synthetic warning"]}));
-    assert_eq!(toast(&app), "Exported written.fig; 2 kinds of content were left out");
-    assert_eq!(app.session.doc().unwrap(), &before);
-    assert_eq!(app.session.ds().unwrap().path.as_deref(), Some("working.figcraft"));
-    assert!(app.session.ds().unwrap().is_dirty());
-}
-
-#[test]
 fn save_with_a_native_path_keeps_using_it_without_a_dialog() {
     let temp = Temp::new();
     let (mut app, picks) = app(None);
@@ -244,57 +192,48 @@ fn save_with_a_native_path_keeps_using_it_without_a_dialog() {
 }
 
 #[test]
-fn saving_legacy_fig_paths_keeps_the_success_toast_and_original_source_bytes() {
+fn saving_a_legacy_fig_path_asks_for_a_figcraft_name_and_keeps_the_old_bytes() {
     for legacy_name in ["legacy.fig", "legacy.FIG"] {
-        for destination in ["corrected.figcraft", "copy.fig"] {
-            let temp = Temp::new();
-            let target = temp.path(destination);
-            let legacy = temp.path(legacy_name);
-            let (mut app, picks) = app(Some(target.clone()));
-            let original = temp.path("original.figcraft");
-            app.run("file.saveAs", json!({"path": original})).unwrap();
-            std::fs::rename(&original, &legacy).unwrap();
-            let legacy_path = legacy.to_string_lossy().into_owned();
-            app.session.ds_mut().unwrap().path = Some(legacy_path.clone());
-            app.run("shape.rectangle", json!({"width": 10, "height": 20})).unwrap();
-            let before = app.session.doc().unwrap().clone();
-            let legacy_bytes = std::fs::read(&legacy).unwrap();
-            app.save();
-            app.poll_dialog(&egui::Context::default());
-            assert_eq!(*picks.lock().unwrap(), expected_picker());
-            assert_eq!(std::fs::read(&legacy).unwrap(), legacy_bytes);
-            assert!(target.is_file());
-            assert!(app.ui.last_error.is_none());
-            assert_eq!(app.session.doc().unwrap(), &before);
-            if destination == "corrected.figcraft" {
-                assert_eq!(toast(&app), "Saved corrected.figcraft");
-                assert_eq!(app.session.ds().unwrap().path.as_deref(), target.to_str());
-                assert!(!app.session.ds().unwrap().is_dirty());
-            } else {
-                assert_eq!(toast(&app), "Exported copy.fig");
-                assert_eq!(app.session.ds().unwrap().path.as_deref(), Some(legacy_path.as_str()));
-                assert!(app.session.ds().unwrap().is_dirty());
-            }
-        }
+        let destination = "corrected.figcraft";
+        let temp = Temp::new();
+        let target = temp.path(destination);
+        let legacy = temp.path(legacy_name);
+        let (mut app, picks) = app(Some(target.clone()));
+        let original = temp.path("original.figcraft");
+        app.run("file.saveAs", json!({"path": original})).unwrap();
+        std::fs::rename(&original, &legacy).unwrap();
+        let legacy_path = legacy.to_string_lossy().into_owned();
+        app.session.ds_mut().unwrap().path = Some(legacy_path.clone());
+        app.run("shape.rectangle", json!({"width": 10, "height": 20})).unwrap();
+        let before = app.session.doc().unwrap().clone();
+        let legacy_bytes = std::fs::read(&legacy).unwrap();
+        app.save();
+        app.poll_dialog(&egui::Context::default());
+        assert_eq!(*picks.lock().unwrap(), expected_picker());
+        assert_eq!(std::fs::read(&legacy).unwrap(), legacy_bytes);
+        assert!(target.is_file());
+        assert!(app.ui.last_error.is_none());
+        assert_eq!(app.session.doc().unwrap(), &before);
+        assert_eq!(toast(&app), "Saved corrected.figcraft");
+        assert_eq!(app.session.ds().unwrap().path.as_deref(), target.to_str());
+        assert!(!app.session.ds().unwrap().is_dirty());
     }
 }
 
 #[test]
 fn failed_writes_surface_the_engine_error_and_keep_the_document_dirty() {
     let temp = Temp::new();
-    for extension in ["figcraft", "fig"] {
-        let path = temp.path(&format!("missing/copy.{extension}"));
-        let (mut app, _) = app(Some(path.clone()));
-        let before = app.session.doc().unwrap().clone();
-        app.save_as_dialog();
-        app.poll_dialog(&egui::Context::default());
-        assert!(!path.exists());
-        assert_eq!(app.session.doc().unwrap(), &before);
-        assert!(app.session.ds().unwrap().path.is_none());
-        assert!(app.session.ds().unwrap().is_dirty());
-        assert_eq!(app.ui.last_error.as_deref(), Some(toast(&app)));
-        assert!(!toast(&app).starts_with("Saved") && !toast(&app).starts_with("Exported"));
-    }
+    let path = temp.path("missing/copy.figcraft");
+    let (mut app, _) = app(Some(path.clone()));
+    let before = app.session.doc().unwrap().clone();
+    app.save_as_dialog();
+    app.poll_dialog(&egui::Context::default());
+    assert!(!path.exists());
+    assert_eq!(app.session.doc().unwrap(), &before);
+    assert!(app.session.ds().unwrap().path.is_none());
+    assert!(app.session.ds().unwrap().is_dirty());
+    assert_eq!(app.ui.last_error.as_deref(), Some(toast(&app)));
+    assert!(!toast(&app).starts_with("Saved") && !toast(&app).starts_with("Exported"));
 }
 
 #[test]
@@ -306,7 +245,7 @@ fn an_empty_destination_is_rejected_without_writing_or_changing_save_state() {
     assert_eq!(app.session.doc().unwrap(), &before);
     assert!(app.session.ds().unwrap().path.is_none());
     assert!(app.session.ds().unwrap().is_dirty());
-    assert_eq!(toast(&app), "Use the .figcraft or .fig extension.");
+    assert_eq!(toast(&app), "Use the .figcraft extension.");
 }
 
 #[test]

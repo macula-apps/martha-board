@@ -12,9 +12,8 @@ use figcraft_doc::{PrintSettings, VdCompat};
 
 /// FigCraft without a window
 ///
-/// Files: .figcraft (native), .penpot (Penpot 2.x), .json (FigCraft or REST API file JSON), .fig
-/// (best effort; `info` lists what wasn't imported), .sketch (Sketch 48 or newer, best effort),
-/// .svg, .png/.jpg/.webp/.gif/.bmp (open as an image layer).
+/// Files: .figcraft (native), .json (FigCraft's own JSON), .svg, .png/.jpg/.webp/.gif/.bmp (open as
+/// an image layer).
 #[derive(Parser)]
 #[command(name = "figcraft-cli", bin_name = "figcraft-cli", version, arg_required_else_help = true, after_help = "See docs/cli.md and docs/mcp.md.")]
 pub struct Cli {
@@ -78,10 +77,7 @@ pub struct InfoArgs {
 /// Export frames, a layer or the whole file
 ///
 /// <OUT> is a folder: one file per top-level frame of the page. An <OUT> with an image extension,
-/// or --node, writes one file. `fig` (or an <OUT> ending in .fig) writes the whole file as .fig,
-/// experimental: other apps may not open every file. `penpot` (or an <OUT> ending in .penpot)
-/// writes the whole file as a Penpot 2.x archive. The format comes from --format, else <OUT>'s
-/// extension, else png.
+/// or --node, writes one file. The format comes from --format, else <OUT>'s extension, else png.
 #[derive(Args)]
 pub struct ExportArgs {
     /// The document to read
@@ -90,7 +86,7 @@ pub struct ExportArgs {
     /// The folder or file to write
     #[arg(short = 'o', long = "out", value_name = "OUT")]
     pub out: String,
-    /// png, jpg, svg, webp, pdf, xml (Android Vector Drawable), fig or penpot
+    /// png, jpg, svg, webp, pdf or xml (Android Vector Drawable)
     #[arg(long, value_name = "FORMAT", value_parser = format)]
     pub format: Option<String>,
     #[command(flatten)]
@@ -137,7 +133,7 @@ pub struct ScaleArg {
     pub scale: f64,
 }
 
-/// Convert by extension (.figcraft, .json, .svg, .png, .jpg, .webp, .pdf, .fig, .penpot)
+/// Convert by extension (.figcraft, .json, .svg, .png, .jpg, .webp, .pdf)
 #[derive(Args)]
 pub struct ConvertArgs {
     /// The document to read
@@ -281,7 +277,7 @@ enum ValueError {
     Bleed,
     #[error("expected bestEffort, exact or ignore")]
     VdCompat,
-    #[error("expected png, jpg, svg, webp, pdf, xml, fig or penpot")]
+    #[error("expected png, jpg, svg, webp, pdf or xml")]
     Format,
     #[error("expected whole numbers, like 1000,10_000")]
     WholeNumber,
@@ -305,7 +301,7 @@ fn vd_compat(s: &str) -> Result<VdCompat, ValueError> {
 fn format(s: &str) -> Result<String, ValueError> {
     let f = s.to_ascii_lowercase();
     match f.as_str() {
-        "png" | "jpg" | "jpeg" | "svg" | "webp" | "pdf" | "xml" | "fig" | "penpot" => Ok(f),
+        "png" | "jpg" | "jpeg" | "svg" | "webp" | "pdf" | "xml" => Ok(f),
         _ => Err(ValueError::Format),
     }
 }

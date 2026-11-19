@@ -81,8 +81,7 @@ Each may be given more than once, as `--flag DIR` or `--flag=DIR`:
   every command that names a file: `file.open`, `file.openRecent` (recent files outside the roots
   are never listed, opened, removed or named: `index` counts the files listed), `file.import`,
   `file.placeImage`, `image.place`, `file.save`, `file.saveAs`, `file.revert`, `file.recover`,
-  `file.export`, `file.exportSvg`, `file.exportLayers` (and the folders it makes), `file.exportFramesPdf`, the images and variables JSON read next to an imported REST API
-  file, `library.add` and the library files open documents link to, `variable.import` /
+  `file.export`, `file.exportSvg`, `file.exportLayers` (and the folders it makes), `file.exportFramesPdf`, `library.add` and the library files open documents link to,
   `variable.export`, `codeConnect.import` / `codeConnect.export`, `component.playground {path}`,
   `plugin.import {path}`, a development plugin's module read again from disk,
   `plugin.directory.publish {path}` and its assets, `collab.recoverFile {path}`, and the headless
@@ -329,8 +328,7 @@ Or in a project's `.mcp.json`:
 - **Lists** are per paragraph: `listStyle` (`none`, `bulleted`, `numbered`) and `indentation` (the
   nesting level, 0–8) apply to the paragraphs chars `start`..`end` touch (all of them without a
   range); `get_node` reports one `listStyle` for the layer, or `lineTypes` and `lineIndentations`
-  per paragraph, plus `listStartOffsets` when a numbered list starts past 1 (from a `.fig` file;
-  1 shows "2."). `text.bulletList`, `text.numberList` and `text.listStyle` act on the selected
+  per paragraph, plus `listStartOffsets` when a numbered list starts past 1 (1 shows "2."). `text.bulletList`, `text.numberList` and `text.listStyle` act on the selected
   paragraphs while text is edited. Layer props: `listSpacing` (px between list items, in place of
   `paragraphSpacing`), `hangingList` (markers outside the box) and `hangingPunctuation`. While
   editing, `key` Tab / Shift+Tab nest an item or move it out, Enter on an empty item and Backspace
@@ -344,8 +342,7 @@ Or in a project's `.mcp.json`:
   A text style also carries paragraph spacing and indent, the list style, the wrap style and the
   OpenType features (`paragraph` beside `style` in `style.list`; a `value` takes `wrapStyle`):
   applying it sets them (on a range, the list and wrap style go to the paragraphs touched; the rest
-  is the layer's), `style.update` moves them too, and a `.fig` file keeps them with the style
-  (not the wrap style yet).
+  is the layer's), and `style.update` moves them too.
   Changing what a text style sets (font, size, line height, letter spacing, decoration, case, axis
   values; at the paragraph level the spacing, indent, list and features) on linked chars unlinks
   them; `style.update` moves every linked char. `style.create {type: "text", name}` takes the
@@ -409,9 +406,9 @@ a later step can use `{"$step": 0, "field": "ids/0"}` to target the first match.
 | `inspect_document {depth, allPages, fields?, outline?}` | The document as JSON (its `id`, layer tree, styles, selection, history); `fields` selects layer properties, `outline: true` gives a compact tree (below). The tools that act on a document also take `document` (see Naming the document below). |
 | `get_node {id, depth, fields?, outline?}` | One layer as JSON; takes the same `fields` and `outline` options; `pluginData` (`{key: value}`, values as strings) when the layer or page has layer data written with `set_properties {props: {pluginData}}`. |
 | `select {ids}` | Replace the selection (`[]` deselects). |
-| `export {ids, format, scale \| size, path?, bleed?, cropMarks?, bleedMarks?, cmyk?, contentsOnly?, includeBoundingBox?, svgOutlineText?, svgIdAttribute?, svgSimplifyStroke?, vdCompat?, colorProfile?, quality?}` | png, jpg, svg, webp, pdf, xml (an Android Vector Drawable: `svgIdAttribute` writes `android:name`, `vdCompat` is `bestEffort` (default: approximated with a warning), `exact` (left out with a warning) or `ignore` (no warnings: overlapping layer opacity dropped, even-odd fills kept as `fillType="evenOdd"`, diamond gradients left out), and the result lists `warnings` for what was changed or left out), or `fig`: the whole file as `.fig`, experimental (see Exporting `.fig` files below); `size` is `2x`, `512w` or `512h`; `quality` is the JPG quality, 1 to 100 (default 90). The image covers what the layers paint (shadows towards their offset, strokes, unclipped children, a mask group's mask; hidden layers take no room; a slice is its area with everything under it, or only the frame or group it sits in while `contentsOnly` is on); `contentsOnly: false` also draws every other layer showing in that area, `includeBoundingBox` exports the layers' own boxes; SVG: `svgOutlineText: false` keeps `<text>`, `svgIdAttribute` writes unique ids from layer names, `svgSimplifyStroke: false` writes every stroke as an outline; png, jpg and webp: `colorProfile` is `sameAsFile` (default: the document's profile), `srgb` or `displayP3`, the pixels converted (out-of-gamut colors clip) and the file tagged for it (PNG: `sRGB` chunk, or ICC and `cICP` for Display P3; JPG: ICC profile; WebP: ICC profile for Display P3, none for sRGB) (SVG, XML and RGB PDF output are always sRGB; PDF with `cmyk` is DeviceCMYK). The same options go in export settings (`export.add` / `export.update`). PDF: frames one page each (sized in points), anything else together on one page; print options: `bleed` (points or a length like `"3mm"`, `"0.125in"`), crop and bleed marks, CMYK colour (see Exports below), also taken by `file.export`, `file.exportLayers`, `file.exportFramesPdf` and stored per export setting by `export.add` / `export.update`; `run_command` `file.exportFramesPdf {page?, path?}` writes every top-level frame of a page. Without `path`, images come back as MCP image content, SVG as text, XML as text followed by `{format, bytes, warnings}`. Layers' own export settings: `run_command` with `export.add` / `export.update {index, size?, suffix?, format?}` / `export.remove` and `file.exportLayers {ids?, dir?, assets?}` (every layer once per setting, named `<layer><suffix>.<format>`, a slash in a layer name making a folder; `assets: true` exports the Inspect tab's assets instead: icons as SVG, images as PNG). |
+| `export {ids, format, scale \| size, path?, bleed?, cropMarks?, bleedMarks?, cmyk?, contentsOnly?, includeBoundingBox?, svgOutlineText?, svgIdAttribute?, svgSimplifyStroke?, vdCompat?, colorProfile?, quality?}` | png, jpg, svg, webp, pdf, xml (an Android Vector Drawable: `svgIdAttribute` writes `android:name`, `vdCompat` is `bestEffort` (default: approximated with a warning), `exact` (left out with a warning) or `ignore` (no warnings: overlapping layer opacity dropped, even-odd fills kept as `fillType="evenOdd"`, diamond gradients left out), and the result lists `warnings` for what was changed or left out); `size` is `2x`, `512w` or `512h`; `quality` is the JPG quality, 1 to 100 (default 90). The image covers what the layers paint (shadows towards their offset, strokes, unclipped children, a mask group's mask; hidden layers take no room; a slice is its area with everything under it, or only the frame or group it sits in while `contentsOnly` is on); `contentsOnly: false` also draws every other layer showing in that area, `includeBoundingBox` exports the layers' own boxes; SVG: `svgOutlineText: false` keeps `<text>`, `svgIdAttribute` writes unique ids from layer names, `svgSimplifyStroke: false` writes every stroke as an outline; png, jpg and webp: `colorProfile` is `sameAsFile` (default: the document's profile), `srgb` or `displayP3`, the pixels converted (out-of-gamut colors clip) and the file tagged for it (PNG: `sRGB` chunk, or ICC and `cICP` for Display P3; JPG: ICC profile; WebP: ICC profile for Display P3, none for sRGB) (SVG, XML and RGB PDF output are always sRGB; PDF with `cmyk` is DeviceCMYK). The same options go in export settings (`export.add` / `export.update`). PDF: frames one page each (sized in points), anything else together on one page; print options: `bleed` (points or a length like `"3mm"`, `"0.125in"`), crop and bleed marks, CMYK colour (see Exports below), also taken by `file.export`, `file.exportLayers`, `file.exportFramesPdf` and stored per export setting by `export.add` / `export.update`; `run_command` `file.exportFramesPdf {page?, path?}` writes every top-level frame of a page. Without `path`, images come back as MCP image content, SVG as text, XML as text followed by `{format, bytes, warnings}`. Layers' own export settings: `run_command` with `export.add` / `export.update {index, size?, suffix?, format?}` / `export.remove` and `file.exportLayers {ids?, dir?, assets?}` (every layer once per setting, named `<layer><suffix>.<format>`, a slash in a layer name making a folder; `assets: true` exports the Inspect tab's assets instead: icons as SVG, images as PNG). |
 | `screenshot {ids?, scale?, maxSize?, window?}` | PNG of the page (with background) or of layers, scaled to fit `maxSize` (default 1600). `window: true` captures the app window in front when attached, a window id (see Windows below) that window. |
-| `open_file {path, variables?, reload?}` / `save_file {path?}` | Open `.figcraft`, `.json` (FigCraft JSON or REST API file JSON with its variables, see below), `.fig` or FigJam `.jam` (best effort, see below), `.sketch` (Sketch 48 and newer, best effort), `.svg` (see Importing SVG below) or an image; save as `.figcraft`. `open_file` returns `opened` (for a file opened anew, a `summary` of `name`, `pages`, `layers` and `images`, and `warnings` or `repairs`; a file that was already open gives its `index`, with `stale: true` when the file changed on disk since that tab read or saved it; `reload: true` reads it again into the tab, refused while the tab has unsaved changes) and the document's `document` outline. |
+| `open_file {path, reload?}` / `save_file {path?}` | Open `.figcraft`, `.json` (FigCraft JSON), `.svg` (see Importing SVG below) or an image; save as `.figcraft`. `open_file` returns `opened` (for a file opened anew, a `summary` of `name`, `pages`, `layers` and `images`, and `warnings` or `repairs`; a file that was already open gives its `index`, with `stale: true` when the file changed on disk since that tab read or saved it; `reload: true` reads it again into the tab, refused while the tab has unsaved changes) and the document's `document` outline. |
 | `undo` / `redo` | Step through history. |
 | `pointer {kind, x, y, to?, steps?, tool?, shift, alt, cmd, pressure?, pressureTo?}` | Mouse gestures in page coordinates with the current tool: `click`, `double`, `drag`, `down`, `move`, `up`, `hover`. A dragged layer drops into the frame or auto layout slot under the pointer, except one inside a group, a boolean group or an instance (outside its slots), which only moves. `pressure` (0–1) is pen pressure; a drag goes from `pressure` to `pressureTo` (see Brushes and pen pressure). |
 | `key {key, shift, alt, cmd}` | A shortcut or key as if typed on the canvas (every default shortcut, tool keys, Escape, Delete, arrows, number keys for opacity, arrows that pan the view when nothing is selected; while editing text, the text shortcuts and then text editing keys). Keys are names like `A`, `0`, `Enter`, `ArrowLeft`, `=`, `/`, or egui's (`Plus`, `Questionmark`); `cmd` is Cmd on macOS and Ctrl elsewhere. |
@@ -859,8 +856,7 @@ header; `delayMs` makes a mouse enter, leave, down or up trigger wait before it 
 the top-left of the layer that opens it, and right below that layer without an offset;
 `anchor: "triggerInside" | "triggerOutside"` measures any other position on the layer that opens
 the overlay instead of the screen, so `{position: "bottomLeft", anchor: "triggerOutside"}` opens a
-dropdown right under its button, left edges lined up; Figma has no such setting, and `.fig` export
-writes it as a manual offset). A key trigger takes a key or a combination (`{type: "keyPress", key: "Shift+K"}`; Ctrl,
+dropdown right under its button, left edges lined up). A key trigger takes a key or a combination (`{type: "keyPress", key: "Shift+K"}`; Ctrl,
 Alt, Shift and Cmd, all held and no others) or a controller button (`key: "Gamepad A"`; `Gamepad`
 followed by `A`, `B`, `X`, `Y`, `LB`, `RB`, `LT`, `RT`, `View`, `Menu`, `LS`, `RS`, `Up`, `Down`,
 `Left`, `Right` or `Home`: the standard layout, face buttons by position), which the player reads
@@ -1209,72 +1205,15 @@ and `viewBox`/`preserveAspectRatio` are resolved. The result's `warnings` list w
 Linked files are never read, only data URIs; documents nested more than 512 elements deep are
 refused.
 
-### Importing `.fig` files
+### Other apps' files
 
-`open_file {path}` (a new, untitled document; the file is never saved over) and `file.import`
-(pages appended) read `.fig` files, best effort. Each file carries the schema its data is encoded
-with, so the data is decoded generically and mapped by field name onto the REST import below: the
-same layers, paints, text, auto layout, components, styles, variables and prototyping come across,
-with image fills from the file's own `images/` folder. Instances are rebuilt from their main
-component with the overrides and property values the file records. Vectors come in as editable
-vector networks (their outlines when the network is missing or damaged); sticky notes, shapes with
-text, connectors, tables and similar layers come in as the closest frames, text layers and
-vectors; set-variable, set-variable-mode and conditional actions come across; video fills are
-skipped. The result's `opened.warnings` list what was approximated or skipped.
+The files of other design apps (`.fig`, FigJam `.jam`, `.sketch`, `.penpot`, REST API file JSON and
+its local variables JSON) are neither opened nor written.
 
-### Exporting `.fig` files (experimental)
+### Exporting variables
 
-`export {format: "fig", path?}` (or `run_command` `file.export {format: "fig"}`, or any `path`
-ending in `.fig`) writes the whole document as a `.fig` file, from the same public format notes the
-import uses: the layer tree, geometry, paints with image bytes, strokes, effects, text with styled
-runs, vector networks, auto layout, constraints, components, sets, instances with their overrides
-and property values, variable collections with their modes, variables and bindings, shared styles
-with their layer links, and prototype interactions. `warnings` lists what was left out (comments,
-Developer Mode data, some bindings and settings and the like). Round trips through FigCraft's own
-importer are tested, and the example documents and small test files were opened in other software
-(`docs/file-format-parity.md` says what was checked); other apps may not open every file. Without
-`path` the file comes back as base64 `data`. Check one by opening it again:
-
-```text
-{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"export","arguments":{"format":"fig","path":"/tmp/handoff.fig"}}}
-{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"open_file","arguments":{"path":"/tmp/handoff.fig"}}}
-```
-
-### Importing REST API file JSON
-
-The JSON returned by the public REST API's file endpoint (`GET /v1/files/:key`, best with
-`geometry=paths` so vectors carry their outlines) and its nodes endpoint opens like any document:
-`open_file {path}` (a new, untitled document; the JSON is never saved over) or
-`run_command {command: "file.import", params: {path}}` (pages appended to the current document,
-with their flows, prototype settings and variables).
-The result's `warnings` list what was skipped or approximated (unsupported layer, paint and effect
-types, video triggers, controller triggers on more than one button, expression functions other than a variable mode lookup over a
-variable and one of its modes, bindings to library
-variables, instances of components outside the file, which come in as frames). Pages, the layer
-tree, geometry, paints, strokes, effects, corners, constraints, auto layout, layout grids, exports,
-text with styled runs, vectors, components, component sets, instances and component properties are
-mapped, and so is prototyping: `interactions` (on click, hover, press, drag, after delay, mouse
-enter/leave/down/up and key triggers, controller triggers as controller buttons; navigate, overlays, back, scroll to, change to, open link,
-set variable (values, variable references and expressions), set variable mode and conditional
-(if / else if / else over expressions) actions; dissolve, smart animate, move, push and slide transitions with their easing,
-custom bezier and spring curves included), flow starting points, scroll overflow and fixed/sticky
-layers, and the prototype device. Image fills keep their `imageRef` and show a grey
-placeholder unless the image files sit in an `images` folder next to the JSON, named by `imageRef`
-(`images/<imageRef>.png`); nothing is fetched from the network.
-
-Variables come from the local variables response (`GET /v1/files/:key/variables/local`):
-collections with their modes (the default mode first), values per mode, aliases and scopes. Pass it
-as `variables` (a path, or the JSON object or text) to `open_file`, `file.open` or `file.import`,
-put it next to the file as `<name>.variables.json` or `variables.json`, or embed its `meta` in the
-file JSON. Layers' `boundVariables` (sizes, gaps and padding, corner radii, opacity, stroke weight and
-per-side stroke weights, visibility, text, font properties, single solid fills and strokes) and `explicitVariableModes` then
-link to them, so switching a mode with `variable.setMode` restyles the layers (`mode: null` sets a
-frame back to Auto, inheriting its parent's mode).
-
-The same JSON carries variables between FigCraft files: `variable.export {collections?, format?,
-path?}` writes this file's collections (default: all but library copies) as a local variables
-response (`format: "json"`, the default; colour calculations as the colour they show in each mode,
-other collections in their default modes) or as CSS custom properties (`format: "css"`: the default
+`variable.export {collections?, format?, path?}` writes this file's collections (default: all but
+library copies) as CSS custom properties (`format: "css"`, the default: the default
 mode on `:root`, each other mode on `[data-<collection>="<mode>"]`, aliases as `var(--name)`, colour
 calculations as the colour they show in that mode (other collections in their default modes), numbers
 in px unless the layers bound to them, their scopes or the variables aliasing them make them an
@@ -1283,16 +1222,9 @@ Dart constants for Flutter (`format: "dart"`: an `abstract final class` per coll
 default mode's named after the collection and the others after the collection and the mode, with a
 `static const` `Color`, `double`, `String` or `bool` per variable; names become camelCase Dart
 identifiers kept apart, aliases are resolved to their value in that mode), and
-returns `{text}` (or writes `path` and returns `{path}`). `variable.import {variables}` (an object,
-JSON text or a path to a regular file of at most 256 MiB;
-`variableCollections` and `variables` under `meta` or at the top level) reads
-one back: a collection joins this file's collection of the same name
-(values matched by mode name, new modes and variables added, a same-named variable of another type
-skipped with a warning; library copies and extended collections are never targets), others are
-added; aliases are checked for loops; it returns `{collections, variables, updated, warnings}`,
-with a warning when the JSON holds no variables (`no variables found: expected meta.variables …`)
-or fewer than its collections list in `variableIds`. The
-Variables editor's Import… and Export… buttons do the same through file dialogs.
+returns `{text}` (or writes `path` and returns `{path}`); `format: "tailwind"` is described under
+Pages as React + Tailwind. The Variables editor's Export… button does the same through a file
+dialog.
 
 Strokes take colour styles and variables like fills: `style.apply {style, target: "stroke"}` links
 a colour style to the strokes (`styles.stroke`; edits of the style follow, `style.detach {which:

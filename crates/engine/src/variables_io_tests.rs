@@ -1,6 +1,6 @@
-//! Extended variable collections (overrides, library updates, reset), variables import and
-//! export (JSON round trip, merging by name, CSS, Dart, junk), gradient stops bound to variables and
-//! variant properties driven by string variables.
+//! Extended variable collections (overrides, library updates, reset), variables export (CSS,
+//! Tailwind, Dart, junk), gradient stops bound to variables and variant properties driven by string
+//! variables.
 
 use figcraft_color::{Color, ColorStop, Gradient, GradientKind, Paint, PaintKind};
 use figcraft_doc::*;
@@ -143,96 +143,8 @@ fn theme(s: &mut Session) {
     ex(s, "variable.update", json!({"variable": "radius", "scopes": ["CORNER_RADIUS"], "description": "Corners"}));
 }
 
-/// (collection, variable, [(mode, value)], scopes), all by name.
-type Row = (String, String, Vec<(String, String)>, Option<Vec<String>>);
-
-/// Collections and variables by name with their values by mode name (aliases by target name).
-fn by_name(s: &Session) -> Vec<Row> {
-    let vars = &s.doc().unwrap().variables;
-    let mut out: Vec<_> = vars
-        .variables
-        .iter()
-        .map(|v| {
-            let c = vars.collection(&v.collection).unwrap();
-            let values = c
-                .modes
-                .iter()
-                .map(|m| {
-                    let val = match v.values.get(&m.id) {
-                        Some(VariableValue::Alias(a)) => format!("→ {}", vars.get(a).unwrap().name),
-                        Some(x) => format!("{x:?}"),
-                        None => "-".into(),
-                    };
-                    (m.name.clone(), val)
-                })
-                .collect();
-            (c.name.clone(), v.name.clone(), values, v.scopes.clone())
-        })
-        .collect();
-    out.sort();
-    out
-}
-
 #[test]
-fn variables_export_and_import_round_trip() {
-    let mut s = Session::new();
-    theme(&mut s);
-    let text = ex(&mut s, "variable.export", json!({}))["text"].as_str().unwrap().to_string();
-    let parsed: Value = serde_json::from_str(&text).unwrap();
-    assert!(figcraft_format::rest::is_variables_json(&parsed));
-
-    // Into another file: the same collections, variables, values, aliases and scopes.
-    let mut t = Session::new();
-    let r = ex(&mut t, "variable.import", json!({"variables": text}));
-    assert_eq!((r["collections"].as_u64(), r["variables"].as_u64()), (Some(1), Some(5)), "{r}");
-    assert_eq!(by_name(&t), by_name(&s));
-    assert_eq!(t.doc().unwrap().variables.get("radius").unwrap().description, "Corners");
-
-    // Back into the same file: nothing new, nothing changed; edited values update in place.
-    let before = s.doc().unwrap().variables.clone();
-    let r = ex(&mut s, "variable.import", json!({"variables": parsed}));
-    assert_eq!((r["collections"].as_u64(), r["variables"].as_u64(), r["updated"].as_u64()), (Some(0), Some(0), Some(5)), "{r}");
-    assert_eq!(s.doc().unwrap().variables, before);
-    let mut edited = parsed.clone();
-    let rid = before.get("radius").unwrap().id.clone();
-    let light = before.collections[0].modes[0].id.clone();
-    edited["meta"]["variables"][&rid]["valuesByMode"][&light] = json!(12);
-    edited["meta"]["variableCollections"][&before.collections[0].id]["modes"].as_array_mut().unwrap().push(json!({"modeId": "x", "name": "Dim"}));
-    edited["meta"]["variables"][&rid]["valuesByMode"]["x"] = json!(1);
-    ex(&mut s, "variable.import", json!({"variables": edited}));
-    let radius = s.doc().unwrap().variables.get("radius").unwrap().clone();
-    assert_eq!(radius.id, rid, "the same variable (bindings keep working)");
-    assert_eq!(radius.values.get(&light), Some(&VariableValue::Number(12.0)));
-    let coll = s.doc().unwrap().variables.collections[0].clone();
-    assert_eq!(coll.modes.len(), 3, "the new mode is added");
-    assert_eq!(radius.values.get(&coll.modes[2].id), Some(&VariableValue::Number(1.0)));
-    assert_eq!(s.doc().unwrap().variables.get("on").unwrap().values.len(), 3, "the others get a value in it too");
-    ex(&mut s, "edit.undo", json!({}));
-    assert_eq!(s.doc().unwrap().variables, before, "one undo step");
-
-    // CSS: the default mode on :root, the others by attribute; aliases refer to their target.
-    let css = ex(&mut s, "variable.export", json!({"format": "css", "collections": ["Theme"]}))["text"].as_str().unwrap().to_string();
-    for want in [
-        ":root {\n",
-        "  --radius: 4px;\n",
-        "[data-theme=\"Dark\"] {\n",
-        "  --radius: 6.5px;\n",
-        "  --accent: var(--color-primary);\n",
-        "  --label: \"Say  hi \";\n",
-    ] {
-        assert!(css.contains(want), "{want:?} in\n{css}");
-    }
-    // Written to a file and read back from it.
-    let path = std::env::temp_dir().join(format!("figcraft-vars-io-{}.json", std::process::id())).to_string_lossy().into_owned();
-    ex(&mut s, "variable.export", json!({"path": path}));
-    let mut u = Session::new();
-    ex(&mut u, "variable.import", json!({"variables": path}));
-    assert_eq!(by_name(&u), by_name(&s));
-    let _ = std::fs::remove_file(&path);
-}
-
-#[test]
-fn stored_variable_ids_keep_remapped_import_aliases() {
+fn an_alias_given_by_id_takes_that_variable_before_a_name() {
     let mut s = Session::new();
     ex(&mut s, "variable.createCollection", json!({"name": "Theme"}));
     let shadow = ex(&mut s, "variable.create", json!({"collection": "Theme", "name": "shadow", "type": "number", "value": 100}))["id"]
@@ -244,94 +156,32 @@ fn stored_variable_ids_keep_remapped_import_aliases() {
         .unwrap()
         .to_string();
     ex(&mut s, "variable.update", json!({"variable": shadow, "name": target}));
-    let imported = json!({"meta": {
-        "variableCollections": {"c": {"id": "c", "name": "Theme", "modes": [{"modeId": "m", "name": "Mode 1"}]}},
-        "variables": {
-            "t": {"id": "t", "name": "target", "variableCollectionId": "c", "resolvedType": "FLOAT", "valuesByMode": {"m": 5}},
-            "a": {"id": "a", "name": "alias", "variableCollectionId": "c", "resolvedType": "FLOAT",
-                  "valuesByMode": {"m": {"type": "VARIABLE_ALIAS", "id": "t"}}}
-        }
-    }});
-    let result = ex(&mut s, "variable.import", json!({"variables": imported}));
-    assert_eq!(result["warnings"], json!([]));
-    let vars = &s.doc().unwrap().variables;
-    let alias = vars.get("alias").unwrap();
-    assert_eq!(alias.values.values().next(), Some(&VariableValue::Alias(target.clone())));
-    assert_eq!(vars.resolve(&alias.id, &Default::default()), Some(VariableValue::Number(5.0)));
+    ex(&mut s, "variable.create", json!({"collection": "Theme", "name": "alias", "type": "number", "value": 0}));
     // The command's alias argument accepts names, but an exact id comes first (#1613): the
     // variable renamed to target's id doesn't take its place.
     ex(&mut s, "variable.set", json!({"variable": "alias", "value": {"alias": target}}));
     let vars = &s.doc().unwrap().variables;
+    assert_eq!(vars.get("alias").unwrap().values.values().next(), Some(&VariableValue::Alias(target.clone())));
     assert_eq!(vars.resolve(&vars.get("alias").unwrap().id, &Default::default()), Some(VariableValue::Number(5.0)));
 }
 
 #[test]
-fn variables_import_checks_what_it_reads() {
+fn variables_export_refuses_bad_arguments() {
     let mut s = Session::new();
     ex(&mut s, "variable.createCollection", json!({"name": "Theme"}));
     ex(&mut s, "variable.create", json!({"collection": "Theme", "name": "size", "type": "color", "value": "#000000"}));
     let before = s.doc().unwrap().variables.clone();
-    for p in
-        [json!({}), json!({"variables": 3}), json!({"variables": "{"}), json!({"variables": {"nope": 1}}), json!({"variables": "/no/such/file.json"})]
-    {
-        assert!(s.execute("variable.import", &p).is_err(), "{p}");
-    }
-    for p in [json!({"collections": "x"}), json!({"collections": ["nope"]}), json!({"format": "xml"}), json!({"collections": [3]})] {
+    // `json` was Figma's local variables JSON; it left with the Figma formats (martha-board#9).
+    for p in [
+        json!({"collections": "x"}),
+        json!({"collections": ["nope"]}),
+        json!({"format": "xml"}),
+        json!({"format": "json"}),
+        json!({"collections": [3]}),
+    ] {
         assert!(s.execute("variable.export", &p).is_err(), "{p}");
     }
     assert_eq!(s.doc().unwrap().variables, before);
-    // Junk entries are skipped with warnings; a type clash and an alias loop don't get in.
-    let mode = json!([{"modeId": "m", "name": "Mode 1"}]);
-    let alias = |id: &str| json!({"type": "VARIABLE_ALIAS", "id": id});
-    let junk = json!({"meta": {
-    "variableCollections": {"c": {"id": "c", "name": "Theme", "modes": mode}, "bad": {"name": "x", "modes": "no"}},
-    "variables": {
-        "size": {"id": "size", "name": "size", "variableCollectionId": "c", "resolvedType": "FLOAT", "valuesByMode": {"m": 3}},
-        "a": {"id": "a", "name": "a", "variableCollectionId": "c", "resolvedType": "FLOAT", "valuesByMode": {"m": alias("b")}},
-        "b": {"id": "b", "name": "b", "variableCollectionId": "c", "resolvedType": "FLOAT", "valuesByMode": {"m": alias("a")}},
-        "w": {"id": "w", "name": "w", "variableCollectionId": "c", "resolvedType": "WEIRD", "valuesByMode": {"m": 1}},
-        "n": {"id": "n", "name": "n", "variableCollectionId": "c", "resolvedType": "FLOAT", "valuesByMode": {"m": "NaN"}}
-    }}});
-    let r = ex(&mut s, "variable.import", json!({"variables": junk}));
-    let warnings = r["warnings"].to_string();
-    assert!(warnings.contains("`size` is a color variable"), "{r}");
-    assert!(warnings.contains("refer back to itself"), "{r}");
-    let vars = &s.doc().unwrap().variables;
-    assert!(matches!(vars.get("size").unwrap().values.values().next(), Some(VariableValue::Color(_))), "the clash left it alone");
-    assert_eq!(vars.collections.len(), 1);
-    let (a, b) = (vars.get("a").unwrap(), vars.get("b").unwrap());
-    assert!(!a.values.values().chain(b.values.values()).all(|v| matches!(v, VariableValue::Alias(_))), "no loop");
-    healthy(&s);
-}
-
-#[test]
-fn variables_import_caps_the_file_it_reads() {
-    let dir = std::env::temp_dir().join(format!("figcraft-vars-io-cap-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let mut s = Session::new();
-    theme(&mut s);
-    let small = dir.join("theme.json").to_string_lossy().into_owned();
-    ex(&mut s, "variable.export", json!({"path": small}));
-    let mut t = Session::new();
-    ex(&mut t, "variable.createCollection", json!({"name": "Other"}));
-    // One byte over the limit (sparse, so nothing is written), a folder, and a device: refused,
-    // nothing changes.
-    let big = dir.join("big.json");
-    std::fs::File::create(&big).unwrap().set_len(256 * 1024 * 1024 + 1).unwrap();
-    let mut refused = vec![big.to_string_lossy().into_owned(), dir.to_string_lossy().into_owned()];
-    if cfg!(unix) {
-        refused.push("/dev/null".to_string());
-    }
-    for bad in &refused {
-        let before = (format!("{:?}", t.docs), t.active);
-        let e = t.execute("variable.import", &json!({"variables": bad})).unwrap_err().to_string();
-        assert!(["more than the 256 MB allowed here", "is a folder, not a file", "isn't a regular file"].iter().any(|w| e.contains(w)), "{bad}: {e}");
-        assert_eq!((format!("{:?}", t.docs), t.active), before, "{bad}");
-    }
-    // A file under the limit still imports.
-    ex(&mut t, "variable.import", json!({"variables": small}));
-    assert_eq!(t.doc().unwrap().variables.collections.len(), 2);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A rectangle filled with a three-stop linear gradient, and colour variables `brand` and `ink`.

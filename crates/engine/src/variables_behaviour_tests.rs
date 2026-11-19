@@ -1,9 +1,9 @@
 //! Variables behaviour suite, written from the public documentation of variables in design
 //! tools: types and their default values, collections and modes (new and duplicated modes, the
 //! default mode), aliases (same type, chains, no cycles), scopes (pickers only), mode inheritance
-//! down the tree, bindings by field and type, deleting bound variables, code syntax and the
-//! variables JSON. Each case gives the rule's source in one line; "docs silent" marks behaviour the
-//! documentation doesn't describe (pinned as it is).
+//! down the tree, bindings by field and type, deleting bound variables and code syntax. Each case
+//! gives the rule's source in one line; "docs silent" marks behaviour the documentation doesn't
+//! describe (pinned as it is).
 
 use serde_json::{Value, json};
 
@@ -441,13 +441,9 @@ fn code_syntax_per_platform() {
     run(&mut s, "variable.bind", json!({"ids": [f], "field": "gap", "variable": "space/xs"}));
     let css = crate::codegen::code_for(s.doc().unwrap(), f, crate::codegen::CodeLang::Css);
     assert!(css.contains("var(--space-tight, 4px)"), "{css}");
-    // The variables JSON carries it both ways.
-    let out = run(&mut s, "variable.export", json!({"format": "json"}));
-    let text = out["text"].as_str().map(str::to_string).unwrap_or_else(|| out.to_string());
-    assert!(text.contains("Spacing.tight"), "{text}");
-    let mut s2 = Session::new();
-    run(&mut s2, "variable.import", json!({"variables": text}));
-    let back = s2.doc().unwrap().variables.get("space/xs").unwrap().code_syntax.clone();
+    // The native file carries it.
+    let bytes = figcraft_format::save_bytes(s.doc().unwrap(), None).unwrap();
+    let back = figcraft_format::load_bytes_with_versions(&bytes).unwrap().doc.variables.get("space/xs").unwrap().code_syntax.clone();
     assert_eq!(back, var.code_syntax.into_iter().filter(|(k, _)| k != "ANDROID").collect());
 }
 

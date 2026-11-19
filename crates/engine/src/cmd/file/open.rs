@@ -1,5 +1,5 @@
 use super::import_ids::Renames;
-use super::load::{ext, file_stem, import_summary, load_path, load_with, read, rest_images, sibling_variables, variables_param};
+use super::load::{ext, file_stem, import_summary, load_path, load_with, read};
 use super::*;
 
 /// How many files File ▸ Open recent keeps.
@@ -57,11 +57,10 @@ pub(super) fn open_recent(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 pub(crate) fn open(s: &mut Session, p: &Value) -> Result<Value> {
-    let variables = variables_param("file.open", p)?;
     if string(p, "path").is_none()
         && let Some(d) = string(p, "data")
     {
-        return open_data(s, &d, p, variables.as_ref());
+        return open_data(s, &d, p);
     }
     let path = req_string("file.open", p, "path")?;
     // Already open: switch to it, and say when the file changed on disk since this tab read or
@@ -87,10 +86,10 @@ pub(crate) fn open(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // Stamped before reading: a change made during the read makes the next save refuse.
     let on_disk = crate::library::stat(&path).ok();
-    let (loaded, rest) = load_path(&path, variables.as_ref())?;
+    let loaded = load_path(&path)?;
     remember(s, &path);
-    let native = !rest && matches!(ext(&path).as_str(), "figcraft" | "json");
-    let warnings = rest || matches!(ext(&path).as_str(), "svg" | "penpot");
+    let native = matches!(ext(&path).as_str(), "figcraft" | "json");
+    let warnings = ext(&path) == "svg";
     // A native file that lost something (a damaged image, say): the app says so, not only the result.
     if (native || warnings) && !loaded.issues.is_empty() {
         s.message = Some(match loaded.issues.as_slice() {
@@ -117,7 +116,7 @@ pub(super) fn revert(s: &mut Session) -> Result<()> {
     let path = s.ds()?.path.clone().ok_or_else(|| EngineError::Disabled("file.revert".into(), "the file was never saved".into()))?;
     // Stamped before reading: a change made during the read makes the next save refuse.
     let on_disk = crate::library::stat(&path).ok();
-    let (loaded, _) = load_path(&path, None)?;
+    let loaded = load_path(&path)?;
     let i = s.active;
     let uid = s.ds()?.uid;
     if let Some(slot) = s.docs.get_mut(i) {
@@ -134,12 +133,12 @@ pub(super) fn revert(s: &mut Session) -> Result<()> {
 
 /// [`open`] for a file given as base64 `data` (a file dropped without a path on disk): `name` tells
 /// the format. It opens as a new document with no path, so the first save asks where to put it.
-fn open_data(s: &mut Session, data: &str, p: &Value, variables: Option<&Value>) -> Result<Value> {
+fn open_data(s: &mut Session, data: &str, p: &Value) -> Result<Value> {
     let name = req_string("file.open", p, "name")?;
     let data = data.split_once(',').map_or(data, |(_, b)| b);
     let bytes = base64::engine::general_purpose::STANDARD.decode(data.trim()).map_err(|e| bad("file.open", e.to_string()))?;
-    let (loaded, rest) = load_with(&bytes, &name, variables, &figcraft_format::rest::no_images)?;
-    let warnings = rest || matches!(ext(&name).as_str(), "svg" | "penpot");
+    let loaded = load_with(&bytes, &name)?;
+    let warnings = ext(&name) == "svg";
     let summary = import_summary(&loaded.doc);
     s.docs.push(DocState::new(loaded.doc, None).with_versions(loaded.versions).with_branches(loaded.branches));
     s.active = s.docs.len() - 1;
@@ -150,7 +149,6 @@ fn open_data(s: &mut Session, data: &str, p: &Value, variables: Option<&Value>) 
 
 pub(super) fn import(s: &mut Session, p: &Value) -> Result<Value> {
     let path = string(p, "path");
-    let variables = variables_param("file.import", p)?;
     let (bytes, name) = if let Some(path) = &path {
         (read(path)?, path.clone())
     } else if let Some(d) = string(p, "data") {
@@ -185,14 +183,8 @@ pub(super) fn import(s: &mut Session, p: &Value) -> Result<Value> {
             }
             Ok(out)
         }
-        "figcraft" | "json" | "fig" | "jam" | "sketch" | "penpot" => {
-            let resolver = path.as_deref().map(rest_images);
-            let images: figcraft_format::rest::ImageResolver = match &resolver {
-                Some(r) => r,
-                None => &figcraft_format::rest::no_images,
-            };
-            let sibling = if variables.is_none() { path.as_deref().and_then(sibling_variables) } else { None };
-            let (other, rest) = load_with(&bytes, &name, variables.as_ref().or(sibling.as_ref()), images)?;
+        "figcraft" | "json" => {
+            let other = load_with(&bytes, &name)?;
             let summary = import_summary(&other.doc);
             let pages = append_pages(s.doc_mut()?, &other.doc)?;
             if !other.issues.is_empty() {
@@ -202,7 +194,7 @@ pub(super) fn import(s: &mut Session, p: &Value) -> Result<Value> {
                 });
             }
             let mut out = json!({"pages": pages, "summary": summary});
-            if rest || !other.issues.is_empty() {
+            if !other.issues.is_empty() {
                 out["warnings"] = json!(other.issues);
             }
             Ok(out)

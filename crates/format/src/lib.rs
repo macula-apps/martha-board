@@ -13,16 +13,10 @@
 //! ignore those entries. Plain
 //! JSON (the `document.json` alone) also opens. Reading is lenient: structural problems are
 //! repaired (see [`Document::repair`]) and reported, damaged versions and libraries are skipped.
-//!
-//! [`rest`] imports the public REST API file JSON; [`fig`] imports `.fig` files (best effort).
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
-pub mod fig;
 pub mod jpeg;
 pub mod library;
-pub mod penpot;
-pub mod rest;
-pub mod sketch;
 pub mod thumbnail;
 
 pub use density::{pixel_density, placed_size};
@@ -47,11 +41,6 @@ pub use craft_figcraft_format::{
     MAX_VERSION_INDEX, MAX_VERSION_NAME, MAX_VERSIONS, ReadBudget, VERSION, VersionEntry as NativeVersionEntry, VersionIndex as NativeVersionIndex,
     clip, document_limit, is_valid_version_id,
 };
-#[cfg(test)]
-const JSON_LEVEL: i64 = 3;
-/// The export warning for colour calculations that resolve to nothing (an operand missing, or more
-/// than 32 variables to read), shared by the Penpot and `.fig` exports.
-pub(crate) const CALCULATIONS_LEFT_OUT: &str = "colour calculations that don't resolve were left out";
 
 /// One entry of a file's version history: a named snapshot of the document.
 #[derive(Clone, Debug)]
@@ -412,12 +401,6 @@ pub(crate) fn io_err(e: impl std::fmt::Display) -> FormatError {
     FormatError::Io(e.to_string())
 }
 
-/// JSON compression for legacy Penpot test fixtures.
-#[cfg(test)]
-pub(crate) fn json_options() -> zip::write::SimpleFileOptions {
-    zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated).compression_level(Some(JSON_LEVEL))
-}
-
 /// Add one member to the native archive.
 pub(crate) fn put(
     z: &mut craft_figcraft_format::ArchiveWriter,
@@ -554,7 +537,9 @@ pub fn load_bytes(bytes: &[u8]) -> Result<(Document, Vec<String>), FormatError> 
     load_bytes_with_versions(bytes).map(|l| (l.doc, l.issues))
 }
 
-/// Read a member from a foreign ZIP archive, refusing entries larger than `limit`.
+/// Read a member of a saved archive, refusing entries larger than `limit` (the tests read what a
+/// save wrote).
+#[cfg(test)]
 pub(crate) fn read_member<R: Read + std::io::Seek>(z: &mut zip::ZipArchive<R>, name: &str, limit: u64) -> Result<Vec<u8>, FormatError> {
     let f = z.by_name(name).map_err(|e| FormatError::Corrupt(format!("{name}: {e}")))?;
     if f.size() > limit {

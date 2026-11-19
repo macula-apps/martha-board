@@ -111,18 +111,6 @@ fn node_set_and_style_bindings_apply_the_alpha_once() {
 }
 
 #[test]
-fn a_fig_round_trip_keeps_the_alpha_once() {
-    let (mut s, r) = setup("#0D6EFD80", "#0D6EFD40");
-    ex(&mut s, "variable.bind", json!({"ids": [r.0], "field": "fill", "variable": "tint"}));
-    ex(&mut s, "fill.set", json!({"ids": [r.0], "index": 0, "opacity": 0.5}));
-    let (bytes, _) = figcraft_format::fig::export(s.doc().unwrap(), None).unwrap();
-    let back = crate::cmd::file::load_fig(&bytes, "x").unwrap().unwrap().doc;
-    let n = back.nodes().find(|n| !n.bound.is_empty()).unwrap();
-    let a = n.fills[0].solid_color().unwrap().a;
-    assert!(near(a, HALF * 0.5), "{a}");
-}
-
-#[test]
 fn code_gives_a_translucent_stroke_its_alpha_once() {
     let (mut s, r) = setup("#0D6EFD80", "#0D6EFD40");
     ex(&mut s, "stroke.add", json!({"ids": [r.0], "color": "#FF000080"}));

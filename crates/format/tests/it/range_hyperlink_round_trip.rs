@@ -1,7 +1,6 @@
-//! A hyperlink cleared on part of a text layer stays cleared through FIG export and import.
+//! A hyperlink cleared on part of a text layer stays cleared through a native save and load.
 
 use figcraft_doc::{Document, NodeKind, TextData};
-use figcraft_format::fig;
 
 fn links(doc: &Document, name: &str) -> Vec<Option<String>> {
     let Some(NodeKind::Text(text)) = doc.nodes().find(|n| n.name == name).map(|n| &n.kind) else { return Vec::new() };
@@ -28,11 +27,5 @@ fn cleared_range_hyperlink_round_trip() {
     let native_bytes = figcraft_format::save_bytes(&document, None).unwrap();
     let native = figcraft_format::load_bytes(&native_bytes).unwrap().0;
     assert_eq!(links(&native, "Cleared"), expected);
-
-    let (bytes, export_warnings) = fig::export(&document, None).unwrap();
-    let (loaded, import_warnings) = fig::import(&bytes, "File").unwrap();
-    assert!(export_warnings.is_empty(), "{export_warnings:?}");
-    assert!(import_warnings.is_empty(), "{import_warnings:?}");
-    assert_eq!(links(&loaded, "Explicit"), vec![None, Some(url)]);
-    assert_eq!(links(&loaded, "Cleared"), expected);
+    assert_eq!(links(&native, "Explicit"), vec![None, Some(url)]);
 }

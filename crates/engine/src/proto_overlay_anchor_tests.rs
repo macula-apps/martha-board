@@ -43,20 +43,6 @@ fn the_anchor_is_set_read_and_undone() {
 }
 
 #[test]
-fn fig_writes_a_manual_offset_from_the_trigger() {
-    let mut s = Session::new();
-    let (b, _) = dropdown(&mut s);
-    let (bytes, _) = figcraft_format::fig::export(s.doc().unwrap(), None).unwrap();
-    let (back, _) = figcraft_format::fig::import(&bytes, "x").unwrap();
-    let hot = back.nodes().find(|n| n.name == "Button").unwrap();
-    assert!(
-        matches!(hot.interactions[0].actions[0], Action::OpenOverlay { position: OverlayPosition::Manual, offset: Some([0.0, 40.0]), .. }),
-        "{:?} (from {b:?})",
-        hot.interactions[0].actions
-    );
-}
-
-#[test]
 fn junk_anchors_are_refused_not_fatal() {
     let junk = [json!(true), json!(-1), json!("above"), json!([1, 2]), json!({"a": 1}), json!("x".repeat(10_000))];
     for j in &junk {

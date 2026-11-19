@@ -172,13 +172,6 @@ pub fn settle(doc: &mut Document) {
     }
 }
 
-/// A document just read from a file: styles with bindings hold their default-mode values and the
-/// layers using them show their own modes' (files give a styled layer the style's stored value).
-pub fn after_load(doc: &mut Document) {
-    settle(doc);
-    refresh(doc, None, None);
-}
-
 /// The layers `only` (every layer when `None`) that use styles with bindings show them resolved in
 /// their own modes (only what changed, so unchanged layers stay shared). What an edit since
 /// `before` changed on a layer is left as edited: that unlinks it from the style instead.

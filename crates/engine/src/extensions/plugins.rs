@@ -176,10 +176,6 @@ fn refusal(m: &Manifest, command: &str, params: &Value) -> Option<String> {
     if command == "codeConnect.import" && get(params, "path").is_some() {
         return Some("plugins can't read files: pass the connections as `json`".into());
     }
-    // Variables JSON may be given as a path: only objects and JSON text for plugins.
-    if command == "variable.import" && get(params, "variables").and_then(Value::as_str).is_some_and(|t| !t.trim_start().starts_with('{')) {
-        return Some("plugins can't read files: pass the variables JSON itself".into());
-    }
     // A saved version is the file's history, which plugins can't read (`version.` is denied).
     if command == "dev.compare" && get(params, "version").is_some_and(|v| !v.is_null()) {
         return Some("plugins can't read saved versions: leave out `version`".into());

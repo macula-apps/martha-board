@@ -5,8 +5,8 @@ use std::collections::BTreeMap;
 use figcraft_color::{Color, Paint, PaintKind};
 use figcraft_doc::ParagraphStyle;
 use figcraft_doc::{
-    Collection, CollectionId, Document, Effect, EffectKind, Mode, ModeId, Node, NodeId, NodeKind, Style, StyleId, StyleKind, TextData, TextStyle,
-    Variable, VariableId, VariableType, VariableValue, Variables, trim_num,
+    Collection, Document, Effect, EffectKind, Mode, Node, NodeId, NodeKind, Style, StyleId, StyleKind, TextData, TextStyle, Variable, VariableId,
+    VariableType, VariableValue, Variables, trim_num,
 };
 use serde_json::{Value, json};
 
@@ -1201,49 +1201,6 @@ fn bound_field(n: &Node, field: &str) -> Option<String> {
         // shortcut: other layer-level fields keep their binding on edits; add a reader when one is bound in practice.
         _ => return None,
     })
-}
-
-/// Imported files (`.fig`, REST) keep a solid paint's alpha in its opacity, a bound paint's too,
-/// while the bound colour brings its own alpha: take the variable's alpha back out of the opacity
-/// (styles' paints and layers') before the bindings are first resolved, so it applies once.
-pub(crate) fn unfold_imported_bound_alpha(doc: &mut Document) {
-    use super::lists::{BoundList, list_binding};
-    fn alphas(vars: &Variables, bound: &BTreeMap<String, VariableId>, modes: &BTreeMap<CollectionId, ModeId>) -> Vec<(BoundList, usize, f32)> {
-        let found = bound.iter().filter_map(|(field, var)| match (list_binding(field)?, vars.resolve(var, modes)?) {
-            ((list @ (BoundList::Fills | BoundList::Strokes), i, "color"), VariableValue::Color(c)) if c.a > 0.0 && c.a < 1.0 => Some((list, i, c.a)),
-            _ => None,
-        });
-        found.collect()
-    }
-    fn unfold(p: Option<&mut Paint>, a: f32) {
-        if let Some(p) = p
-            && matches!(p.kind, PaintKind::Solid { .. })
-        {
-            p.opacity = (p.opacity / a).min(1.0);
-        }
-    }
-    let pending = doc.take_dirty();
-    for i in 0..doc.styles.len() {
-        let found = doc.styles.get(i).map(|s| alphas(&doc.variables, &s.bound, &BTreeMap::new())).unwrap_or_default();
-        if let Some(StyleKind::Paint { paints }) = doc.styles.get_mut(i).filter(|_| !found.is_empty()).map(|s| &mut s.kind) {
-            for (_, j, a) in found {
-                unfold(paints.get_mut(j), a);
-            }
-        }
-    }
-    let ids: Vec<NodeId> = doc.nodes().filter(|n| !n.bound.is_empty()).map(|n| n.id).collect();
-    for id in ids {
-        let found = doc.node(id).map(|n| alphas(&doc.variables, &n.bound, &doc.modes_for(id))).unwrap_or_default();
-        if found.is_empty() {
-            continue;
-        }
-        let Ok(n) = doc.get_mut(id) else { continue };
-        for (list, j, a) in found {
-            unfold(if list == BoundList::Fills { n.fills.get_mut(j) } else { n.strokes.get_mut(j) }, a);
-        }
-    }
-    doc.take_dirty();
-    doc.mark_dirty(pending);
 }
 
 /// Settle imported paint colours before the document is first shown. Other bindings can affect

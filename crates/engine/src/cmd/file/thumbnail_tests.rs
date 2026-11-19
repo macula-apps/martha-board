@@ -139,18 +139,15 @@ fn custom_thumbnails_keep_the_size_limit_and_aspect_ratio() {
 }
 
 #[test]
-fn native_save_and_fig_export_embed_the_same_chosen_thumbnail() {
+fn a_native_save_embeds_the_chosen_thumbnail() {
     let (mut s, cover, _) = scene();
     choose(&mut s, cover);
     let before = s.doc().unwrap().clone();
     let expected = picture(s.doc().unwrap());
     let native = file_bytes(s.ds().unwrap()).unwrap();
-    let (fig, _) = super::export::fig_bytes(s.doc().unwrap()).unwrap();
-    for bytes in [native, fig] {
-        let png = figcraft_format::thumbnail::thumbnail_png(std::io::Cursor::new(bytes)).unwrap();
-        let actual = image::load_from_memory(&png).unwrap().to_rgba8();
-        assert_eq!(actual.dimensions(), (200, 200));
-        assert_eq!(actual, expected);
-    }
+    let png = figcraft_format::thumbnail::thumbnail_png(std::io::Cursor::new(native)).unwrap();
+    let actual = image::load_from_memory(&png).unwrap().to_rgba8();
+    assert_eq!(actual.dimensions(), (200, 200));
+    assert_eq!(actual, expected);
     assert_eq!(s.doc().unwrap(), &before);
 }

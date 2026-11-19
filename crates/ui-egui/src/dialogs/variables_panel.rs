@@ -309,12 +309,12 @@ pub fn show(app: &mut FigApp, ctx: &Context) {
     app.ui.variables = open.then_some(st);
 }
 
-/// Draw the variables header: the title at the left, and the import/export/Close controls at the
+/// Draw the variables header: the title at the left, and the export and Close controls at the
 /// right.
 fn header(app: &mut FigApp, ui: &mut Ui, open: &mut bool) {
     let t = Tokens::get(ui.ctx());
     let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 44.0), Sense::hover());
-    // Import and export, left of Close.
+    // Export, left of Close.
     let bar = Rect::from_min_max(pos2(r.max.x - 280.0, r.min.y + 10.0), pos2(r.max.x - 40.0, r.max.y - 10.0));
     let mut bar = ui.new_child(UiBuilder::new().max_rect(bar).layout(egui::Layout::right_to_left(egui::Align::Center)));
     // The window lays itself out without item spacing (set by the caller); the buttons in this bar
@@ -322,17 +322,13 @@ fn header(app: &mut FigApp, ui: &mut Ui, open: &mut bool) {
     bar.spacing_mut().item_spacing.x = 16.0;
     let export = widgets::button(&mut bar, tr("Export…"), false, true);
     crate::right::menu_popup(&export).show(|ui| {
-        for (label, format) in [(tr("Variables JSON…"), "json"), (tr("CSS custom properties…"), "css"), (tr("Dart constants for Flutter…"), "dart")]
-        {
+        for (label, format) in [(tr("CSS custom properties…"), "css"), (tr("Dart constants for Flutter…"), "dart")] {
             if menu_item(ui, label, "") {
                 export_dialog(app, format);
                 ui.close();
             }
         }
     });
-    if widgets::button(&mut bar, tr("Import…"), false, true).on_hover_text(tr("Add or update collections from a variables JSON")).clicked() {
-        import_dialog(app);
-    }
     ui.painter().text(pos2(r.min.x + 16.0, r.center().y), Align2::LEFT_CENTER, tr("Local variables"), semibold(13.0), t.text);
     if widgets::icon_button_at(
         ui,
@@ -367,20 +363,6 @@ pub(crate) fn export_dialog(app: &mut FigApp, format: &str) {
             let file = p.file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default();
             app.toast(trf("Exported {file}", &[("file", &file)]));
         }
-    });
-}
-
-/// Import a variables JSON picked in an open dialog.
-fn import_dialog(app: &mut FigApp) {
-    app.pick_open(tr("Import variables"), &["json"], |app, p| {
-        let Some(r) = app.run("variable.import", json!({"variables": p.to_string_lossy()})) else { return };
-        let (added, updated) = (r["variables"].as_u64().unwrap_or(0), r["updated"].as_u64().unwrap_or(0));
-        let skipped = r["warnings"].as_array().map_or(0, Vec::len);
-        let mut msg = trn("Imported {n} new variables, updated {updated}", added as usize, &[("updated", &updated)]);
-        if skipped > 0 {
-            msg = format!("{msg} {}", trn("({n} warnings: some entries were skipped)", skipped, &[]));
-        }
-        app.toast(msg);
     });
 }
 

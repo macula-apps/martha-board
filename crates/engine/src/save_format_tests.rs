@@ -1,10 +1,10 @@
-//! Save As can write an experimental `.fig` copy without replacing native save state.
+//! Saves write the native format: a `.fig` path is refused and leaves the save state alone.
 
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use figcraft_format::Version;
-use serde_json::{Value, json};
+use serde_json::json;
 
 use crate::{DocState, EngineError, Session};
 
@@ -133,136 +133,11 @@ fn opening_an_older_file_uses_its_filename_only_for_the_default_title() {
     assert_eq!(reopened.ds().unwrap().doc.name, "Chosen title");
 }
 
-fn read_fig(path: &std::path::Path, result: &Value) -> figcraft_doc::Document {
-    let bytes = std::fs::read(path).unwrap();
-    assert_eq!(result["format"], "fig");
-    assert_eq!(result["bytes"], bytes.len());
-    assert!(result["warnings"].is_array());
-    assert!(figcraft_format::load_bytes(&bytes).is_err(), "a .fig copy must not contain native FigCraft data");
-    figcraft_format::fig::import(&bytes, "Copy").unwrap().0
-}
-
 #[test]
-fn fig_save_as_keeps_native_path_dirty_state_and_history() {
+fn a_fig_path_is_refused_and_keeps_save_state() {
     let mut files = SaveFiles::new();
-    let native = files.path("design.figcraft");
-    let copy = files.path("copy.fig");
-    let mut s = Session::new();
-    rect(&mut s, "Saved rectangle");
-    s.execute("file.saveAs", &json!({"path": native.to_string_lossy()})).unwrap();
-    let saved = std::fs::read(&native).unwrap();
-    rect(&mut s, "New rectangle");
-    s.execute("comment.add", &json!({"x": 0, "y": 0, "text": "Copy warning"})).unwrap();
-    s.execute("file.saveVersion", &json!({"name": "Before copy"})).unwrap();
-    rect(&mut s, "Undone rectangle");
-    s.undo().unwrap();
-    let before = s.ds().unwrap().clone();
-    let recent = s.prefs.recent_files.clone();
-    assert!(before.is_dirty());
-    assert!(!before.history.redo.is_empty());
-
-    let result = s.execute("file.saveAs", &json!({"path": copy.to_string_lossy()})).unwrap();
-    let imported = read_fig(&copy, &result);
-    assert!(imported.nodes().any(|n| n.name == "New rectangle"));
-    assert!(!imported.nodes().any(|n| n.name == "Undone rectangle"));
-    assert!(result["warnings"].as_array().unwrap().iter().any(|w| w == "comments were left out"));
-    assert_save_state_unchanged(&s, &before, &recent);
-    assert_eq!(std::fs::read(&native).unwrap(), saved);
-
-    s.execute("file.save", &json!({})).unwrap();
-    assert!(!s.ds().unwrap().is_dirty());
-    assert_eq!(s.ds().unwrap().path.as_deref(), native.to_str());
-    let persisted = figcraft_format::load_bytes_with_versions(&std::fs::read(&native).unwrap()).unwrap();
-    assert!(persisted.doc.nodes().any(|n| n.name == "New rectangle"));
-    assert_eq!(persisted.versions[0].name, "Before copy");
-    assert_eq!(std::fs::read(&copy).unwrap().len(), result["bytes"].as_u64().unwrap() as usize);
-}
-
-#[test]
-fn unsaved_fig_copy_remains_unsaved() {
-    let mut files = SaveFiles::new();
-    let copy = files.path("unsaved.fig");
-    let mut s = Session::new();
-    rect(&mut s, "Unsaved rectangle");
-    let before = s.ds().unwrap().clone();
-    let recent = s.prefs.recent_files.clone();
-    let result = s.execute("file.saveAs", &json!({"path": copy.to_string_lossy()})).unwrap();
-    assert!(read_fig(&copy, &result).nodes().any(|n| n.name == "Unsaved rectangle"));
-    assert_save_state_unchanged(&s, &before, &recent);
-    assert!(matches!(s.execute("file.save", &json!({})), Err(EngineError::Disabled(..))));
-    assert_eq!(s.ui_requests.last().unwrap().kind, "dialog.saveAs");
-}
-
-#[test]
-fn empty_document_fig_copy_keeps_clean_state() {
-    let mut files = SaveFiles::new();
-    let copy = files.path("empty.fig");
-    let mut s = Session::new();
-    let before = s.ds().unwrap().clone();
-    assert!(!before.is_dirty());
-    let result = s.execute("file.saveAs", &json!({"path": copy.to_string_lossy()})).unwrap();
-    let imported = read_fig(&copy, &result);
-    assert_eq!(imported.pages.len(), 1);
-    assert_eq!(imported.node_count(), 1);
-    assert_save_state_unchanged(&s, &before, &[]);
-}
-
-#[test]
-fn fig_save_commands_accept_uppercase_extension() {
-    let mut files = SaveFiles::new();
-    for (index, command) in ["file.save", "file.saveAs"].into_iter().enumerate() {
-        let copy = files.path(&format!("copy-{index}.FIG"));
-        let mut s = Session::new();
-        rect(&mut s, command);
-        let before = s.ds().unwrap().clone();
-        let result = s.execute(command, &json!({"path": copy.to_string_lossy()})).unwrap();
-        assert!(read_fig(&copy, &result).nodes().any(|n| n.name == command));
-        assert_save_state_unchanged(&s, &before, &[]);
-    }
-}
-
-#[test]
-fn fig_copy_from_branch_exports_active_document_without_saving_main() {
-    let mut files = SaveFiles::new();
-    let native = files.path("main.figcraft");
-    let copy = files.path("branch.fig");
-    let mut s = Session::new();
-    rect(&mut s, "Main rectangle");
-    s.execute("file.save", &json!({"path": native.to_string_lossy()})).unwrap();
-    let saved = std::fs::read(&native).unwrap();
-    s.execute("branch.create", &json!({"name": "Explore"})).unwrap();
-    rect(&mut s, "Branch rectangle");
-    s.execute("file.saveVersion", &json!({"name": "Branch version"})).unwrap();
-    // Branch edits normally sync to main before commands; capture that state before exporting.
-    s.execute("branch.list", &json!({})).unwrap();
-    let branch = s.ds().unwrap().clone();
-    let main = s.docs[0].clone();
-    let recent = s.prefs.recent_files.clone();
-
-    let result = s.execute("file.saveAs", &json!({"path": copy.to_string_lossy()})).unwrap();
-    assert!(read_fig(&copy, &result).nodes().any(|n| n.name == "Branch rectangle"));
-    assert_save_state_unchanged(&s, &branch, &recent);
-    assert_eq!(s.docs[0].path, main.path);
-    assert_eq!(s.docs[0].is_dirty(), main.is_dirty());
-    assert!(Arc::ptr_eq(&s.docs[0].saved_doc, &main.saved_doc));
-    assert!(Arc::ptr_eq(&s.docs[0].doc, &main.doc));
-    assert_eq!(std::fs::read(&native).unwrap(), saved);
-
-    s.execute("file.save", &json!({})).unwrap();
-    let persisted = figcraft_format::load_bytes_with_versions(&std::fs::read(&native).unwrap()).unwrap();
-    assert!(!persisted.doc.nodes().any(|n| n.name == "Branch rectangle"));
-    assert!(persisted.branches[0].head.nodes().any(|n| n.name == "Branch rectangle"));
-    assert_eq!(persisted.branches[0].versions.last().unwrap().name, "Branch version");
-    assert!(!s.ds().unwrap().is_dirty());
-    assert!(!s.docs[0].is_dirty());
-}
-
-#[test]
-fn fig_copy_write_failure_keeps_save_state() {
-    let mut files = SaveFiles::new();
-    let blocked = files.path("blocked.fig");
-    std::fs::create_dir(&blocked).unwrap();
-    let missing = files.path("missing/copy.fig");
+    let lower = files.path("refused.fig");
+    let upper = files.path("REFUSED.FIG");
     let mut s = Session::new();
     rect(&mut s, "Kept rectangle");
     s.execute("file.saveVersion", &json!({"name": "Kept version"})).unwrap();
@@ -270,10 +145,10 @@ fn fig_copy_write_failure_keeps_save_state() {
     s.execute("version.preview", &json!({"index": 0})).unwrap();
     let before = s.ds().unwrap().clone();
     for command in ["file.save", "file.saveAs"] {
-        for path in [&blocked, &missing] {
-            assert!(s.execute(command, &json!({"path": path.to_string_lossy()})).is_err());
+        for path in [&lower, &upper] {
+            assert!(matches!(s.execute(command, &json!({"path": path.to_string_lossy()})), Err(EngineError::Disabled(..))), "{command} {path:?}");
             assert_save_state_unchanged(&s, &before, &[]);
-            assert!(!PathBuf::from(format!("{}.tmp-figcraft", path.display())).exists());
+            assert!(!path.exists(), "nothing is written under a .fig name");
         }
     }
 }
@@ -292,35 +167,6 @@ fn save_as_without_extension_stays_native() {
     assert!(!requested.exists());
     let loaded = figcraft_format::load_bytes(&std::fs::read(native).unwrap()).unwrap();
     assert!(loaded.0.nodes().any(|n| n.name == "Native rectangle"));
-}
-
-#[test]
-fn fig_copy_of_version_preview_keeps_visible_version_and_save_state() {
-    let mut files = SaveFiles::new();
-    for (index, command) in ["file.save", "file.saveAs"].into_iter().enumerate() {
-        let native = files.path(&format!("current-{index}.figcraft"));
-        let copy = files.path(&format!("version-{index}.FIG"));
-        let mut s = Session::new();
-        rect(&mut s, "A");
-        s.execute("file.saveVersion", &json!({"name": "A only"})).unwrap();
-        s.execute("file.save", &json!({"path": native.to_string_lossy()})).unwrap();
-        let saved = std::fs::read(&native).unwrap();
-        rect(&mut s, "B");
-        s.execute("version.preview", &json!({"index": 0})).unwrap();
-        let before = s.ds().unwrap().clone();
-        let recent = s.prefs.recent_files.clone();
-        assert!(before.preview.is_some());
-        assert!(before.is_dirty());
-
-        let result = s.execute(command, &json!({"path": copy.to_string_lossy()})).unwrap();
-        let imported = read_fig(&copy, &result);
-        assert!(imported.nodes().any(|n| n.name == "A"));
-        assert!(!imported.nodes().any(|n| n.name == "B"), "the copy must export the version shown");
-        assert_save_state_unchanged(&s, &before, &recent);
-        assert_eq!(std::fs::read(&native).unwrap(), saved);
-        s.execute("version.exitPreview", &json!({})).unwrap();
-        assert!(s.doc().unwrap().nodes().any(|n| n.name == "B"));
-    }
 }
 
 #[test]

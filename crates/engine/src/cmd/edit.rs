@@ -25,8 +25,8 @@ mod nudge_rotated_parent_tests;
 mod vector_clipboard_tests;
 
 pub(crate) use clipboard::apply_copied_props;
-pub use clipboard::{CLIP_CLOSE, CLIP_OPEN, copy_to_clipboard, design_clipboard_buffer, paste_into};
-use clipboard::{copy, copy_props, copy_props_of, cut, paste, paste_design_layers, paste_over, paste_props, paste_replace};
+use clipboard::{copy, copy_props, copy_props_of, cut, paste, paste_over, paste_props, paste_replace};
+pub use clipboard::{copy_to_clipboard, paste_into};
 use props::{
     batch_rename, effect_add, effect_copy, effect_paste, find_replace, paint_copy, paint_list, paint_paste, paint_set, pattern_fill, reparent, set,
     stroke_brush, width_profile,
@@ -143,13 +143,6 @@ pub fn specs() -> Vec<CommandSpec> {
             "{parent?, x?, y? (page coordinates of the pasted top-left; give both or neither, one alone is refused)}  in vector edit mode (and no parent): the copied vectors' segments and the outlines of shapes, booleans and lines join the edited vector's network (at x/y when given, else in place), their points selected, as one undo step; layers with no outline (text, images, instances, frames, groups) are skipped and named in `skipped` (present only when some were), and when none has an outline the paste is refused (Disabled), as it is past 500,000 segments in one vector. Returns {ids: [] (always empty: no layer is created), edited (the vector's id), vertices (points added), skipped?}, unlike a paste outside edit mode, which returns the new layers' `ids`; a copied main component pastes as an instance of it within its file (cut ones, and pastes into other files, keep the component)",
             true,
             paste
-        ),
-        spec!(
-            "edit.pasteDesignLayers",
-            "Paste design layers",
-            "{html (the clipboard's HTML) | data (base64 of the clipboard's design data, at most 256 MB), parent?, x?, y?}  layers copied from another design app (a .fig canvas in the clipboard's HTML), read like a .fig file (best effort, with `warnings`), pasted as edit.paste pastes; `missingImages`: the names of pasted layers whose image the clipboard didn't carry (they show the missing-image placeholder)",
-            true,
-            paste_design_layers
         ),
         spec!("edit.pasteOver", "Paste over selection", "{}", true, paste_over),
         spec!("edit.pasteReplace", "Paste to replace", "{ids?}", true, paste_replace),

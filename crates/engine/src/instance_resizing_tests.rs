@@ -4,7 +4,7 @@
 //! detach and reset.
 
 use base64::Engine;
-use serde_json::{Value, json};
+use serde_json::json;
 
 use crate::Session;
 use crate::components::tests::{copy_of, ex, healthy, idv, node};
@@ -167,54 +167,18 @@ fn resizing_overrides_survive_save_and_reopen() {
     ex(&mut s, "node.set", json!({"id": ia, "props": {"sizingH": "fill"}}));
     ex(&mut s, "node.set", json!({"id": idot, "props": {"width": 40}}));
     let native = figcraft_format::save_bytes(s.doc().unwrap(), None).unwrap();
-    let (fig, _) = figcraft_format::fig::export(s.doc().unwrap(), None).unwrap();
-    for (bytes, name) in [(native, "field.figcraft"), (fig, "field.fig")] {
-        let mut s = Session::new();
-        open(&mut s, &bytes, name);
-        let i = instance(&s);
-        let (ia, idot) = (named(&s, i, "Atom"), named(&s, i, "Dot"));
-        assert!(node(&s, ia).overrides.contains("resizing"), "{name}: {:?}", node(&s, ia).overrides);
-        assert!(node(&s, idot).overrides.contains("size"), "{name}: {:?}", node(&s, idot).overrides);
-        // An edit of the main relays the instance out.
-        let main = |s: &Session, id: NodeId| node(s, id).source.unwrap();
-        let (atom, dot) = (main(&s, ia), main(&s, idot));
-        ex(&mut s, "node.set", json!({"id": atom, "props": {"minWidth": 120}}));
-        ex(&mut s, "node.set", json!({"id": dot, "props": {"width": 30}}));
-        assert_eq!((sizing_h(&s, ia), node(&s, ia).width, node(&s, idot).width), (Sizing::Fill, 240.0, 40.0), "{name}");
-        healthy(&s);
-    }
-}
-
-#[test]
-fn imported_resizing_overrides_survive_relayout() {
-    let at = |x: f64, y: f64| json!([[1, 0, x], [0, 1, y]]);
-    let dot = |id: &str| json!({"id": id, "name": "Dot", "type": "RECTANGLE", "relativeTransform": at(0.0, 0.0), "size": {"x": 20, "y": 20}});
-    let atom = |id: &str, dot_id: &str, w: f64, more: Value| {
-        let mut a = json!({"id": id, "name": "Atom", "type": "FRAME", "relativeTransform": at(0.0, 0.0), "size": {"x": w, "y": 20},
-            "layoutMode": "HORIZONTAL", "primaryAxisSizingMode": "AUTO", "counterAxisSizingMode": "AUTO", "minWidth": 100, "children": [dot(dot_id)]});
-        a.as_object_mut().unwrap().extend(more.as_object().unwrap().clone());
-        a
-    };
-    let field = |id: &str, ty: &str, y: f64, kids: Value| {
-        json!({"id": id, "name": "Field", "type": ty, "relativeTransform": at(0.0, y), "size": {"x": 240, "y": 40}, "layoutMode": "HORIZONTAL",
-            "primaryAxisSizingMode": "FIXED", "counterAxisSizingMode": "FIXED", "children": kids})
-    };
-    let mut inst =
-        field("2:1", "INSTANCE", 100.0, json!([atom("I2:1;1:2", "I2:1;1:3", 240.0, json!({"layoutSizingHorizontal": "FILL", "layoutGrow": 1}))]));
-    inst["componentId"] = json!("1:1");
-    inst["overrides"] = json!([{"id": "I2:1;1:2", "overriddenFields": ["layoutSizingHorizontal", "layoutGrow"]}]);
-    let file = json!({"name": "Field", "document": {"id": "0:0", "type": "DOCUMENT", "children": [
-        {"id": "0:1", "name": "Page", "type": "CANVAS", "children": [field("1:1", "COMPONENT", 0.0, json!([atom("1:2", "1:3", 100.0, json!({}))])), inst]}
-    ]}, "components": {"1:1": {"key": "k", "name": "Field", "description": ""}}, "styles": {}});
+    let name = "field.figcraft";
     let mut s = Session::new();
-    open(&mut s, file.to_string().as_bytes(), "field.json");
+    open(&mut s, &native, name);
     let i = instance(&s);
-    let ia = named(&s, i, "Atom");
-    assert_eq!((sizing_h(&s, ia), node(&s, ia).width), (Sizing::Fill, 240.0));
-    assert!(node(&s, ia).overrides.contains("resizing"), "{:?}", node(&s, ia).overrides);
-    // The main's first edit relays every instance out from it.
-    let main_atom = node(&s, ia).source.unwrap();
-    ex(&mut s, "node.set", json!({"id": main_atom, "props": {"minWidth": 120}}));
-    assert_eq!((sizing_h(&s, ia), node(&s, ia).width), (Sizing::Fill, 240.0));
+    let (ia, idot) = (named(&s, i, "Atom"), named(&s, i, "Dot"));
+    assert!(node(&s, ia).overrides.contains("resizing"), "{name}: {:?}", node(&s, ia).overrides);
+    assert!(node(&s, idot).overrides.contains("size"), "{name}: {:?}", node(&s, idot).overrides);
+    // An edit of the main relays the instance out.
+    let main = |s: &Session, id: NodeId| node(s, id).source.unwrap();
+    let (atom, dot) = (main(&s, ia), main(&s, idot));
+    ex(&mut s, "node.set", json!({"id": atom, "props": {"minWidth": 120}}));
+    ex(&mut s, "node.set", json!({"id": dot, "props": {"width": 30}}));
+    assert_eq!((sizing_h(&s, ia), node(&s, ia).width, node(&s, idot).width), (Sizing::Fill, 240.0, 40.0), "{name}");
     healthy(&s);
 }

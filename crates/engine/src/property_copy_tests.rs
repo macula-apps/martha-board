@@ -90,20 +90,6 @@ fn a_copied_effect_replaces_an_effect_row_or_adds_one() {
 }
 
 #[test]
-fn pasting_design_layers_keeps_a_copied_row() {
-    let mut s = Session::new();
-    let a = rect(&mut s);
-    ex(&mut s, "fill.copy", json!({"id": a}));
-    // Layers pasted from another app replace the copied layers, not the copied fill row.
-    let mut other = Session::new();
-    other.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
-    let exported = other.execute("file.export", &json!({"format": "fig"})).unwrap();
-    ex(&mut s, "edit.pasteDesignLayers", json!({"data": exported["data"]}));
-    let b = rect(&mut s);
-    ex(&mut s, "fill.paste", json!({"ids": [b], "index": 0}));
-}
-
-#[test]
 fn a_copied_image_fill_brings_its_image_to_another_file() {
     let mut s = Session::new();
     let a = rect(&mut s);

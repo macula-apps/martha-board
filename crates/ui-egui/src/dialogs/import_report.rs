@@ -1,4 +1,4 @@
-//! The import report: what a successful `.fig`, REST JSON or SVG import left out or changed, shown
+//! The import report: what a successful SVG import left out or changed, shown
 //! in a dialog window after the file opens, so the notes don't vanish with a toast.
 
 use egui::RichText;
@@ -35,15 +35,10 @@ impl Report {
     /// a native file's `repairs` are shown by the engine's own message, and an SVG opened without
     /// notes has nothing to report. `params` are the command's, for the file's name.
     pub fn from_result(command: &str, params: &Value, result: &Value) -> Option<Self> {
-        if !matches!(command, "file.open" | "file.openRecent" | "file.import" | "edit.pasteDesignLayers") {
+        if !matches!(command, "file.open" | "file.openRecent" | "file.import") {
             return None;
         }
         let warnings = result.get("warnings").and_then(Value::as_array)?;
-        // A paste is reported when something was left out or changed, as an import into the page.
-        let pasted = command == "edit.pasteDesignLayers";
-        if pasted && warnings.is_empty() {
-            return None;
-        }
         let file_name = params.get("path").and_then(Value::as_str).and_then(|p| std::path::Path::new(p).file_name()).and_then(|n| n.to_str());
         if command != "file.import" && warnings.is_empty() && file_name.is_some_and(|n| n.to_ascii_lowercase().ends_with(".svg")) {
             return None;
@@ -61,14 +56,14 @@ impl Report {
             .and_then(Value::as_str)
             .or(file_name)
             .or_else(|| params.get("name").and_then(Value::as_str))
-            .unwrap_or(if pasted { tr("Pasted design layers") } else { tr("Imported document") });
+            .unwrap_or(tr("Imported document"));
         let mut report = Self {
             name: name.chars().take(512).collect(),
             pages: count("pages"),
             layers: count("layers"),
             images: count("images"),
             appended,
-            placed: (command == "file.import" && !appended) || pasted,
+            placed: command == "file.import" && !appended,
             uid: 0,
             notes: Vec::new(),
             shown: Vec::new(),
@@ -98,8 +93,7 @@ impl Report {
     }
 }
 
-/// `note` in the UI language when the catalog has it (the importers' fixed notes: `.fig` imports
-/// name "the file" where REST imports name the JSON they read); a repeat count (` (×N)`) is kept.
+/// `note` in the UI language when the catalog has it; a repeat count (` (×N)`) is kept.
 /// The stored notes are lower-case fragments; a known note is shown as a sentence, so its first
 /// letter is capitalised here. Other notes (SVG's, say) are shown as they are.
 pub(crate) fn note_text(note: &str) -> String {

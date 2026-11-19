@@ -349,15 +349,9 @@ fn calculations_survive_save_and_load() {
 }
 
 #[test]
-fn rest_and_css_exports_write_calculations_as_their_colours() {
+fn the_css_export_writes_calculations_as_their_colours() {
     let mut s = seeds();
-    // The exported REST variable `name` of `collections`, and the CSS text for them.
-    let json_variable = |s: &mut Session, collections: Value, name: &str| -> Value {
-        let text = ex(s, "variable.export", json!({"format": "json", "collections": collections}));
-        let doc: Value = serde_json::from_str(text["text"].as_str().unwrap()).unwrap();
-        let meta = doc.get("meta").unwrap_or(&doc);
-        meta["variables"].as_object().unwrap().values().find(|v| v["name"] == name).unwrap().clone()
-    };
+    // The CSS text for `collections`.
     let css = |s: &mut Session, collections: Value| {
         ex(s, "variable.export", json!({"format": "css", "collections": collections}))["text"].as_str().unwrap().to_string()
     };
@@ -366,11 +360,6 @@ fn rest_and_css_exports_write_calculations_as_their_colours() {
         "variable.create",
         json!({"collection": "C", "name": "fade", "type": "color", "value": {"alpha": {"variable": "ink", "opacity": 0.5}}}),
     );
-    let fade = json_variable(&mut s, json!(["C"]), "fade");
-    let value = fade["valuesByMode"].as_object().unwrap().values().next().unwrap();
-    assert_eq!(value["r"], 1.0);
-    assert_eq!(value["a"], 0.5);
-    assert!(value.get("type").is_none(), "no calculation shape leaks into the REST JSON: {value}");
     let text = css(&mut s, json!(["C"]));
     assert!(text.contains("rgba(255, 0, 0, 0.5"), "the CSS export writes the colour it resolves to: {text}");
     // Each mode is written as the colour it shows in that mode.
@@ -382,15 +371,6 @@ fn rest_and_css_exports_write_calculations_as_their_colours() {
     );
     let veil = json!({"alpha": {"variable": "brand", "opacity": 0.5}});
     ex(&mut s, "variable.create", json!({"collection": "Theme", "name": "veil", "type": "color", "value": veil}));
-    let veil = json_variable(&mut s, json!(["Theme"]), "veil");
-    let mut per_mode: Vec<(f64, f64, f64)> = veil["valuesByMode"]
-        .as_object()
-        .unwrap()
-        .values()
-        .map(|v| (v["r"].as_f64().unwrap(), v["b"].as_f64().unwrap(), v["a"].as_f64().unwrap()))
-        .collect();
-    per_mode.sort_by(|x, y| x.partial_cmp(y).unwrap());
-    assert_eq!(per_mode, [(0.0, 1.0, 0.5), (1.0, 0.0, 0.5)], "Light and Dark each written as their own colour");
     let text = css(&mut s, json!(["Theme"]));
     assert!(text.contains("rgba(255, 0, 0, 0.5") && text.contains("rgba(0, 0, 255, 0.5"), "both modes in CSS: {text}");
 }
@@ -454,21 +434,6 @@ fn prototype_expressions_refuse_a_calculation_literal() {
     let same = json!({"op": {"op": "equals", "args": [{"value": {"type": "alias", "value": "ink"}}, calc]}});
     let msg = err(&mut s, "proto.conditional.setCondition", json!({"id": btn, "index": 0, "path": added["path"], "block": 0, "condition": same}));
     assert!(msg.contains("Not a value"), "condition: {msg}");
-}
-
-#[test]
-fn rest_import_skips_a_hand_written_calculation_with_a_warning() {
-    // The variables JSON has no shape for calculations; a hand-written one must not import or corrupt.
-    let mut s = seeds();
-    let text = json!({
-        "variableCollections": {"COL:X": {"id": "COL:X", "name": "Imp", "modes": [{"modeId": "M:1", "name": "M"}], "defaultModeId": "M:1", "variableIds": ["V:9"]}},
-        "variables": {"V:9": {"id": "V:9", "name": "ghost", "variableCollectionId": "COL:X", "resolvedType": "COLOR",
-                              "valuesByMode": {"M:1": {"type": "colorAlpha", "value": {"variable": "V:1", "opacity": 0.5}}}}}
-    });
-    let out = ex(&mut s, "variable.import", json!({"variables": text}));
-    assert!(out["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap_or("").contains("composed colours")), "skip warning present: {out}");
-    let list = ex(&mut s, "variable.list", json!({}));
-    assert!(list["variables"].as_array().unwrap().iter().all(|v| v["name"] != "ghost"), "the calculation was skipped");
 }
 
 #[test]

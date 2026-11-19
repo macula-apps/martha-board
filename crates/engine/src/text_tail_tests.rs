@@ -397,29 +397,6 @@ fn inspect_css_and_files() {
     }
 }
 
-#[test]
-fn rest_import_lists_and_decorations() {
-    let file = json!({"document": {"type": "DOCUMENT", "children": [{"type": "CANVAS", "name": "P", "children": [{
-        "type": "TEXT", "name": "T", "characters": "a\nb\nc",
-        "absoluteBoundingBox": {"x": 0, "y": 0, "width": 100, "height": 60},
-        "style": {"fontFamily": "Inter", "fontSize": 16, "listSpacing": 5, "hangingPunctuation": true, "hangingList": true,
-                  "textDecoration": "UNDERLINE", "textDecorationStyle": "WAVY", "textDecorationSkipInk": true,
-                  "textDecorationThickness": {"value": 2, "unit": "PIXELS"}, "textDecorationOffset": {"unit": "AUTO"},
-                  "textDecorationColor": {"value": {"type": "SOLID", "color": {"r": 0, "g": 0, "b": 1, "a": 1}}}},
-        "lineTypes": ["ORDERED", "ORDERED", "UNORDERED"], "lineIndentations": [0, 1, 0]
-    }]}]}});
-    let (doc, _) = figcraft_format::rest::import(&file, &figcraft_format::rest::no_images).unwrap();
-    let t = doc.nodes().find_map(|n| n.kind.text()).unwrap();
-    let got: Vec<(ListStyle, u8)> = (0..3).map(|p| (t.para_list(p).list, t.para_list(p).indent)).collect();
-    assert_eq!(got, [(N, 0), (N, 1), (B, 0)], "each paragraph's list type and level");
-    assert_eq!((t.list_spacing, t.hanging_punctuation, t.hanging_list), (5.0, true, true));
-    let look = t.style.look();
-    assert_eq!(
-        (look.style, look.thickness, look.offset, look.skip_ink, look.color),
-        (DecorationStyle::Wavy, DecorationLength::Pixels(2.0), DecorationLength::Auto, true, Some(Color::new(0.0, 0.0, 1.0, 1.0)))
-    );
-}
-
 /// "From within the text layer, there are a couple of ways to start a numbered list: Enter one of
 /// the creation characters below followed by a Space: 1. 1)" (Create bulleted and numbered lists);
 /// "-" and "*" start a bulleted one the same way.
@@ -481,30 +458,4 @@ fn a_many_line_paste_clears_every_created_start() {
     assert_eq!(d.paragraph_count(), 2001);
     assert_eq!(d.para_list(0).start_offset, 4, "the first item keeps its start");
     assert!((1..d.paragraph_count()).all(|p| d.para_list(p).start_offset == 0 && d.para_list(p).list == N));
-}
-
-#[test]
-fn a_list_back_from_a_fig_split_in_the_middle_restarts_at_one() {
-    // #2273's steps: type "5. a", Enter, "b", Enter, "c"; save a copy as .fig and open it;
-    // Backspace at the start of "b". The export writes the start on every line, as Figma does,
-    // and "c" must then read 1., not 5.
-    let mut s = Session::new();
-    three_typed_items(&mut s, "5. a");
-    crate::textedit::end(&mut s).unwrap();
-    let (bytes, _) = figcraft_format::fig::export(s.doc().unwrap(), None).unwrap();
-    let (back, _) = figcraft_format::fig::import(&bytes, "x").unwrap();
-    let t = back.nodes().find(|n| n.kind.text().is_some()).map(|n| n.id).unwrap();
-    let mut s = Session::with_document(back);
-    let d = data(&s, t);
-    assert_eq!(lists(&s, t), [(N, 0); 3]);
-    assert_eq!(
-        (d.para_list(0).start_offset, d.para_list(1).start_offset, d.para_list(2).start_offset),
-        (4, 0, 0),
-        "only the first item carries the start"
-    );
-    begin(&mut s, t, Some(2), false).unwrap();
-    key(&mut s, "Backspace", false, false, false).unwrap();
-    let d = data(&s, t);
-    assert_eq!(lists(&s, t), [(N, 0), (P, 0), (N, 0)]);
-    assert_eq!((d.para_list(0).start_offset, d.para_list(2).start_offset), (4, 0), "c reads 1.");
 }
