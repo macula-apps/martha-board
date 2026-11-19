@@ -495,3 +495,16 @@ fn a_held_press_keeps_its_page_point_when_the_canvas_moves() {
     assert_eq!(frame_x(&u, ids[3]), 1410.0);
     assert_eq!(u.app.session.ds().unwrap().history.undo.len(), steps, "no history step");
 }
+
+/// View ▸ Panels ▸ Layers shows the Layers panel: it opens a collapsed left panel and leaves the
+/// version history for the pages and layers.
+#[test]
+fn view_layers_opens_the_layers_panel() {
+    let mut app = FigApp::new(Session::new(), Box::new(NoServices));
+    crate::versions::open(&mut app);
+    app.ui.left_collapsed = true;
+    assert!(app.ui.versions.open);
+    app.run("view.layers", json!({}));
+    assert!(!app.ui.left_collapsed, "the left panel is open");
+    assert!(!app.ui.versions.open, "it shows the layers, not the version history");
+}

@@ -91,6 +91,18 @@ pub(crate) fn set_all(s: &mut Session, variable: &str, value: VariableValue) {
     .unwrap();
 }
 
+/// A collection extending `parent` (an id), named `name` → its id: normalising gives it the
+/// parent's modes and one inheriting variable per variable of the parent.
+pub(crate) fn extend(s: &mut Session, parent: &str, name: &str) -> String {
+    variable_data::edit(s, |doc| {
+        let id = doc.new_collection_id();
+        let c = figcraft_doc::Collection { id: id.clone(), name: name.to_string(), modes: Vec::new(), extends: Some(parent.to_string()) };
+        doc.variables.collections.push(c);
+        Ok(id)
+    })
+    .unwrap()
+}
+
 /// Bind `field` of the shared style `style` (id or name) to `variable` (name or id): every layer
 /// using the style shows the field resolved in its own modes.
 pub(crate) fn bind_style(s: &mut Session, style: &str, field: &str, variable: &str) {

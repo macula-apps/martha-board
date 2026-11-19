@@ -143,6 +143,12 @@ impl FigApp {
                     self.services.save_prefs(&self.session.prefs);
                 }
                 "focus.region" => self.ui.nav.step(r.data.get("step").and_then(Value::as_i64).unwrap_or(1).clamp(-4, 4) as i32),
+                // The Layers panel: the left panel, showing the pages and layers (not the version
+                // history).
+                "panel.layers" => {
+                    self.ui.versions = Default::default();
+                    self.ui.open_left_panel();
+                }
                 "panel.versionHistory" => versions::open(self),
                 "home" => self.ui.home = true,
                 "home.templates" => {

@@ -172,3 +172,13 @@ fn a_file_whose_components_hold_each_others_instances_opens() {
     let got = rx.recv_timeout(std::time::Duration::from_secs(60)).expect("the file opens and draws without hanging or panicking");
     assert_eq!(got, (count, true, true), "every layer is there and both draw");
 }
+
+/// A caller still naming a library for a colour style is refused by name, not given this file's
+/// style of the same name.
+#[test]
+fn a_colour_style_from_a_library_is_refused_by_name() {
+    let mut s = Session::new();
+    ex(&mut s, "style.create", json!({"type": "paint", "name": "Brand", "value": "#0000ff"}));
+    let e = s.execute("selection.applyColorStyle", &json!({"targets": [], "style": "Brand", "library": "kit"})).unwrap_err().to_string();
+    assert!(e.contains("unknown parameter `library`"), "{e}");
+}
