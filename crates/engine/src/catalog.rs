@@ -81,7 +81,6 @@ pub static MENU: &[MenuItem] = &[
     m!("Edit/Select all with same", "Effect", "select.sameEffect"),
     m!("Edit/Select all with same", "Text properties", "select.sameText"),
     m!("Edit/Select all with same", "Font", "select.sameFont"),
-    m!("Edit/Select all with same", "Instance", "select.sameInstance"),
     m!("Edit/Select all with same", "Properties", "select.sameProperties"),
     // View
     m!("View", "Pixel grid", "view.pixelGrid"),

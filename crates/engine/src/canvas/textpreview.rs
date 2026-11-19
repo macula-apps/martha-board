@@ -16,17 +16,8 @@ pub const COMMANDS: [&str; 3] = ["text.preview", "text.endPreview", "widget.hove
 
 /// What can be previewed: text styles, font styles and axis values, layers' properties and the
 /// blend of a paint on a layer, a selection or a style.
-pub const PREVIEWABLE: [&str; 9] = [
-    "style.apply",
-    "library.applyStyle",
-    "text.setVariations",
-    "text.style",
-    "node.set",
-    "fill.set",
-    "stroke.set",
-    "selection.setPaint",
-    "style.update",
-];
+pub const PREVIEWABLE: [&str; 8] =
+    ["style.apply", "text.setVariations", "text.style", "node.set", "fill.set", "stroke.set", "selection.setPaint", "style.update"];
 
 /// Show `command params` as a live preview (in place of an earlier one).
 pub fn show(s: &mut Session, command: &str, params: &Value) -> Result<()> {

@@ -430,7 +430,7 @@ fn the_getting_started_card_closes_stays_closed_and_comes_back_from_help() {
     let mut u = first_run();
     let s = settle(&mut u);
     assert!(has_text(&s, "Getting started"));
-    for tip in ["Draw a frame", "Add auto layout", "Make a component", "Share with a code", "Export"] {
+    for tip in ["Draw a frame", "Add auto layout", "Share with a code", "Export"] {
         assert!(has_text(&s, tip), "{tip}");
     }
     // Shortcuts come from the keymap.

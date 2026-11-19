@@ -141,13 +141,11 @@ fn a_single_id_that_is_not_an_id_is_refused() {
 }
 
 #[test]
-fn an_image_and_an_instance_parent_are_checked_the_same_way() {
+fn an_image_parent_is_checked() {
     let mut s = Session::new();
     card(&mut s);
     let img = failed(s.execute("image.place", &json!({"data": "aGk=", "parent": {"$step": 0}})));
     assert!(img.unwrap_or_default().contains("`parent` must be a node id"), "image.place");
-    let inst = failed(s.execute("instance.create", &json!({"component": 99999, "parent": {"$step": 0}})));
-    assert!(inst.is_some(), "instance.create refuses both a bad component and a bad parent");
 }
 
 #[test]

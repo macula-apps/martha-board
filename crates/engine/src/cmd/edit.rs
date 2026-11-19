@@ -242,12 +242,6 @@ pub fn specs() -> Vec<CommandSpec> {
                 |a, b| matches!((&a.kind, &b.kind), (NodeKind::Text(x), NodeKind::Text(y)) if x.style.font_family == y.style.font_family && x.style.font_style == y.style.font_style),
             )
         }),
-        spec!("select.sameInstance", "Select same instance", "{}", false, |s, _| {
-            select_same(
-                s,
-                |a, b| matches!((&a.kind, &b.kind), (NodeKind::Instance { component: x, .. }, NodeKind::Instance { component: y, .. }) if x == y),
-            )
-        }),
         spec!("select.sameProperties", "Select same properties", "{}", false, |s, _| {
             select_same(s, |a, b| {
                 a.kind.type_name() == b.kind.type_name()
