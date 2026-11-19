@@ -533,13 +533,6 @@ fn every_command_survives_junk_params() {
 }
 
 #[test]
-fn parity_catalog_mostly_covered() {
-    let (done, total, missing) = catalog::parity(&[]);
-    assert!(total > 150);
-    assert!(done as f64 / total as f64 > 0.8, "{done}/{total} missing: {missing:?}");
-}
-
-#[test]
 fn export_frames_to_pdf() {
     let mut s = sess();
     let a = id(&s.execute("frame.create", &json!({"x": 0, "y": 0, "width": 200, "height": 100})).unwrap());

@@ -1,13 +1,12 @@
 //! Layers that only moved skip the steps of [`normalize`] that follow a layer's own content
 //! (#1571): the document must come out exactly as a full normalisation leaves it, for any set of
-//! layers moved, in the example files and during a drag.
+//! layers moved, on a board holding every built-in template and during a drag.
 
 use figcraft_doc::{Document, NodeId};
 use figcraft_geom::kurbo::Affine;
 use serde_json::json;
 
 use crate::Session;
-use crate::cmd::file::load_path;
 use crate::derived::{NO_MOVE_SHORTCUT, only_moved_layers};
 use crate::normalize;
 use crate::params::id_of;
@@ -45,26 +44,31 @@ fn moved(base: &Document, ids: &[NodeId]) -> Document {
     doc
 }
 
+/// A board holding each built-in template once (sections, stickies, shapes with text, connectors,
+/// tables and text), side by side.
+fn templates_board() -> Document {
+    let mut s = crate::board_tests::board();
+    let list = s.execute("board.templates", &json!({})).unwrap();
+    let names: Vec<&str> = list.as_array().unwrap().iter().map(|t| t["id"].as_str().unwrap()).collect();
+    assert!(!names.is_empty());
+    for (i, name) in names.iter().enumerate() {
+        s.execute("board.template", &json!({"name": name, "x": i as f64 * 2000.0, "y": 0})).unwrap();
+    }
+    s.doc().unwrap().clone()
+}
+
 #[test]
-fn moving_layers_of_the_examples_matches_a_full_normalise() {
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples");
-    let mut paths: Vec<_> =
-        std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().path()).filter(|p| p.extension().is_some_and(|e| e == "figcraft")).collect();
-    paths.sort();
-    assert!(!paths.is_empty());
-    for p in paths {
-        let name = p.file_name().unwrap().to_string_lossy().into_owned();
-        let base = settled(load_path(&p.to_string_lossy()).unwrap().doc);
-        let layers: Vec<NodeId> = base.ids().filter(|i| !base.pages.contains(i)).collect();
-        let top: Vec<NodeId> = base.pages.iter().flat_map(|pg| base.get(*pg).unwrap().children.clone()).collect();
-        let every_third: Vec<NodeId> = layers.iter().copied().step_by(3).collect();
-        for (case, ids) in [("top-level layers", &top), ("every layer", &layers), ("every third layer", &every_third)] {
-            let doc = moved(&base, ids);
-            let mut probe = doc.clone();
-            let touched = probe.take_dirty();
-            assert!(!only_moved_layers(&mut probe, &base, &touched).is_empty(), "{name}, {case}: some layers take the shortcut");
-            assert!(normalized(doc.clone(), &base, true) == normalized(doc, &base, false), "{name}, {case}: as a full normalisation");
-        }
+fn moving_layers_of_a_templates_board_matches_a_full_normalise() {
+    let base = settled(templates_board());
+    let layers: Vec<NodeId> = base.ids().filter(|i| !base.pages.contains(i)).collect();
+    let top: Vec<NodeId> = base.pages.iter().flat_map(|pg| base.get(*pg).unwrap().children.clone()).collect();
+    let every_third: Vec<NodeId> = layers.iter().copied().step_by(3).collect();
+    for (case, ids) in [("top-level layers", &top), ("every layer", &layers), ("every third layer", &every_third)] {
+        let doc = moved(&base, ids);
+        let mut probe = doc.clone();
+        let touched = probe.take_dirty();
+        assert!(!only_moved_layers(&mut probe, &base, &touched).is_empty(), "{case}: some layers take the shortcut");
+        assert!(normalized(doc.clone(), &base, true) == normalized(doc, &base, false), "{case}: as a full normalisation");
     }
 }
 

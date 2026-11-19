@@ -413,7 +413,6 @@ fn counts_match_the_docs() {
     let missing = documented.iter().filter(|r| matches!(r.ours, Missing)).count();
     let reserved = documented.iter().filter(|r| !r.reserved.is_empty()).count();
     let pinned = ROWS.len() - documented.len();
-    // docs/ui-parity.md quotes these.
     assert_eq!((documented.len(), bound, moved, missing, reserved, pinned), (137, 126, 1, 10, 2, 55));
 }
 

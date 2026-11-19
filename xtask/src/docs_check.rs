@@ -5,10 +5,9 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-/// Checks `ROADMAP.md` and `docs/*.md` under `root`; prints each repeat and returns whether there
-/// were none.
+/// Checks `docs/*.md` under `root`; prints each repeat and returns whether there were none.
 pub fn check(root: &Path) -> bool {
-    let mut files = vec![root.join("ROADMAP.md")];
+    let mut files = Vec::new();
     if let Ok(rd) = std::fs::read_dir(root.join("docs")) {
         let mut docs: Vec<_> = rd.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e == "md")).collect();
         docs.sort();

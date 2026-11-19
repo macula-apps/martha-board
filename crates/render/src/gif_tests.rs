@@ -1,5 +1,5 @@
 //! Animated GIFs: frames and their timing, the caps on decoding, junk input, and the first frame
-//! everywhere but the presenter.
+//! everywhere unless a render asks for a later time.
 
 use std::sync::Arc;
 
@@ -106,11 +106,11 @@ fn the_first_frame_draws_unless_time_moves_on() {
         [c.red(), c.green(), c.blue()]
     };
     assert_eq!(centre(crate::render_node(&d, id, 1.0).unwrap()), [255, 0, 0], "exports and the canvas: the first frame");
-    assert_eq!(centre(crate::render_node_at(&d, id, 1.0, 0.15).unwrap()), [0, 255, 0], "the presenter, 150 ms in");
+    assert_eq!(centre(crate::render_node_at(&d, id, 1.0, 0.15).unwrap()), [0, 255, 0], "a render 150 ms in");
     let (frame, next) = images::animation_clock(&d, page, 0.15).unwrap();
     assert!(frame != images::animation_clock(&d, page, 0.05).unwrap().0 && (next - 0.05).abs() < 1e-9);
     d.get_mut(id).unwrap().visible = false;
-    assert!(images::animation_clock(&d, page, 0.15).is_none(), "hidden layers don't keep the presenter awake");
+    assert!(images::animation_clock(&d, page, 0.15).is_none(), "hidden layers ask for no next frame");
 }
 
 #[test]

@@ -36,7 +36,8 @@ pub struct Ctx<'a, 'd> {
     pub magnified_image_pixels: bool,
     /// The surfaces under the one being drawn into, when it is an isolated layer (for backdrops).
     pub under: Option<&'a Under<'a>>,
-    /// Seconds into animated GIFs (0: their first frame; only the presenter plays them).
+    /// Seconds into animated GIFs (0: their first frame; no caller outside this crate's tests sets
+    /// another time).
     pub time: f64,
     /// Paint bounds already worked out in this render.
     pub bounds: &'a Bounds<'d>,

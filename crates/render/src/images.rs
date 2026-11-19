@@ -7,8 +7,9 @@
 //! (#1483); exports and every other render draw from the image itself ([`get`]).
 //!
 //! Animated GIFs keep their original bytes like any image; their first frame is the image
-//! everywhere (canvas, exports). The presenter plays them: [`frame_at`] decodes every frame on
-//! first use (capped by [`MAX_FRAMES`] and [`MAX_ANIMATION_BYTES`]) and picks the one due.
+//! everywhere (canvas, exports). [`frame_at`] decodes every frame on first use (capped by
+//! [`MAX_FRAMES`] and [`MAX_ANIMATION_BYTES`]) and picks the one due at a later time; nothing in
+//! the workspace renders at a later time now, only this crate's tests.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
