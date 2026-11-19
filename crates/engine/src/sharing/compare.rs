@@ -1,16 +1,15 @@
-//! Dev Mode "Compare changes": what changed in a ready-for-dev frame or section since it was
-//! marked, or in any frame or section since a saved version. The document keeps a snapshot of a
-//! ready-for-dev layer from just before its first change ([`figcraft_doc::handoff`]); this compares
-//! it (or the layer in the version) with the layer as it is now, layer by layer
-//! (matched by id): layers added and removed, and for the others their properties formatted the
-//! way Inspect shows them (`width 120 → 136`, `fill #FF0000 → #E03030`).
+//! What changed between two versions of a document, for reviewing a branch: layer by layer
+//! (matched by id), layers added and removed, and for the others their properties
+//! ([`props`]) as one line each (`width 120 → 136`, `fill #FF0000 → #E03030`).
+
+pub(crate) mod props;
 
 use std::collections::BTreeSet;
 
-use figcraft_doc::{DevStatus, Document, MAX_SNAPSHOT_NODES, Node, NodeId, NodeKind};
+use figcraft_doc::{Document, MAX_SNAPSHOT_NODES, Node, NodeId, NodeKind};
 use serde::Serialize;
 
-use crate::devinspect::{Prop, Section, properties};
+use props::{Prop, Section, properties};
 
 /// Most changed layers listed (the rest is counted as truncated).
 pub const MAX_CHANGES: usize = 2_000;
@@ -19,7 +18,7 @@ const MAX_DEPTH: usize = 256;
 /// Longest text content shown in a change (chars).
 const MAX_TEXT: usize = 60;
 
-/// One property that changed, as Inspect formats it.
+/// One property that changed, as [`props`] formats it.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct PropChange {
     /// The group it belongs to ("Layer", "Layout", "Fills"…).
@@ -66,7 +65,7 @@ pub struct LayerChange {
     #[serde(rename = "type")]
     pub type_name: &'static str,
     pub change: ChangeKind,
-    /// How deep under the compared layer it is (0: the layer itself).
+    /// How deep under its page it is (0: the page itself).
     pub depth: usize,
     /// Added or removed: how many layers that is (the layer and everything in it).
     pub layers: usize,
@@ -75,17 +74,10 @@ pub struct LayerChange {
     pub properties: Vec<PropChange>,
 }
 
-/// The changes to a ready-for-dev layer since it was marked.
-#[derive(Clone, Debug, PartialEq, Serialize)]
+/// The layers that changed between two versions.
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Comparison {
-    pub id: NodeId,
-    pub name: String,
-    /// It changed since it was marked (shown as "Changed").
-    pub changed: bool,
-    /// What it looked like before is known (files from before snapshots were kept, and layers too
-    /// large to snapshot, have none).
-    pub snapshot: bool,
     pub changes: Vec<LayerChange>,
     pub added: usize,
     pub removed: usize,
@@ -94,61 +86,10 @@ pub struct Comparison {
     pub truncated: bool,
 }
 
-/// Nothing compared yet for layer `id` of `doc` (`snapshot` false: the before isn't known).
-pub fn empty(doc: &Document, id: NodeId) -> Comparison {
-    Comparison {
-        id,
-        name: doc.node(id).map(|n| n.name.clone()).unwrap_or_default(),
-        changed: false,
-        snapshot: false,
-        changes: Vec::new(),
-        added: 0,
-        removed: 0,
-        modified: 0,
-        truncated: false,
-    }
-}
-
-/// The changes to layer `id` since it was marked ready for dev (empty when it hasn't changed).
-pub fn compare(doc: &Document, id: NodeId) -> Comparison {
-    let mut out = empty(doc, id);
-    out.changed = doc.node(id).is_some_and(|n| n.dev_status == DevStatus::ReadyForDev && n.dev_changed);
-    if !out.changed {
-        return out;
-    }
-    let Some(before) = doc.with_dev_snapshot(id) else { return out };
-    out.snapshot = true;
-    let mut w = Walk { before: &before, now: doc, now_ids: bounded_set(doc, id), before_ids: bounded_set(&before, id), out: &mut out };
-    w.layer(id, 0);
-    out
-}
-
-/// The changes to layer `id` of `now` since `before` (a saved version of the same file: layers
-/// match by id). A layer the version doesn't have was added as a whole.
-pub fn compare_with(before: &Document, now: &Document, id: NodeId) -> Comparison {
-    let mut out = empty(now, id);
-    out.snapshot = true;
-    let mut w = Walk { before, now, now_ids: bounded_set(now, id), before_ids: bounded_set(before, id), out: &mut out };
-    if before.contains(id) {
-        w.layer(id, 0);
-    } else {
-        w.whole(now, id, 0, ChangeKind::Added);
-    }
-    out.changed = !out.changes.is_empty();
-    out
-}
-
-/// The before and after documents of layer `id` (the snapshot's copy and the document), for
-/// rendering the two side by side.
-pub fn before_doc(doc: &Document, id: NodeId) -> Option<Document> {
-    doc.node(id).filter(|n| n.dev_status == DevStatus::ReadyForDev && n.dev_changed)?;
-    doc.with_dev_snapshot(id)
-}
-
 /// Every layer that changed between two versions of a whole document, page by page (pages added
 /// or removed as a whole), for reviewing a branch.
 pub fn compare_docs(before: &Document, now: &Document) -> Comparison {
-    let mut out = Comparison { name: now.name.clone(), snapshot: true, ..empty(now, NodeId(0)) };
+    let mut out = Comparison::default();
     let mut w = Walk { before, now, now_ids: now.ids().collect(), before_ids: before.ids().collect(), out: &mut out };
     for p in &now.pages {
         if before.contains(*p) {
@@ -160,12 +101,7 @@ pub fn compare_docs(before: &Document, now: &Document) -> Comparison {
     for p in before.pages.iter().filter(|p| !now.contains(**p)) {
         w.whole(before, *p, 0, ChangeKind::Removed);
     }
-    out.changed = !out.changes.is_empty();
     out
-}
-
-fn bounded_set(doc: &Document, id: NodeId) -> BTreeSet<NodeId> {
-    doc.subtree(id).into_iter().take(MAX_SNAPSHOT_NODES * 2).collect()
 }
 
 struct Walk<'a> {
@@ -247,7 +183,7 @@ pub fn layer_changes(before: &Document, now: &Document, id: NodeId) -> Vec<PropC
     } else if let Some((ib, ia)) = order(before, now, id) {
         put("Layer", "order", ib.to_string(), ia.to_string());
     }
-    // Unchanged layers (shared with the snapshot, or equal) only move with their parent.
+    // Unchanged layers (shared by both versions, or equal) only move with their parent.
     let same = before.node_arc(id).zip(now.node_arc(id)).is_some_and(|(x, y)| std::sync::Arc::ptr_eq(x, y)) || b.same_design(a);
     if same {
         return out;
@@ -403,7 +339,7 @@ fn with_token(value: String, p: &Prop, other: Option<&Prop>) -> String {
     }
 }
 
-/// What a row Inspect leaves out means.
+/// What a row [`props`] leaves out means.
 fn missing(section: &str, label: &str) -> &'static str {
     match (section, label) {
         (_, "Rotation") => "0°",
@@ -413,7 +349,7 @@ fn missing(section: &str, label: &str) -> &'static str {
     }
 }
 
-/// A row's property name in a change: Inspect's label, lower case, made unambiguous.
+/// A row's property name in a change: its label, lower case, made unambiguous.
 fn property_name(section: &str, label: &str) -> String {
     let name = match (section, label) {
         ("Layout", "Radius") => "corner radius",

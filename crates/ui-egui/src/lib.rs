@@ -96,10 +96,6 @@ mod cursors_tests;
 #[cfg(test)]
 mod dash_pattern_tests;
 #[cfg(test)]
-mod dev_mode_tests;
-#[cfg(test)]
-mod devmode_tail_tests;
-#[cfg(test)]
 mod display_name_tests;
 #[cfg(test)]
 mod duplicate_paint_tests;
@@ -351,9 +347,8 @@ pub use dialogs::variables_panel;
 pub use home::home_recents;
 pub use home::online;
 pub use panels::assets_panel;
+pub use panels::compare_view;
 pub use panels::component_panel;
-pub use panels::dev_compare;
-pub use panels::dev_mode;
 pub use panels::export_panel;
 pub use panels::frame_presets;
 pub use panels::layers;
@@ -608,8 +603,6 @@ pub struct UiState {
     pub versions: versions::VersionUi,
     /// The branch review dialog, while open.
     pub branch_review: Option<branch_ui::ReviewView>,
-    /// Dev Mode: annotations on the canvas and the ready-for-dev list.
-    pub dev: dev_mode::DevUi,
 
     /// What FigCraft last put on the system clipboard: when the clipboard still holds it, a paste
     /// uses our copied layers; anything else there (an image, SVG, text) came from another app.
@@ -763,7 +756,6 @@ impl Default for UiState {
             comments: comments::CommentUi::default(),
             versions: versions::VersionUi::default(),
             branch_review: None,
-            dev: dev_mode::DevUi::default(),
 
             last_copy: None,
             last_copy_generation: 0,

@@ -70,7 +70,7 @@ fn board_commands_refuse_on_design_files_and_prototyping_refuses_on_boards() {
         assert!(matches!(d.execute(cmd, &p), Err(EngineError::Disabled(..))), "{cmd} on a design file");
     }
     let mut s = board();
-    for cmd in ["view.devMode", "view.prototype", "proto.present", "proto.flow.add", "dev.focus"] {
+    for cmd in ["view.prototype", "proto.present", "proto.flow.add"] {
         let e = s.execute(cmd, &json!({})).unwrap_err();
         assert!(e.to_string().contains("boards have no prototypes"), "{cmd}: {e}");
     }

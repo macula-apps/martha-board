@@ -1094,7 +1094,7 @@ pub fn icon_button(ui: &mut Ui, icon: Icon, tip: &str) -> bool {
     icon_button_at(ui, id, rect, icon, tip)
 }
 
-/// A bar floating at the top centre of the `canvas` area (a version preview, the focus view):
+/// A bar floating at the top centre of the `canvas` area (a version preview, a branch):
 /// `add` lays out its contents in a row.
 pub fn canvas_banner<R>(ctx: &egui::Context, id: Id, canvas: Rect, add: impl FnOnce(&mut Ui) -> R) -> R {
     let t = Tokens::get(ctx);

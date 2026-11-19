@@ -1,6 +1,6 @@
 # FigCraft architecture
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-19 · **Change:** minor (dropped the `.fig`, FigJam, Sketch, Penpot and REST API file JSON import and export; earlier: the file I/O overview corrected on 2026-11-04, the `vectordrawable` crate, L4: Android Vector Drawable export; the shared hub in `collab-net` and the `figcraft-server` app) · **Target:** Figma Design
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-19 · **Change:** minor (dropped Developer Mode; earlier: the `.fig`, FigJam, Sketch, Penpot and REST API file JSON import and export dropped on 2026-11-19, the file I/O overview corrected on 2026-11-04, the `vectordrawable` crate, L4: Android Vector Drawable export; the shared hub in `collab-net` and the `figcraft-server` app) · **Target:** Figma Design
 
 How FigCraft is built today. Engine first, a thin swappable UI, everything a command; a Figma-shaped
 data model (a scene graph of frames with auto layout, components and variables). ~108,800 lines of
@@ -27,8 +27,8 @@ replaced.
 | L4 | `figcraft-svg` | ~3.7k | SVG export and import (usvg) |
 | L4 | `figcraft-pdf` | ~2.3k | PDF export (krilla) with print options |
 | L4 | `figcraft-vectordrawable` | ~1.2k | Android Vector Drawable (XML) export: baked path data, gradients through `aapt:attr`, clip groups, compatibility modes and warnings |
-| L5 | `figcraft-engine` | ~39.3k | Sessions, undo history (`Arc` snapshots), the command registry (`cmd/*`, `spec!`), pointer tools and vector edit mode, snapping and measuring, components sync, libraries, prototype runtime, Developer Mode code generation, the menu catalog (`catalog.rs`) and the keymap (`keymap.rs`), a panic guard |
-| L6 | `figcraft-ui-egui` | ~31.9k | The UI3-style frontend: canvas (render worker), toolbar, layers, Design/Prototype/Inspect panels, colour picker, menus, dialogs, presenter, comments, accessibility (AccessKit), the control channel server |
+| L5 | `figcraft-engine` | ~58.3k | Sessions, undo history (`Arc` snapshots), the command registry (`cmd/*`, `spec!`), pointer tools and vector edit mode, snapping and measuring, components sync, libraries, prototype runtime, the branch compare, the menu catalog (`catalog.rs`) and the keymap (`keymap.rs`), a panic guard |
+| L6 | `figcraft-ui-egui` | ~55.4k | The UI3-style frontend: canvas (render worker), toolbar, layers, Design/Prototype panels, colour picker, menus, dialogs, presenter, comments, accessibility (AccessKit), the control channel server |
 | L6 | `figcraft-mcp` | ~2.4k | MCP server (JSON-RPC over stdio), headless or bridged to a running app |
 | L6 | `figcraft-collab-net` | ~3.0k | Live sessions over the network: the WebSocket transport (tungstenite, a reader and a writer thread per connection), the hub that runs a collaboration core server per open file for the session host the app embeds and for `figcraft-server` (behind a `Backend`), the joining and managing clients (publishing), invite links, presence relay and limits; the browser client; the only crate allowed networking dependencies |
 | apps | `figcraft`, `figcraft-cli`, `figcraft-web`, `figcraft-server` | ~3.2k | Desktop app (eframe + wgpu), command line, browser build (WASM, WebGPU/WebGL2), collaboration server (files, share links, persistence; [`server.md`](server.md)) |
@@ -67,7 +67,7 @@ express an effect.
 
 `.figcraft` is the native format (atomic saves, autosave checkpoints; the desktop app keeps
 recovery copies of unsaved documents that reopen after a crash or a forced quit). Imports: SVG,
-raster images and clipboard content. Exports: PNG, JPG, WebP, SVG, PDF and code. The files of other
+raster images and clipboard content. Exports: PNG, JPG, WebP, SVG and PDF. The files of other
 design apps (`.fig`, FigJam `.jam`, `.sketch`, `.penpot`, REST API file JSON) are neither read nor
 written.
 
@@ -83,6 +83,7 @@ input.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-19 | minor | Dropped Developer Mode (code generators, Code Connect, annotations, measurements, dev resources, ready for dev and the Inspect tab); the branch compare moved to `sharing/compare` and the asset export to `cmd/file/assets`: `figcraft-engine` ~65.2k → ~58.3k lines, `figcraft-ui-egui` ~57.4k → ~55.4k. The engine and UI rows had kept their 2026-10-10 counts until now. |
 | 2026-11-19 | minor | Dropped the importers and exporters of other design apps' files (`.fig`, FigJam `.jam`, `.sketch`, `.penpot`, REST API file JSON and its variables JSON): `figcraft-format` keeps the native format only (~5.2k → ~1.5k lines). |
 | 2026-11-04 | minor | Corrected the file I/O overview and format-crate row: best-effort `.fig` import and experimental export already exist in `figcraft-format`. No capability or readiness change. |
 | 2026-10-18 | minor | Added `vectordrawable` (L4), the Android Vector Drawable (XML) writer |

@@ -1,13 +1,11 @@
 //! The component playground: a component tried with other property values without placing it or
 //! touching the document. [`build`] makes a copy of the document holding one extra instance with
-//! the values; what shows it (the Inspect panel, `component.playground`) renders that instance and
-//! generates its code.
+//! the values; `component.playground` renders that instance.
 
 use figcraft_doc::{Document, ExportFormat, NodeId, NodeKind};
 use serde_json::{Map, Value, json};
 
 use crate::cmd::CommandSpec;
-use crate::codegen::CodeLang;
 use crate::params::{get, id_of, num, string, targets};
 use crate::{EngineError, Result, Session, bad, spec};
 
@@ -52,7 +50,7 @@ pub fn specs() -> Vec<CommandSpec> {
     vec![spec!(
         "component.playground",
         "Component playground",
-        "{id? (an instance, a component or a component set; default the selection), properties? {name: value} (variant, boolean, text and instance-swap properties, as instance.setProperties takes them), language? css|html|react|leptos|vue|swiftui|compose|arkui|flutter (default react), path? (write the preview there as a PNG), scale? (the PNG's, default 2)} → {component, properties: [{name, type, options?, value}], language, code, width, height, path?}  the component with those property values, tried on a copy: its code and its look. Nothing in the document changes",
+        "{id? (an instance, a component or a component set; default the selection), properties? {name: value} (variant, boolean, text and instance-swap properties, as instance.setProperties takes them), path? (write the preview there as a PNG), scale? (the PNG's, default 2)} → {component, properties: [{name, type, options?, value}], width, height, path?}  the component with those property values, tried on a copy: its properties, size and look. Nothing in the document changes",
         false,
         |s, p| {
             let cmd = "component.playground";
@@ -62,15 +60,9 @@ pub fn specs() -> Vec<CommandSpec> {
                 Some(Value::Object(m)) => m.clone(),
                 Some(_) => return Err(bad(cmd, "properties: {name: value}")),
             };
-            let lang = match string(p, "language") {
-                Some(l) => CodeLang::from_id(&l).ok_or_else(|| bad(cmd, "language: css|html|react|leptos|vue|swiftui|compose|arkui|flutter"))?,
-                None => CodeLang::React,
-            };
             let (copy, inst) = build(s.doc()?, target, &values)?;
             let n = copy.get(inst)?;
             let mut out = properties(&copy, inst);
-            out["language"] = json!(lang.id());
-            out["code"] = json!(crate::codegen::code_for(&copy, inst, lang));
             (out["width"], out["height"]) = (json!(n.width), json!(n.height));
             if let Some(path) = string(p, "path") {
                 let scale = num(p, "scale").filter(|k| k.is_finite()).map_or(2.0, |k| k.clamp(0.01, 16.0));

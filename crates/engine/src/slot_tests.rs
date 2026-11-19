@@ -410,11 +410,7 @@ fn assert_slot_text(s: &mut Session, instance: NodeId, expected: &str) {
     let label = children[0];
     assert_eq!(node(s, label).name, "Label");
     let characters = node(s, label).kind.text().expect("Content's only child must be text").characters.clone();
-    let html = ex(s, "inspect.code", json!({"id": instance, "language": "html"}))["code"].as_str().unwrap().to_string();
-    assert_eq!(characters, expected, "slot Label characters; HTML: {html}");
-    assert_eq!(html.matches("<p ").count(), 1, "slot Label HTML must contain exactly one paragraph: {html}");
-    assert_eq!(html.matches("</p>").count(), 1, "slot Label HTML must contain exactly one paragraph: {html}");
-    assert!(html.contains(&format!(">{expected}</p>")), "slot Label HTML: {html}");
+    assert_eq!(characters, expected, "slot Label characters");
 }
 
 fn assert_stored_slot_text(s: &Session, instance: NodeId, expected: &str) {

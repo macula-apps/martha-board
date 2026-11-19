@@ -19,8 +19,6 @@ pub(super) enum BarAction {
     Responsive(bool),
     /// Show or hide the comments on the presented frame.
     Comments,
-    /// Show or hide the Inspect panel.
-    Inspect,
     /// Hide UI: hide or show the bars (the Options menu, Cmd/Ctrl+\).
     HideUi,
 }
@@ -59,14 +57,6 @@ pub fn show(app: &mut FigApp, ui: &mut Ui) {
     if !typing && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::Backslash)) {
         action = Some(BarAction::HideUi);
     }
-    if pres.view.inspect {
-        let t = Tokens::get(&ctx);
-        egui::Panel::right("present_inspect")
-            .resizable(false)
-            .exact_size(INSPECT_W)
-            .frame(egui::Frame::NONE.fill(t.panel).stroke(Stroke::new(1.0, t.border)))
-            .show(ui, |ui| inspect_panel(app, ui, &pres));
-    }
     egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| {
         action = player(&mut pres, ui, ui.max_rect(), now, Chrome { keys: !typing, ..FULL }).or(action);
     });
@@ -83,7 +73,6 @@ pub fn show(app: &mut FigApp, ui: &mut Ui) {
     }
     match action {
         Some(BarAction::Comments) => pres.view.comments = !pres.view.comments,
-        Some(BarAction::Inspect) => pres.view.inspect = !pres.view.inspect,
         Some(BarAction::HideUi) => {
             pres.view.hide_ui = !pres.view.hide_ui;
             // As the reference tool does, say how the bars come back.
@@ -343,26 +332,6 @@ fn link_notice(app: &mut FigApp, p: &mut Presenter, ctx: &egui::Context, id: Id)
     } else if cancel {
         p.link_notice = None;
     }
-}
-
-/// The width of the presenter's Inspect panel.
-const INSPECT_W: f32 = 280.0;
-
-/// The presenter's Inspect panel: the inspected layer's properties, as in the Inspect tab.
-fn inspect_panel(app: &mut FigApp, ui: &mut Ui, pres: &Presenter) {
-    let t = Tokens::get(ui.ctx());
-    let found = pres.inspected.zip(pres.doc.as_ref()).and_then(|(id, doc)| doc.node(id).map(|n| (id, doc, n.name.clone())));
-    egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-        let Some((id, doc, name)) = found else {
-            widgets::section_header(ui, tr("Inspect"), &[], false);
-            widgets::note(ui, tr("Hover a layer to see its properties"), t.text_secondary);
-            return;
-        };
-        widgets::section_header(ui, &name, &[], false);
-        for section in figcraft_engine::devinspect::properties(doc, id) {
-            crate::right::inspect_section(app, ui, &section);
-        }
-    });
 }
 
 /// The top-most visible layer of `root` (it included) under the screen point `q`.

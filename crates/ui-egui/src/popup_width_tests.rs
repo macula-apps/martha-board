@@ -2,11 +2,9 @@
 //! default area width, and stay inside the window: drawn headless.
 
 use egui::{Color32, Event, Order, PointerButton, Pos2, RawInput, Rect, pos2, vec2};
-use figcraft_engine::Session;
 
 use crate::right::{menu_item, menu_popup, menu_row_width};
 use crate::theme::regular;
-use crate::{FigApp, NoServices, RightTab};
 
 const SCREEN: egui::Vec2 = vec2(1440.0, 900.0);
 
@@ -63,41 +61,4 @@ fn a_menu_is_as_wide_as_its_widest_row_and_does_not_wrap() {
     // One line per row.
     let rows = 26.0 * items.len() as f32;
     assert!(menu.height() < rows + 40.0, "menu {} tall for {rows} of rows", menu.height());
-}
-
-#[test]
-fn right_panel_dropdown_menus_fit_the_panel() {
-    let mut app = FigApp::new(Session::new(), Box::new(NoServices));
-    app.ui.right_tab = RightTab::Inspect;
-    let ctx = egui::Context::default();
-    let mut t = 0.0;
-    let mut frame = |app: &mut FigApp, events: Vec<Event>| {
-        let mut out = ctx.run_ui(input(&mut t, events), |ui| app.ui(ui));
-        out.textures_delta.clear();
-    };
-    for _ in 0..3 {
-        frame(&mut app, vec![]);
-    }
-    // With nothing selected, Inspect lists the frames ready for dev under a filter dropdown, the
-    // only control on that panel: click down the panel until it opens.
-    let panel_left = SCREEN.x - app.ui.right_width;
-    let x = panel_left + app.ui.right_width / 2.0;
-    let mut menu = None;
-    for y in (140..600).step_by(6) {
-        let at = pos2(x, y as f32);
-        frame(&mut app, press(at, true));
-        frame(&mut app, press(at, false));
-        frame(&mut app, vec![]);
-        frame(&mut app, vec![]);
-        if let [m] = menus(&ctx).as_slice() {
-            menu = Some(*m);
-            break;
-        }
-    }
-    let menu = menu.expect("the Ready for dev filter menu opens");
-    // The dropdown spans the panel less its padding; its three short options fit in that.
-    let dropdown = app.ui.right_width - 2.0 * crate::widgets::PAD;
-    assert!(menu.width() >= dropdown - 16.0, "menu {menu:?} at least as wide as its dropdown ({dropdown})");
-    assert!(menu.width() <= app.ui.right_width, "menu {menu:?} fits the {} px panel", app.ui.right_width);
-    assert!(menu.max.x <= SCREEN.x && menu.min.x >= panel_left - 8.0, "menu {menu:?} inside the window, under the panel");
 }

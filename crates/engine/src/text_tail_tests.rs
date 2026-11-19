@@ -343,7 +343,7 @@ fn node_set_keys_for_agents() {
 }
 
 #[test]
-fn inspect_css_and_files() {
+fn inspect_and_files() {
     let mut s = Session::new();
     let t = text(&mut s, "one\ntwo");
     s.execute("node.set", &json!({"id": t, "props": {"listStyle": "bulleted", "start": 4, "end": 4, "listSpacing": 4, "hangingList": true}}))
@@ -367,17 +367,6 @@ fn inspect_css_and_files() {
         ("textDecorationColor", json!("#00FF00"), "colour"),
     ] {
         assert_eq!(j[k], v, "{why}");
-    }
-    let n = doc.node(t).unwrap();
-    let css = crate::codegen::css_decls(doc, n, &mut Default::default(), (true, true));
-    for want in [
-        "text-decoration-style: dotted",
-        "text-decoration-thickness: 2px",
-        "text-underline-offset: 3px",
-        "text-decoration-color: #00ff00",
-        "text-decoration-skip-ink: none",
-    ] {
-        assert!(css.to_lowercase().contains(want), "{want} in {css}");
     }
     // Saved files keep it all and stay free of it when unused.
     let td = doc.node(t).unwrap().kind.text().unwrap();

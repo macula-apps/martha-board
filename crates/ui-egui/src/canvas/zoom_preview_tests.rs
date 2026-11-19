@@ -82,7 +82,6 @@ pub(super) fn job(doc: &Arc<Document>, page: NodeId, uid: u64, view: View) -> Jo
         outline_extras: Default::default(),
         outlined: vec![],
         skip: vec![],
-        solo: None,
         proof: false,
         dots: None,
         uid,

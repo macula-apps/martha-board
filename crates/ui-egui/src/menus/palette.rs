@@ -241,17 +241,9 @@ fn draw_row(ui: &mut Ui, t: &Tokens, row: &ActionRow, highlighted: bool) -> egui
     resp
 }
 
-/// The text a search reads besides the label in the UI's language: the English label, the id, and
-/// a name the feature had before it was renamed ([`figcraft_engine::catalog::SEARCH_ALIASES`]).
+/// The text a search reads besides the label in the UI's language: the English label and the id.
 fn search_text(english: &str, id: &str) -> String {
-    let mut text = format!("{english} {id}");
-    for (alias_id, alias) in figcraft_engine::catalog::SEARCH_ALIASES {
-        if *alias_id == id {
-            text.push(' ');
-            text.push_str(alias);
-        }
-    }
-    text
+    format!("{english} {id}")
 }
 
 /// Whether `label` (or `extra`) matches the query, in any case.

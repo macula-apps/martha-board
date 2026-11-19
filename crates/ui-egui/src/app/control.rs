@@ -1,6 +1,4 @@
-use super::{
-    FigApp, PendingAck, Value, cursors, dev_compare, home_recents, import_report, json, live, missing_fonts, online, present, tabs, windows,
-};
+use super::{FigApp, PendingAck, Value, cursors, home_recents, import_report, json, live, missing_fonts, online, present, tabs, windows};
 
 impl FigApp {
     /// Queue raw input injected through the control channel for the window drawing next, tagged
@@ -53,16 +51,13 @@ impl FigApp {
             "reduceMotion": self.reduce_motion(),
             "presenting": self.ui.present.is_some(),
             "presenter": tabs::shown_or_paused(self).map(present::Presenter::inspect),
-            "presentOptions": {"scale": self.ui.present_view.scale.id(), "deviceFrame": self.ui.present_view.device_frame, "comments": self.ui.present_view.comments, "hotspotHints": self.ui.present_view.hotspot_hints, "inspect": self.ui.present_view.inspect, "hideUi": self.ui.present_view.hide_ui},
+            "presentOptions": {"scale": self.ui.present_view.scale.id(), "deviceFrame": self.ui.present_view.device_frame, "comments": self.ui.present_view.comments, "hotspotHints": self.ui.present_view.hotspot_hints, "hideUi": self.ui.present_view.hide_ui},
             "preview": self.ui.preview.as_ref().map(|p| p.player.inspect()),
             "mainMenu": self.ui.main_menu,
             "palette": self.ui.palette.is_some(),
             "variables": self.ui.variables.is_some(),
             "versionHistory": self.ui.versions.open,
-            "branchReview": self.ui.branch_review.as_ref().map(|r| json!({"id": r.id, "picks": r.picks, "mode": if r.mode == dev_compare::Mode::Overlay { "overlay" } else { "sideBySide" }})),
-            "devCompare": self.ui.dev.compare.as_ref().map(|c| json!({"id": c.id, "mode": if c.mode == dev_compare::Mode::Overlay { "overlay" } else { "sideBySide" }, "split": c.split, "version": c.version})),
-            "devFocus": self.session.ds().ok().and_then(figcraft_engine::DocState::focused),
-            "annotationFilter": self.ui.dev.categories.id(),
+            "branchReview": self.ui.branch_review.as_ref().map(|r| json!({"id": r.id, "picks": r.picks, "mode": if r.mode == crate::compare_view::Mode::Overlay { "overlay" } else { "sideBySide" }})),
             "colorProfileDialog": self.ui.color_profile.map(|p| p.id()),
             "stylePicker": self.ui.style_picker.as_ref().map(|p| p.slot().key()),
             "stylePickerView": if self.ui.style_grid { "grid" } else { "list" },

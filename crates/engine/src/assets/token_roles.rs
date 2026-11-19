@@ -8,8 +8,6 @@ use std::collections::HashMap;
 
 use figcraft_doc::{Document, Variable, VariableId, VariableType, VariableValue};
 
-use crate::codegen::num;
-
 /// What a number variable measures.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NumberRole {
@@ -102,5 +100,43 @@ impl Roles {
     /// A number variable's CSS value: pixels for lengths, bare for opacity and font weight.
     pub fn number_css(&self, v: &Variable, x: f64) -> String {
         if self.role(v) == NumberRole::Unitless { num(x) } else { format!("{}px", num(x)) }
+    }
+}
+
+/// `v` without trailing zeros (2 decimals).
+fn num(v: f64) -> String {
+    if !v.is_finite() {
+        return "0".into();
+    }
+    let scaled = v * 100.0;
+    // Past the x100 overflow every value is whole anyway, so keep it as is.
+    let r = if scaled.is_finite() { scaled.round() / 100.0 } else { v };
+    if (r - r.round()).abs() < 1e-9 {
+        // `as i64` saturates past 2^63, so larger whole values are printed from the float.
+        if r.abs() < 9e18 { format!("{}", r.round() as i64) } else { format!("{:.0}", r.round()) }
+    } else {
+        format!("{r}")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::num;
+
+    #[test]
+    fn num_keeps_finite_values_past_the_x100_overflow() {
+        for v in [1e307, -1e307, f64::MAX] {
+            let s = num(v);
+            assert_eq!(s, format!("{v:.0}"));
+            assert_eq!(s.parse::<f64>(), Ok(v));
+        }
+    }
+
+    #[test]
+    fn num_keeps_huge_whole_numbers() {
+        assert_eq!(num(1e20), "100000000000000000000");
+        assert_eq!(num(-1e20), "-100000000000000000000");
+        assert_eq!(num(1e18), "1000000000000000000");
+        assert_eq!(num(-0.0), "0");
     }
 }

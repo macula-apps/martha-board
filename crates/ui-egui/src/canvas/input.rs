@@ -9,7 +9,7 @@ pub(crate) struct HoverKey {
     doc: Option<(u64, figcraft_engine::doc::NodeId, u64)>,
     selection: Vec<figcraft_engine::doc::NodeId>,
     tool: figcraft_engine::ToolId,
-    modes: [bool; 3],
+    modes: [bool; 2],
 }
 
 impl HoverKey {
@@ -20,7 +20,7 @@ impl HoverKey {
             doc: ds.map(|d| (d.uid, d.page, d.revision)),
             selection: ds.map(|d| d.selection.clone()).unwrap_or_default(),
             tool: app.session.tool.tool,
-            modes: [app.session.tool.dev_mode, ds.is_some_and(|d| d.vector_edit.is_some()), ds.is_some_and(|d| d.text_edit.is_some())],
+            modes: [ds.is_some_and(|d| d.vector_edit.is_some()), ds.is_some_and(|d| d.text_edit.is_some())],
         }
     }
 }
@@ -130,7 +130,7 @@ fn import_dropped(app: &mut FigApp, ctx: &egui::Context, hover_pos: Option<egui:
             crate::pending_open::open_dropped(app, &f);
             continue;
         }
-        if refused || crate::menus::dev_mode_refuses(app, "file.import") {
+        if refused {
             refused = true;
             continue;
         }
@@ -215,8 +215,7 @@ pub(super) fn input(app: &mut FigApp, ui: &mut Ui, resp: &egui::Response) -> boo
         return false;
     }
     // Dropped files import onto the canvas, behind a card while they do ([`crate::pending_open`]);
-    // a dropped document opens as a file of its own, as on the home screen. Dev Mode imports
-    // nothing into the design, and says so once for the whole drop.
+    // a dropped document opens as a file of its own, as on the home screen.
     import_dropped(app, &ctx, hover_pos);
     let Some(pos) = hover_pos.filter(|p| app.canvas.rect.contains(*p)) else {
         // A drag released off the canvas, or off the window, ends where the pointer was last seen.

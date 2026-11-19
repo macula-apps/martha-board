@@ -343,7 +343,6 @@ fn updates_banner(app: &mut FigApp, ui: &mut Ui, w: f32, count: usize) {
     let mut child =
         ui.new_child(egui::UiBuilder::new().max_rect(Rect::from_min_max(pos2(r.max.x - 70.0, r.min.y + 6.0), pos2(r.max.x - 6.0, r.max.y))));
     if crate::widgets::button(&mut child, tr("Update"), true, true).clicked()
-        && !crate::menus::dev_mode_refuses(app, "library.acceptUpdates")
         && let Some(v) = app.run("library.acceptUpdates", json!({}))
     {
         let (c, s) = (v["components"].as_u64().unwrap_or(0), v["styles"].as_u64().unwrap_or(0));
@@ -668,9 +667,7 @@ pub fn show(app: &mut FigApp, ui: &mut Ui) {
         }
         Some(Act::Style(src, style)) => apply_style(app, &src, &style),
         Some(Act::Hide(id, on)) => {
-            if !crate::menus::dev_mode_refuses(app, "component.hideWhenPublishing") {
-                app.run("component.hideWhenPublishing", json!({"ids": [id], "on": on}));
-            }
+            app.run("component.hideWhenPublishing", json!({"ids": [id], "on": on}));
         }
         Some(Act::Toggle(id)) => {
             let mut c = collapsed;
@@ -691,9 +688,7 @@ fn place(app: &mut FigApp, src: &Source, id: NodeId, x: f64, y: f64) {
         Source::Local => ("instance.place", json!({"component": id, "x": x, "y": y})),
         Source::Library(lib) => ("library.place", json!({"library": lib, "component": id, "x": x, "y": y})),
     };
-    if !crate::menus::dev_mode_refuses(app, cmd) {
-        app.run(cmd, params);
-    }
+    app.run(cmd, params);
 }
 
 fn apply_style(app: &mut FigApp, src: &Source, style: &str) {
@@ -701,9 +696,6 @@ fn apply_style(app: &mut FigApp, src: &Source, style: &str) {
         Source::Local => ("style.apply", json!({"style": style})),
         Source::Library(lib) => ("library.applyStyle", json!({"library": lib, "style": style})),
     };
-    if crate::menus::dev_mode_refuses(app, cmd) {
-        return;
-    }
     if app.session.selection().is_empty() {
         app.toast(tr("Select layers to apply the style to"));
         return;
@@ -717,9 +709,7 @@ fn swap_at(app: &mut FigApp, src: &Source, id: NodeId, x: f64, y: f64) {
         Source::Local => ("instance.swapAt", json!({"component": id, "x": x, "y": y})),
         Source::Library(lib) => ("library.swapAt", json!({"library": lib, "component": id, "x": x, "y": y})),
     };
-    if !crate::menus::dev_mode_refuses(app, cmd) {
-        app.run(cmd, params);
-    }
+    app.run(cmd, params);
 }
 
 /// The component set (by name) a dragged asset belongs to, in the document it comes from: the
@@ -942,10 +932,7 @@ fn publish_form(app: &mut FigApp, ui: &mut Ui, w: f32, doc: &Document) {
         None => {}
     }
     let params = (publish || to_server).then(|| json!({"description": form.description.clone().unwrap_or(description), "include": include}));
-    if publish
-        && !crate::menus::dev_mode_refuses(app, "library.publish")
-        && let Some(r) = params.clone().and_then(|p| app.run("library.publish", p))
-    {
+    if publish && let Some(r) = params.clone().and_then(|p| app.run("library.publish", p)) {
         form = PublishForm::default();
         // Other files read the saved file.
         app.save();
@@ -1228,7 +1215,7 @@ fn enabled_libraries(app: &mut FigApp, ui: &mut Ui, w: f32, doc: &Document) {
         hint(ui, tr("This file uses team libraries on servers you haven't used here. They aren't contacted until you check them."));
         ui.horizontal(|ui| {
             ui.add_space(PAD);
-            if crate::widgets::button(ui, tr("Check for updates"), false, true).clicked() && !crate::menus::dev_mode_refuses(app, CHECK) {
+            if crate::widgets::button(ui, tr("Check for updates"), false, true).clicked() {
                 app.run(CHECK, json!({}));
             }
         });
@@ -1246,9 +1233,7 @@ fn enabled_libraries(app: &mut FigApp, ui: &mut Ui, w: f32, doc: &Document) {
             crate::widgets::text_field(ui, Id::unique("asset_add_link"), "", w - PAD * 2.0, tr("Paste a team library link (a view link)"))
         })
         .inner;
-    if let Some(link) = pasted.map(|l| l.trim().to_string()).filter(|l| !l.is_empty())
-        && !crate::menus::dev_mode_refuses(app, ADD)
-    {
+    if let Some(link) = pasted.map(|l| l.trim().to_string()).filter(|l| !l.is_empty()) {
         app.run_background(&ui.ctx().clone(), ADD, json!({"path": link}), Box::new(|app, _, r| added(app, &r)));
     }
     if app.session.waiting_for(ADD) {
@@ -1260,13 +1245,10 @@ fn enabled_libraries(app: &mut FigApp, ui: &mut Ui, w: f32, doc: &Document) {
             }
         });
     }
-    if let Some(id) = remove
-        && !crate::menus::dev_mode_refuses(app, "library.remove")
-    {
+    if let Some(id) = remove {
         app.run("library.remove", json!({"id": id}));
     }
     if let Some((from, to)) = swap
-        && !crate::menus::dev_mode_refuses(app, "library.swap")
         && let Some(r) = app.run("library.swap", json!({"from": from, "to": to}))
     {
         let moved = ["components", "styles", "variables"].iter().map(|k| r[*k].as_u64().unwrap_or(0)).sum::<u64>();
@@ -1277,7 +1259,7 @@ fn enabled_libraries(app: &mut FigApp, ui: &mut Ui, w: f32, doc: &Document) {
             trn("Swapped {n} assets; {missed} had no match and still use the old library", moved as usize, &[("missed", &missed)])
         });
     }
-    if add && !crate::menus::dev_mode_refuses(app, ADD) {
+    if add {
         app.pick_open(tr("Add library"), &["figcraft"], |app, p| {
             if let Some(r) = app.run(ADD, json!({"path": p.to_string_lossy()})) {
                 added(app, &r);

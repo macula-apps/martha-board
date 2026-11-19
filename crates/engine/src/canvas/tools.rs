@@ -58,7 +58,6 @@ pub enum ToolId {
     Text,
     TextOnPath,
     Comment,
-    Annotation,
     Eyedropper,
     ShapeBuilder,
     // Board tools.
@@ -72,7 +71,7 @@ pub enum ToolId {
 }
 
 impl ToolId {
-    pub const ALL: [ToolId; 27] = [
+    pub const ALL: [ToolId; 26] = [
         ToolId::Move,
         ToolId::Scale,
         ToolId::Hand,
@@ -90,7 +89,6 @@ impl ToolId {
         ToolId::Text,
         ToolId::TextOnPath,
         ToolId::Comment,
-        ToolId::Annotation,
         ToolId::Eyedropper,
         ToolId::ShapeBuilder,
         ToolId::Sticky,
@@ -120,7 +118,6 @@ impl ToolId {
             ToolId::Text => "text",
             ToolId::TextOnPath => "textOnPath",
             ToolId::Comment => "comment",
-            ToolId::Annotation => "annotation",
             ToolId::Eyedropper => "eyedropper",
             ToolId::ShapeBuilder => "shapeBuilder",
             ToolId::Sticky => "sticky",
@@ -131,11 +128,6 @@ impl ToolId {
             ToolId::Eraser => "eraser",
             ToolId::Stamp => "stamp",
         }
-    }
-    /// Whether Developer Mode keeps this tool: it only inspects, so the tools that edit leave it.
-    /// The one list behind the engine's pointer routing and command allowlist and the toolbar.
-    pub fn works_in_dev_mode(self) -> bool {
-        matches!(self, ToolId::Move | ToolId::Hand | ToolId::Comment | ToolId::Annotation)
     }
     pub fn from_id(s: &str) -> Option<ToolId> {
         ToolId::ALL.into_iter().find(|t| t.id().eq_ignore_ascii_case(s))
@@ -159,7 +151,6 @@ impl ToolId {
             ToolId::Text => "Text",
             ToolId::TextOnPath => "Text on a path",
             ToolId::Comment => "Comment",
-            ToolId::Annotation => "Annotation",
             ToolId::Eyedropper => "Pick color",
             ToolId::ShapeBuilder => "Shape builder",
             ToolId::Sticky => "Sticky note",
@@ -580,10 +571,6 @@ pub struct ToolState {
     /// removes; Alt merges).
     pub shape_builder: Option<std::sync::Arc<crate::shapebuilder::Arrangement>>,
     pub builder_remove: bool,
-    /// Dev Mode: the canvas inspects. Hovering shows distances from the selection without Alt, and
-    /// presses select, pan and comment but never edit the design (no moving, resizing, drawing,
-    /// or editing text or vectors).
-    pub dev_mode: bool,
     /// Pen snap targets, kept while hovering (see `vectoredit::point_snap`).
     pub(crate) pen_targets: Option<crate::vectoredit::point_snap::PenTargets>,
     /// Vector edit mode's pen: where the last press that started something new (no path being

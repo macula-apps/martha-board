@@ -58,19 +58,17 @@ fn switching_mode_ends_the_pen_path_as_escape_does() {
     let finished = layers(&esc);
     assert_eq!(finished, 1, "Escape keeps the two-anchor path");
 
-    // Shift+E is Prototype, Shift+D is Inspect.
-    for key in [Key::E, Key::D] {
-        let mut u = drawing();
-        press(&mut u, key, Modifiers::SHIFT);
-        assert_ne!(u.app.ui.right_tab, RightTab::Design, "{key:?}");
-        assert!(u.app.session.tool.pen.is_none(), "{key:?}: the path is finished");
-        assert_eq!(u.app.session.tool.tool, ToolId::Move, "{key:?}: back to Move");
-        assert_eq!(layers(&u), finished, "{key:?}: the path is kept as Escape keeps it");
-        // The canvas takes no more pen points.
-        click(&mut u, pos2(800.0, 300.0));
-        assert!(u.app.session.tool.pen.is_none(), "{key:?}: a click starts no path");
-        assert_eq!(layers(&u), finished, "{key:?}: a click adds nothing");
-    }
+    // Shift+E is Prototype.
+    let mut u = drawing();
+    press(&mut u, Key::E, Modifiers::SHIFT);
+    assert_eq!(u.app.ui.right_tab, RightTab::Prototype);
+    assert!(u.app.session.tool.pen.is_none(), "the path is finished");
+    assert_eq!(u.app.session.tool.tool, ToolId::Move, "back to Move");
+    assert_eq!(layers(&u), finished, "the path is kept as Escape keeps it");
+    // The canvas takes no more pen points.
+    click(&mut u, pos2(800.0, 300.0));
+    assert!(u.app.session.tool.pen.is_none(), "a click starts no path");
+    assert_eq!(layers(&u), finished, "a click adds nothing");
 }
 
 #[test]
@@ -80,15 +78,13 @@ fn the_mode_switcher_ends_the_pen_path_too() {
         press(&mut esc, Key::Escape, Modifiers::NONE);
         layers(&esc)
     };
-    for (label, tab) in [("Prototype", RightTab::Prototype), ("Inspect", RightTab::Inspect)] {
-        let mut u = drawing();
-        let at = mode_button(&mut u, label);
-        click(&mut u, at);
-        assert_eq!(u.app.ui.right_tab, tab, "{label}");
-        assert!(u.app.session.tool.pen.is_none(), "{label}: the path is finished");
-        assert_eq!(u.app.session.tool.tool, ToolId::Move, "{label}: back to Move");
-        assert_eq!(layers(&u), finished, "{label}: the path is kept as Escape keeps it");
-    }
+    let mut u = drawing();
+    let at = mode_button(&mut u, "Prototype");
+    click(&mut u, at);
+    assert_eq!(u.app.ui.right_tab, RightTab::Prototype);
+    assert!(u.app.session.tool.pen.is_none(), "the path is finished");
+    assert_eq!(u.app.session.tool.tool, ToolId::Move, "back to Move");
+    assert_eq!(layers(&u), finished, "the path is kept as Escape keeps it");
     // Design is already the mode while the pen draws: pressing it again leaves nothing, so the
     // path goes on.
     let mut u = drawing();

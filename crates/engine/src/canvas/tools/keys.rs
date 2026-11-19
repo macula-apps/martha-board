@@ -4,10 +4,6 @@ impl Session {
     /// Keys the current mode handles before menu shortcuts (vector edit mode's tools and point
     /// keys, Enter to finish the shape builder). Returns whether the key was used.
     pub fn tool_key(&mut self, name: &str, shift: bool, alt: bool, cmd: bool) -> Result<bool> {
-        // Dev Mode edits nothing: keys go to the commands (which it refuses in the app).
-        if self.tool.dev_mode {
-            return Ok(false);
-        }
         // Enter while the pen draws ends the path and edits it with the Move tool (#1430).
         if name == "Enter" && !alt && !cmd && self.tool.pen.is_some() {
             self.pen_enter()?;
@@ -54,23 +50,18 @@ impl Session {
         Ok(true)
     }
 
-    /// The layer under `p` for a click: the topmost on `page`, or in the focus view the focused
-    /// frame's. Boolean groups are hit by their results ([`crate::booleans::result_outline`]); in
-    /// outline mode shapes only on their outlines.
+    /// The layer under `p` for a click: the topmost on `page`. Boolean groups are hit by their
+    /// results ([`crate::booleans::result_outline`]); in outline mode shapes only on their outlines.
     pub fn hit(&self, doc: &Document, page: NodeId, p: Point, tol: f64) -> Option<NodeId> {
         let sel = self.selection();
         let result = crate::booleans::result_outline(doc, &sel);
-        let focus = self.ds().ok().and_then(crate::DocState::focused);
         // Outline mode draws no fills: shapes are clicked on their outlines, reaching what's behind.
         if let Some(v) = self.ds().ok().map(|d| &d.view).filter(|v| v.outlines) {
             // What it draws besides the shapes can be clicked too.
             let also = figcraft_doc::geometry::OutlineHits { hidden: v.outline_hidden, bounds: v.outline_bounds };
-            return figcraft_doc::geometry::hit_outlines(doc, focus.unwrap_or(page), p, tol, Some(&result), also);
+            return figcraft_doc::geometry::hit_outlines(doc, page, p, tol, Some(&result), also);
         }
-        match focus {
-            Some(f) => figcraft_doc::geometry::hit_in(doc, f, p, tol, Some(&result)),
-            None => doc.hit_test(page, p, tol, Some(&result)),
-        }
+        doc.hit_test(page, p, tol, Some(&result))
     }
 
     /// Enter with a shape or frame tool (`tool.place`): what a click with it makes, centred on `at`
@@ -101,8 +92,7 @@ impl Session {
         r
     }
 
-    /// Keyboard Escape: cancel gestures, finish pens, leave text editing, then deselect (in the
-    /// focus view, once the focused frame or nothing is selected, it ends the focus view).
+    /// Keyboard Escape: cancel gestures, finish pens, leave text editing, then deselect.
     pub fn escape(&mut self) -> Result<()> {
         // Following someone in a live session: Escape stops that first.
         if self.live_unfollow() {
@@ -139,13 +129,6 @@ impl Session {
             self.set_tool(ToolId::Move);
             return Ok(());
         }
-        let sel = self.selection();
-        if let Some(f) = self.ds()?.focused()
-            && (sel.is_empty() || sel == [f])
-        {
-            self.ds_mut()?.focus = None;
-            return Ok(());
-        }
         // Escape clears the selection whatever its nesting (measured in Figma: it never selects the
         // parent).
         self.set_selection(vec![]);
@@ -157,7 +140,6 @@ impl Session {
     pub(super) fn arc_handles_shown(&self) -> bool {
         let arc_drag = matches!(self.tool.gesture, Gesture::Arc { .. } | Gesture::Shape { .. });
         self.tool.tool == ToolId::Move
-            && !self.tool.dev_mode
             && (arc_drag || !self.tool.busy())
             && self.ds().is_ok_and(|ds| ds.vector_edit.is_none() && ds.text_edit.is_none())
     }

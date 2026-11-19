@@ -84,7 +84,6 @@ fn big_job(doc: &Arc<figcraft_doc::Document>, page: figcraft_doc::NodeId, scale:
         outline_extras: Default::default(),
         outlined: vec![],
         skip: vec![],
-        solo: None,
         proof: false,
         dots: None,
         uid: 0,

@@ -1,9 +1,9 @@
 //! Which URLs stored in a document may be handed to the browser or the system opener.
 //!
 //! A document can carry URLs that the app opens for whoever views it: a prototype's Open link
-//! action ([`crate::proto_run`]) and Dev Mode's dev resources ([`crate::dev_resources`]). Both end
-//! up at the platform's opener, so a document that someone else made chooses what that opener is
-//! asked to do. Only the schemes a browser would follow on a plain link are allowed:
+//! action ([`crate::proto_run`]). It ends up at the platform's opener, so a document that someone
+//! else made chooses what that opener is asked to do. Only the schemes a browser would follow on a
+//! plain link are allowed:
 //!
 //! - `javascript:` runs script. In the web build the opener is `window.open`, which executes it in
 //!   the app's own origin, so a saved document becomes stored XSS.

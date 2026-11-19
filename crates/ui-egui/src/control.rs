@@ -1039,8 +1039,7 @@ fn ui_key(app: &mut FigApp, ctx: &Context, p: &Value) -> Result<Value, String> {
             };
             // A shape or frame tool chosen and nothing selected: the arrows show and move the
             // placement crosshair, as the window's key path does.
-            if app.session.selection().is_empty() && app.session.tool.tool.draws_shape() && !app.session.tool.dev_mode && !(m.cmd || m.ctrl || m.alt)
-            {
+            if app.session.selection().is_empty() && app.session.tool.tool.draws_shape() && !(m.cmd || m.ctrl || m.alt) {
                 return app.session.execute("tool.crosshair", &json!({"dx": dx, "dy": dy, "big": m.shift})).map_err(|e| e.to_string());
             }
             // Otherwise, with nothing selected the arrows pan the view, as the window's own key path does.
@@ -1060,10 +1059,6 @@ fn ui_key(app: &mut FigApp, ctx: &Context, p: &Value) -> Result<Value, String> {
             } else {
                 ("transform.nudge", json!({"dx": dx, "dy": dy, "big": m.shift}))
             };
-            // Dev Mode only inspects, as the window's key path says.
-            if crate::menus::dev_mode_refuses(app, cmd) {
-                return Err("Developer Mode only inspects: switch to Design to edit".into());
-            }
             app.session.execute(cmd, &params).map_err(|e| e.to_string())
         }
         _ => {
@@ -1151,7 +1146,6 @@ fn ui_set_view(app: &mut FigApp, ctx: &Context, p: &Value) -> Result<(), String>
     if let Some(t) = p.get("rightTab").and_then(Value::as_str) {
         app.ui.right_tab = match t {
             "prototype" => crate::RightTab::Prototype,
-            "inspect" => crate::RightTab::Inspect,
             _ => crate::RightTab::Design,
         };
     }
@@ -1385,26 +1379,6 @@ fn ui_set_styles(app: &mut FigApp, p: &Value) -> Result<(), String> {
     if let Some(v) = p.get("exportPreview").and_then(Value::as_bool) {
         app.ui.export_thumb = v;
     }
-    // Dev Mode's compare view: a frame or section opens it, null closes it; `devCompareVersion`
-    // the saved version it compares with (null: when it was marked ready for dev),
-    // `devCompareMode` is sideBySide or overlay, `devCompareSplit` the overlay slider (0–1).
-    if let Some(v) = p.get("devCompare") {
-        app.ui.dev.compare = figcraft_engine::params::id_of(v).map(|id| crate::dev_compare::CompareView::new(id, None));
-    }
-    if let Some(c) = app.ui.dev.compare.as_mut() {
-        if let Some(v) = p.get("devCompareVersion") {
-            c.version = v.as_str().map(str::to_string);
-        }
-        match p.get("devCompareMode").and_then(Value::as_str) {
-            Some("overlay") => c.mode = crate::dev_compare::Mode::Overlay,
-            Some("sideBySide") => c.mode = crate::dev_compare::Mode::SideBySide,
-            Some(_) => return Err("devCompareMode: sideBySide|overlay".into()),
-            None => {}
-        }
-        if let Some(x) = p.get("devCompareSplit").and_then(Value::as_f64).filter(|x| x.is_finite()) {
-            c.split = x.clamp(0.0, 1.0) as f32;
-        }
-    }
     // The branch review dialog: a branch id opens it, null closes it; `branchReviewPicks`
     // chooses sides ({<conflict key>: "branch" | "main"}).
     if let Some(v) = p.get("branchReview") {
@@ -1418,11 +1392,6 @@ fn ui_set_styles(app: &mut FigApp, p: &Value) -> Result<(), String> {
             let side = v.as_str().and_then(figcraft_engine::branches::Side::parse).ok_or("branchReviewPicks: \"branch\" or \"main\"")?;
             r.picks.insert(k.clone(), side);
         }
-    }
-    // Which annotations the canvas shows: all, none (uncategorised) or a category.
-    if let Some(v) = p.get("annotationFilter").and_then(Value::as_str) {
-        let doc = app.session.doc().map_err(|e| e.to_string())?;
-        app.ui.dev.categories = crate::dev_mode::CategoryFilter::parse(doc, v).ok_or("annotationFilter: all|none|a category id or name")?;
     }
     if b(p, "resetFrameStats") {
         app.frame_stats.reset();

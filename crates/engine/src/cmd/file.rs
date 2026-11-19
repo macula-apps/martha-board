@@ -13,6 +13,7 @@ use super::{CommandSpec, ok};
 use crate::params::{bool_of, boolean, get, id, num, num_or, req_index, req_string, string, targets};
 use crate::{DocState, EngineError, Result, Session, bad, spec};
 
+mod assets;
 mod export;
 mod import_ids;
 mod load;
@@ -20,6 +21,7 @@ mod open;
 mod save;
 mod version;
 
+pub use assets::{Asset, AssetKind, asset_jobs, assets};
 pub(crate) use export::FORBIDDEN_FILE_NAME_CHARS;
 #[cfg(test)]
 use export::add_member;
@@ -122,7 +124,7 @@ pub fn specs() -> Vec<CommandSpec> {
         spec!(
             "file.exportLayers",
             "Export layers",
-            "{ids? (default the selection, else every layer on the page with export settings), assets? (true: the Inspect tab's assets in and under them instead: layers with export settings, icons as SVG, images as PNG), dir? (folder to write into; else each file comes back as base64 `data`), zip? (no dir: the files come back together as one base64 zip `data` instead), bleed? (PDF: points, or with a unit: \"3mm\", \"0.125in\", \"9pt\"), cropMarks?, bleedMarks?, cmyk? (PDF print options): for every PDF instead of each setting's own, vdCompat? (bestEffort|exact|ignore: for every XML instead of each setting's own), colorProfile? (sameAsFile|srgb|displayP3: for every PNG, JPG and WebP instead of each setting's own)}  every layer once per export setting, named `<layer><suffix>.<format>` (\"@2x\" when a scaled export has no suffix; repeats get \" 2\"; slashes in a layer name make folders). Returns {files: [{name, id, bytes, path | data, warnings (XML only)}], skipped (layers without settings), data? (zip)}",
+            "{ids? (default the selection, else every layer on the page with export settings), assets? (true: the assets in and under them instead: layers with export settings, icons as SVG, images as PNG), dir? (folder to write into; else each file comes back as base64 `data`), zip? (no dir: the files come back together as one base64 zip `data` instead), bleed? (PDF: points, or with a unit: \"3mm\", \"0.125in\", \"9pt\"), cropMarks?, bleedMarks?, cmyk? (PDF print options): for every PDF instead of each setting's own, vdCompat? (bestEffort|exact|ignore: for every XML instead of each setting's own), colorProfile? (sameAsFile|srgb|displayP3: for every PNG, JPG and WebP instead of each setting's own)}  every layer once per export setting, named `<layer><suffix>.<format>` (\"@2x\" when a scaled export has no suffix; repeats get \" 2\"; slashes in a layer name make folders). Returns {files: [{name, id, bytes, path | data, warnings (XML only)}], skipped (layers without settings), data? (zip)}",
             false,
             export_layers
         ),
@@ -476,6 +478,9 @@ fn cycle_doc(s: &mut Session, dir: i64) -> Result<Value> {
     s.active = (s.active as i64 + dir).rem_euclid(n) as usize;
     Ok(json!({"index": s.active}))
 }
+
+#[cfg(test)]
+mod assets_tests;
 
 #[cfg(test)]
 mod staging_write_tests;

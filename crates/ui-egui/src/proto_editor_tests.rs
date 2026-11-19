@@ -253,29 +253,6 @@ fn typed_conditions_are_checked_and_errors_show_until_fixed() {
 }
 
 #[test]
-fn the_presenter_inspects_the_layer_under_the_pointer() {
-    let (s, a, _, btn) = setup();
-    let mut u = Ui::new(s);
-    u.run("proto.present", json!({"start": a}));
-    assert_eq!(presenter(&u)["inspect"], json!(false), "off by default");
-    let r = rect_of(&presenter(&u)["hotspots"][0]["rect"]);
-    u.run("proto.presentOptions", json!({"inspect": true}));
-    u.frames(2, Vec::new);
-    // The panel takes room: the prototype moves; hover the button where it is now.
-    let r2 = rect_of(&presenter(&u)["hotspots"][0]["rect"]);
-    assert!(r2.center().x < r.center().x, "{r:?} → {r2:?}");
-    u.frame(vec![egui::Event::PointerMoved(r2.center())]);
-    u.frames(1, Vec::new);
-    assert_eq!(presenter(&u)["inspected"], json!(btn));
-    // Elsewhere in the frame: the frame itself; outside it, the last one stays.
-    u.frame(vec![egui::Event::PointerMoved(pos2(r2.center().x, r2.max.y + 30.0))]);
-    assert_eq!(presenter(&u)["inspected"], json!(a));
-    u.frame(vec![egui::Event::PointerMoved(pos2(5.0, 400.0))]);
-    assert_eq!(presenter(&u)["inspected"], json!(a));
-    assert_eq!(u.app.inspect()["presentOptions"]["inspect"], json!(true));
-}
-
-#[test]
 fn deleting_a_prototype_interaction_removes_the_interaction_not_the_component() {
     let (s, _a, b, btn) = setup();
     let mut u = Ui::new(s);

@@ -7,16 +7,16 @@ use figcraft_doc::{Collection, Document, Variable, VariableValue, Variables, tri
 use serde_json::{Value, json};
 
 use super::CommandSpec;
-use crate::codegen::{CssNames, css_var_name};
 use crate::library::local_collections;
 use crate::params::{get, string};
+use crate::variable_names::{CssNames, Theme, css_var_name, kotlin_color};
 use crate::{Result, Session, bad, spec};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![spec!(
         "variable.export",
         "Export variables",
-        "{collections? [ids or names; default every collection of this file, not library copies], format? (css (default): custom properties, the default mode on :root and each other mode on [data-<collection>=\"<mode>\"], colour calculations as the colour they show in that mode with other collections in their default modes; numbers in px unless layers or scopes use them as opacity or font weight | tailwind: a Tailwind CSS v4 stylesheet, the default mode as an @theme block named the way inspect.code's tailwind utilities read them: --color-*, --radius-*, --text-*, --spacing-*, --font-*, unique per file; each other mode as in css; colour calculations as the colour they show in that mode, other collections in their default modes) | dart: a Dart file for Flutter, a class of constants per collection and mode (Color, double, String, bool), aliases and colour calculations resolved), path? (write it there)}  → {text}, or {path} when written",
+        "{collections? [ids or names; default every collection of this file, not library copies], format? (css (default): custom properties, the default mode on :root and each other mode on [data-<collection>=\"<mode>\"], colour calculations as the colour they show in that mode with other collections in their default modes; numbers in px unless layers or scopes use them as opacity or font weight | tailwind: a Tailwind CSS v4 stylesheet, the default mode as an @theme block named --color-*, --radius-*, --text-*, --spacing-*, --font-*, unique per file; each other mode as in css; colour calculations as the colour they show in that mode, other collections in their default modes) | dart: a Dart file for Flutter, a class of constants per collection and mode (Color, double, String, bool), aliases and colour calculations resolved), path? (write it there)}  → {text}, or {path} when written",
         false,
         export
     )]
@@ -60,7 +60,7 @@ fn css(doc: &Document, colls: &[&Collection], tailwind: bool) -> String {
     let vars = &doc.variables;
     let flattener = vars.flattener();
     // Tailwind theme names, unique per file and the same ones page code reads.
-    let theme = crate::tailwind::Theme::new(doc);
+    let theme = Theme::new(doc);
     // CSS names, unique per file and the same ones generated code reads.
     let names = CssNames::new(doc);
     let name = |v: &Variable| if tailwind { theme.name(v) } else { names.name(v) };
@@ -227,7 +227,7 @@ fn dart(vars: &Variables, colls: &[&Collection]) -> String {
             let modes = BTreeMap::from([(c.id.clone(), m.id.clone())]);
             for (v, name) in &names {
                 let (ty, value) = match vars.resolve(&v.id, &modes) {
-                    Some(VariableValue::Color(col)) => ("Color", crate::codegen::kotlin_color(col)),
+                    Some(VariableValue::Color(col)) => ("Color", kotlin_color(col)),
                     Some(VariableValue::Number(x)) if x.is_finite() => ("double", dart_number(x)),
                     Some(VariableValue::String(t)) => ("String", format!("'{}'", dart_string(&t))),
                     Some(VariableValue::Boolean(b)) => ("bool", b.to_string()),

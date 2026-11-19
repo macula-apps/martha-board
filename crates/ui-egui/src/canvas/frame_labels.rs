@@ -10,7 +10,6 @@ use figcraft_doc::{Document, NodeId, NodeKind};
 use figcraft_geom::Point;
 
 use crate::FigApp;
-use crate::canvas::status_badge;
 use crate::i18n::tr;
 use crate::theme::{ACCENT, COMPONENT, Tokens, regular, semibold};
 
@@ -129,7 +128,6 @@ pub fn draw(app: &FigApp, painter: &Painter, t: &Tokens, doc: &Document, id: Nod
             crate::icons::paint(painter, ir, crate::icons::Icon::EyeOff, fg);
         }
         painter.galley(r.min + vec2(8.0 + eye, 4.0), galley, fg);
-        status_badge(painter, n, pos2(r.max.x + 6.0, r.center().y));
         r
     } else {
         let mut x = tl.x;
@@ -142,7 +140,6 @@ pub fn draw(app: &FigApp, painter: &Painter, t: &Tokens, doc: &Document, id: Nod
         let size = galley.size();
         let end = x + size.x;
         painter.galley(pos2(x, tl.y - 16.0), galley, col);
-        status_badge(painter, n, pos2(end + 6.0, tl.y - 9.0));
         Rect::from_min_max(pos2(tl.x, tl.y - 18.0), pos2(end, tl.y - 16.0 + size.y.max(12.0)))
     };
     turn_since(painter, from, tl, edge.angle);

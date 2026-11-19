@@ -625,8 +625,4 @@ fn a_click_on_a_child_of_a_selected_frame_selects_the_child() {
     }
     assert_eq!(s.doc().unwrap().world_bounds(c).unwrap().origin(), home, "nothing moved");
     let _ = gc;
-    s.tool.dev_mode = true;
-    ex(&mut s, "select.set", json!({"ids": [f]}));
-    click(&mut s, 60.0, 60.0, NONE);
-    assert_eq!(s.selection(), vec![c], "in Dev Mode too");
 }

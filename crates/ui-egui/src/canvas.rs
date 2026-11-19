@@ -30,7 +30,6 @@ pub(crate) use outline::{TextOnScreen, node_quad};
 use overlays::{accent, overlays};
 use render::{JobKey, request_render, shows};
 pub use rulers::fmt;
-pub(crate) use rulers::{status_badge, status_label};
 pub mod board_bar;
 pub mod board_connect;
 pub mod board_facilitate;
@@ -281,17 +280,11 @@ pub fn show(app: &mut FigApp, ui: &mut Ui, worker: &mut Worker) {
         }
     }
     let own_cursor = input(app, ui, &resp);
-    // A browser names no dragged file until the drop, so documents there still say "import", or
-    // in Dev Mode show the Dev Mode note, though they open when dropped.
+    // A browser names no dragged file until the drop, so documents there still say "import",
+    // though they open when dropped.
     let documents = ctx.input(|i| i.raw.hovered_files.iter().all(|f| f.path.as_deref().is_some_and(crate::is_document)));
-    let label = if documents {
-        tr("Drop to open")
-    } else if app.ui.right_tab == crate::RightTab::Inspect {
-        tr("Developer Mode only inspects: switch to Design (Shift+D) to edit")
-    } else {
-        tr("Drop to import")
-    };
-    match crate::colorpicker::image_drop_target(app, &ctx).filter(|_| !documents && app.ui.right_tab != crate::RightTab::Inspect) {
+    let label = if documents { tr("Drop to open") } else { tr("Drop to import") };
+    match crate::colorpicker::image_drop_target(app, &ctx).filter(|_| !documents) {
         Some((rect, _)) => crate::drop_overlay(&ctx, rect, tr("Drop to use this image")),
         None => crate::drop_overlay(&ctx, ctx.content_rect(), label),
     }
@@ -386,7 +379,6 @@ pub fn show(app: &mut FigApp, ui: &mut Ui, worker: &mut Worker) {
     if let Some((texture, image_rect)) = image {
         painter.image(texture, image_rect, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
     }
-    crate::dev_mode::refresh_measurements(app);
     app.session.tool.labels = overlays(app, &painter, &t);
     crate::frame_labels::rename_field(app, ui);
     // The zoom tool's area.
@@ -397,7 +389,6 @@ pub fn show(app: &mut FigApp, ui: &mut Ui, worker: &mut Worker) {
             painter.rect_stroke(area, CornerRadius::ZERO, Stroke::new(1.0, accent(&painter)), StrokeKind::Inside);
         }
     }
-    crate::dev_mode::draw(app, &painter);
     crate::handles::draw(app, &painter);
     crate::board_facilitate::badges(app, &painter);
     crate::board_bar::stamp_author(app, &painter, ctx.input(|i| i.pointer.hover_pos()).filter(|p| rect.contains(*p)));
@@ -417,7 +408,6 @@ pub fn show(app: &mut FigApp, ui: &mut Ui, worker: &mut Worker) {
     crate::comments::popovers(app, &ctx);
     crate::versions::preview_banner(app, &ctx, banners);
     crate::branch_ui::banner(app, &ctx, banners);
-    crate::dev_mode::focus_bar(app, &ctx, banners);
     // The cursor: the tool's, unless something on the canvas with its own has the pointer.
     app.canvas.cursor = None;
     if let (true, Some(at)) = (own_cursor && resp.hovered(), ctx.input(|i| i.pointer.hover_pos())) {

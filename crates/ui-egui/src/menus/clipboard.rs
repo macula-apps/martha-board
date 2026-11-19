@@ -1,4 +1,4 @@
-use super::{FigApp, dev_mode_refuses, json};
+use super::{FigApp, json};
 use crate::i18n::trf;
 
 /// Run a menu item: some open dialogs or use platform services, the rest go to the engine.
@@ -7,14 +7,12 @@ use crate::i18n::trf;
 /// `event_text` is the text the platform handed over with the paste event (the browser has no
 /// other way to read it; the desktop's clipboard bridge has already read it). `at`: the page
 /// point to paste at (Paste here); `None` pastes in the middle of the view.
-/// In Dev Mode only a comment's link pastes (it opens the thread); everything else would edit.
 pub fn paste(app: &mut FigApp, event_text: Option<&str>, at: Option<(f64, f64)>) {
     // A gesture injected through the control channel pastes only our own copied layers: it must not
     // read (and so expose) the user's system clipboard.
     if app.control_synthetic {
-        // Synthetic input is user-like: Dev Mode refuses the paste here too, and only the engine's
-        // own copied layers are pasted (the system clipboard is never read).
-        if !(at.is_none() && crate::property_rows::paste(app)) && !dev_mode_refuses(app, "edit.paste") {
+        // Only the engine's own copied layers are pasted (the system clipboard is never read).
+        if !(at.is_none() && crate::property_rows::paste(app)) {
             app.run("edit.paste", at.map_or(json!({}), |(x, y)| json!({"x": x, "y": y})));
         }
         return;
@@ -36,9 +34,6 @@ pub fn paste(app: &mut FigApp, event_text: Option<&str>, at: Option<(f64, f64)>)
     let (cx, cy) = at.or_else(|| app.session.ds().ok().map(|d| (d.view.cx, d.view.cy))).unwrap_or((0.0, 0.0));
     if !ours {
         if let Some((png, w, h)) = clipboard_png(app) {
-            if dev_mode_refuses(app, "edit.paste") {
-                return;
-            }
             use base64::Engine as _;
             let b64 = base64::engine::general_purpose::STANDARD.encode(png);
             // One selected layer that can have fills takes the image as its top fill.
@@ -66,9 +61,7 @@ pub fn paste(app: &mut FigApp, event_text: Option<&str>, at: Option<(f64, f64)>)
     if at.is_none() && crate::property_rows::paste(app) {
         return;
     }
-    if !dev_mode_refuses(app, "edit.paste") {
-        app.run("edit.paste", at.map_or(json!({}), |(x, y)| json!({"x": x, "y": y})));
-    }
+    app.run("edit.paste", at.map_or(json!({}), |(x, y)| json!({"x": x, "y": y})));
 }
 
 /// The marker FigCraft puts on the system clipboard for copied layers with no text/SVG mirror.
@@ -83,8 +76,6 @@ fn paste_text(app: &mut FigApp, text: &str, (cx, cy): (f64, f64), center: bool) 
     let board = app.session.doc().is_ok_and(figcraft_engine::board::is_board);
     if text.trim().starts_with("figcraft://comment/") {
         app.run("comment.open", json!({"link": text.trim()}));
-    } else if dev_mode_refuses(app, "edit.paste") {
-        // Dev Mode: the note says why nothing was pasted.
     } else if let Some((cells, more)) = board.then(|| figcraft_engine::board_table::spreadsheet_cells(text)).flatten() {
         // Centred in the view, or (Paste here) its top-left at the point.
         let mut params = json!({"cells": cells});

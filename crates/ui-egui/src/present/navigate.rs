@@ -130,8 +130,6 @@ impl Presenter {
             "hotspots": self.hot.iter().map(|(id, r)| json!({"id": id, "rect": [r.min.x, r.min.y, r.max.x, r.max.y]})).collect::<Vec<_>>(),
             "hotspotFlash": self.flash_until > self.clock,
             "waiting": self.waiting.len(),
-            "inspect": self.view.inspect,
-            "inspected": self.inspected,
             "hideUi": self.view.hide_ui,
             "deviceColor": doc.and_then(|d| page_settings(d, self.current).device_color()).map(|c| c.name),
             "responsive": self.fit.map(|f| [f.0, f.1]),

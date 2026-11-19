@@ -79,7 +79,7 @@ pub fn section(app: &mut FigApp, ui: &mut Ui, doc: &Arc<Document>, sel: &[NodeId
         (k, _) => trn("Export {n} layers", k, &[]),
     };
     if wide_button(ui, &label) {
-        export_layers(app, sel, false);
+        export_layers(app, sel);
     }
 }
 
@@ -394,14 +394,10 @@ pub(crate) fn wide_button(ui: &mut Ui, label: &str) -> bool {
     clicked
 }
 
-/// Export `ids` with their export settings (`assets`: the Inspect tab's assets in and under them):
-/// one file through a save dialog, several into a folder.
-pub(crate) fn export_layers(app: &mut FigApp, ids: &[NodeId], assets: bool) {
-    let jobs = match app.session.doc() {
-        Ok(doc) if assets => figcraft_engine::devinspect::asset_jobs(doc, ids),
-        Ok(doc) => export_jobs(doc, ids),
-        Err(_) => return,
-    };
+/// Export `ids` with their export settings: one file through a save dialog, several into a folder.
+pub(crate) fn export_layers(app: &mut FigApp, ids: &[NodeId]) {
+    let Ok(doc) = app.session.doc() else { return };
+    let jobs = export_jobs(doc, ids);
     match jobs.as_slice() {
         [] => {}
         // The suggested name keeps only the file's own name (a layer's folders apply to folders).
@@ -410,7 +406,7 @@ pub(crate) fn export_layers(app: &mut FigApp, ids: &[NodeId], assets: bool) {
         // arrive together as one zip (#969).
         _ if app.services.downloads() => {
             let name = format!("{}.zip", app.session.doc().map_or("Export", |d| d.name.as_str()));
-            if let Some(r) = app.run("file.exportLayers", json!({"ids": ids, "assets": assets, "zip": true}))
+            if let Some(r) = app.run("file.exportLayers", json!({"ids": ids, "zip": true}))
                 && app.download(&name, &r)
             {
                 app.toast(trn("Exported {n} files", r["files"].as_array().map_or(0, Vec::len), &[]));
@@ -419,7 +415,7 @@ pub(crate) fn export_layers(app: &mut FigApp, ids: &[NodeId], assets: bool) {
         _ => {
             let ids = ids.to_vec();
             app.pick_folder(tr("Export"), move |app, dir| {
-                if let Some(r) = app.run("file.exportLayers", json!({"ids": ids, "dir": dir.to_string_lossy(), "assets": assets})) {
+                if let Some(r) = app.run("file.exportLayers", json!({"ids": ids, "dir": dir.to_string_lossy()})) {
                     let files = r["files"].as_array().cloned().unwrap_or_default();
                     // Android Vector Drawables say what they changed or left out.
                     let changed = files.iter().any(|f| f["warnings"].as_array().is_some_and(|w| !w.is_empty()));

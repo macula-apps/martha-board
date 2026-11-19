@@ -1,14 +1,14 @@
-use super::chrome::{BarAction, layer_at, paint_menu_chevron};
+use super::chrome::{BarAction, paint_menu_chevron};
 use super::device::{device_body, device_glass};
 use super::draw::draw;
 use super::input::{InputMode, input};
-use super::layout::{Chrome, Layout, layout};
+use super::layout::{Chrome, layout};
 use super::navigate::next_delay;
 use super::scroll::page_settings;
 use super::transition::lerp;
 use super::{
-    ACCENT, Align2, Arc, Color32, CornerRadius, Device, Icon, NodeKind, PresentScale, Presenter, Rect, Sense, Stroke, StrokeKind, Tip, Tokens, Ui,
-    icons, pos2, regular, semibold, tr, tr_noop, vec2,
+    Align2, Arc, Color32, CornerRadius, Device, Icon, NodeKind, PresentScale, Presenter, Rect, Sense, Stroke, Tip, Tokens, Ui, icons, pos2, regular,
+    semibold, tr, tr_noop, vec2,
 };
 
 /// One frame of the player in `rect`: the top bar, then the prototype (on its device) below.
@@ -86,9 +86,6 @@ pub(super) fn player(p: &mut Presenter, ui: &mut Ui, rect: Rect, now: f64, chrom
         painter.rect_filled(l.screen, CornerRadius::ZERO, bg);
     }
     draw(p, &painter, &ctx, &l, now);
-    if p.view.inspect && !chrome.pane {
-        inspect_hover(p, &painter, &ctx, &l, area);
-    }
     if let Some((d, _)) = body {
         device_glass(&painter, d.name, l.screen, l.landscape);
     }
@@ -104,21 +101,6 @@ pub(super) fn player(p: &mut Presenter, ui: &mut Ui, rect: Rect, now: f64, chrom
         crate::repaint_in(&ctx, due.clamp(0.0, 60.0));
     }
     action
-}
-
-/// Inspecting: the layer under the pointer becomes the inspected one; it is outlined.
-fn inspect_hover(p: &mut Presenter, painter: &egui::Painter, ctx: &egui::Context, l: &Layout, area: Rect) {
-    let (root, place, clip) = l.active(p.current);
-    if let Some(q) = ctx.pointer_hover_pos().filter(|q| area.contains(*q) && clip.contains(*q))
-        && let Some(id) = layer_at(&l.disp, root, &place, q)
-    {
-        p.inspected = Some(id);
-    }
-    if let Some(id) = p.inspected.filter(|id| *id == root || l.disp.is_ancestor(root, *id))
-        && let Some(b) = l.disp.world_bounds(id)
-    {
-        painter.with_clip_rect(clip).rect_stroke(place.rect(b), CornerRadius::ZERO, Stroke::new(1.5, ACCENT), StrokeKind::Outside);
-    }
 }
 
 /// The bar above the prototype: the flow picker and the frame's name on the left, the buttons on
@@ -158,7 +140,6 @@ fn top_bar(p: &mut Presenter, ui: &mut Ui, bar: Rect, now: f64, chrome: Chrome) 
             (BarAction::Restart, tr_noop("Restart"), Icon::Reset),
             (BarAction::Options, tr_noop("Options"), Icon::Dots),
             (BarAction::Comments, tr_noop("Comments"), Icon::Comment),
-            (BarAction::Inspect, tr_noop("Inspect"), Icon::Code),
         ]
     };
     let mut x = bar.max.x - if chrome.pane { 6.0 } else { 8.0 };
@@ -171,7 +152,7 @@ fn top_bar(p: &mut Presenter, ui: &mut Ui, bar: Rect, now: f64, chrome: Chrome) 
         if chrome.pane {
             resp = resp.tip(shown);
         }
-        let on = (*act == BarAction::Comments && p.view.comments) || (*act == BarAction::Inspect && p.view.inspect);
+        let on = *act == BarAction::Comments && p.view.comments;
         if on {
             ui.painter().rect_filled(br, CornerRadius::same(5), t.accent);
         } else if resp.hovered() {
@@ -179,9 +160,6 @@ fn top_bar(p: &mut Presenter, ui: &mut Ui, bar: Rect, now: f64, chrome: Chrome) 
         }
         if *act == BarAction::Comments {
             resp = resp.tip(tr("Show comments (Shift+C)"));
-        }
-        if *act == BarAction::Inspect {
-            resp = resp.tip(tr("Inspect the layer under the pointer: size, colours, typography"));
         }
         if chrome.pane {
             icons::paint(ui.painter(), crate::widgets::icon_glyph_rect(br), *icon, if on { t.accent_on } else { t.icon });

@@ -5,7 +5,7 @@ use super::{
 };
 
 impl Session {
-    /// The pointer left the canvas: what hovering there showed goes (the distances Alt or Dev Mode
+    /// The pointer left the canvas: what hovering there showed goes (the distances Alt
     /// measured and the box measured to, a vector region's highlight), unless a gesture holds it.
     pub fn pointer_left(&mut self) {
         if !self.tool.busy() {
@@ -35,27 +35,20 @@ impl Session {
     }
 
     /// What a marquee starting at page point `p` selects inside: the top-level frame it starts in
-    /// (its children), or the focus view's frame.
+    /// (its children).
     pub(crate) fn marquee_within(&self, p: Point) -> Result<Option<NodeId>> {
         let (doc, page) = (self.doc()?, self.page()?);
         let within = frame_at(doc, page, p, &[]).filter(|f| doc.node(*f).is_some_and(|n| n.parent == Some(page)));
         let within = within.filter(|f| doc.world_bounds(*f).is_some_and(|b| b.contains(p)));
-        Ok(self.ds()?.focused().or(within))
+        Ok(within)
     }
 
     /// The selection a marquee over page rect `r` makes from `base` (what was selected before):
     /// the layers it touches (`deep`: nested ones too); `additive` (Shift) toggles them.
     pub(crate) fn marquee_selection(&self, r: Rect, within: Option<NodeId>, deep: bool, base: &[NodeId], additive: bool) -> Result<Vec<NodeId>> {
         let (doc, page) = (self.doc()?, self.page()?);
-        let focused = self.ds()?.focused();
-        let mut hits = match (deep, focused) {
-            (true, _) => figcraft_doc::geometry::marquee_deep(doc, page, r),
-            (false, Some(f)) => figcraft_doc::geometry::marquee(doc, page, r, Some(f)),
-            (false, None) => figcraft_doc::geometry::marquee_select(doc, page, r, within),
-        };
-        if let Some(f) = focused {
-            hits.retain(|h| *h != f && doc.is_ancestor(f, *h));
-        }
+        let mut hits =
+            if deep { figcraft_doc::geometry::marquee_deep(doc, page, r) } else { figcraft_doc::geometry::marquee_select(doc, page, r, within) };
         // A widget's layers are part of the widget: a marquee from outside never opens one.
         if !deep {
             hits.retain(|h| {
@@ -107,21 +100,6 @@ impl Session {
         }
     }
 
-    /// The tool pointer events go to: in Dev Mode every tool but the hand and comments selects.
-    fn acting_tool(&self) -> ToolId {
-        match self.tool.tool {
-            t if self.tool.dev_mode && !t.works_in_dev_mode() => ToolId::Move,
-            t => t,
-        }
-    }
-
-    /// Drop the gesture under way (a drag, a resize, a shape being drawn), restoring the document
-    /// as Escape does; the UI calls it when Dev Mode starts, where nothing may move.
-    pub fn drop_gesture(&mut self) -> Result<()> {
-        self.tool.gesture = Gesture::None;
-        self.cancel_interaction()
-    }
-
     /// Feed one pointer event to the current tool.
     pub fn pointer(&mut self, ev: &PointerEvent) -> Result<()> {
         // A held button sends the same move every frame: running the gesture again would only
@@ -134,8 +112,8 @@ impl Session {
             }
             self.tool.last_move = Some(ev.clone());
         }
-        let tool = self.acting_tool();
-        let edits = matches!(tool, ToolId::Move | ToolId::Scale) && !self.tool.dev_mode;
+        let tool = self.tool.tool;
+        let edits = matches!(tool, ToolId::Move | ToolId::Scale);
         if edits && self.origin_pointer(ev)? {
             return Ok(());
         }
@@ -150,7 +128,7 @@ impl Session {
             PointerKind::Down => match tool {
                 ToolId::Move | ToolId::Scale => {
                     // While a board's vote runs, a click on an object votes.
-                    if tool == ToolId::Move && !self.tool.dev_mode && self.vote_down(ev)? {
+                    if tool == ToolId::Move && self.vote_down(ev)? {
                         return Ok(());
                     }
                     // A click on the canvas deselects a ruler guide (the UI selects guides itself).
@@ -176,7 +154,6 @@ impl Session {
                     self.request_ui("comment.new", json!({"x": ev.x, "y": ev.y}));
                     Ok(())
                 }
-                ToolId::Annotation => self.annotation_down(ev),
                 ToolId::Eyedropper => self.eyedrop(ev),
                 t if t.on_boards() => self.board_down(ev),
                 t if t.draws_shape() => self.draw_down(ev),
@@ -207,21 +184,8 @@ impl Session {
         Ok(true)
     }
 
-    /// The Annotation tool's press: the layer under the pointer is selected and the UI is asked
-    /// for its note (the engine writes nothing; the note is typed in the Inspect tab). A press on
-    /// empty canvas does nothing.
-    fn annotation_down(&mut self, ev: &PointerEvent) -> Result<()> {
-        let ds = self.ds()?;
-        let (doc, page) = (ds.doc.clone(), ds.page);
-        // The same reach as the Move tool's pick (`ev.tol() * 2.0`); never the page itself.
-        let Some(id) = self.hit(&doc, page, ev.p(), ev.tol() * 2.0).filter(|i| doc.node(*i).is_some_and(|n| !n.is_page())) else { return Ok(()) };
-        self.set_selection(vec![id]);
-        self.request_ui("annotation.new", json!({"id": id}));
-        Ok(())
-    }
-
     pub(super) fn hover(&mut self, ev: &PointerEvent) -> Result<()> {
-        let tool = self.acting_tool();
+        let tool = self.tool.tool;
         let ds = self.ds()?;
         let (doc, sel, page) = (ds.doc.clone(), ds.selection.clone(), ds.page);
         let mut cursor = tool.cursor();
@@ -254,7 +218,7 @@ impl Session {
         if matches!(tool, ToolId::Move | ToolId::Scale) && on_edited {
             cursor = Cursor::Text;
         } else if matches!(tool, ToolId::Move | ToolId::Scale) && arc_hover.is_none() && shape_hover.is_none() {
-            if let Some(h) = handle_at(&doc, &sel, ev.p(), ev.zoom).filter(|_| !self.tool.dev_mode) {
+            if let Some(h) = handle_at(&doc, &sel, ev.p(), ev.zoom) {
                 cursor = resize_cursor(&doc, &sel, h);
             } else {
                 let leaf = self.hit(&doc, page, ev.p(), ev.tol() * 2.0);
@@ -264,10 +228,10 @@ impl Session {
                 widget_hover = leaf.map(|l| crate::widgets::hovered_at(&doc, l, ev.p())).unwrap_or_default();
                 hover = label_at(&doc, page, &self.tool.labels, ev.p()).or_else(|| leaf.map(|leaf| select_target(&doc, leaf, &sel, ev.cmd)));
                 // Alt over a selected layer: a drag from here duplicates it.
-                if ev.alt && !self.tool.dev_mode && tool == ToolId::Move && hover.is_some_and(|h| sel.contains(&h) && !locked_in(&doc, h)) {
+                if ev.alt && tool == ToolId::Move && hover.is_some_and(|h| sel.contains(&h) && !locked_in(&doc, h)) {
                     cursor = Cursor::Copy;
                 }
-                if ev.alt || self.tool.dev_mode {
+                if ev.alt {
                     use crate::distance::{Hover, guide_at, hover_lines, padding_frame, parent_of};
                     // Shift+Alt over an auto layout frame: its padding and gaps. Otherwise from the
                     // selection to a ruler guide, the hovered layer or (over empty canvas) the parent.
@@ -289,7 +253,7 @@ impl Session {
         }
         let on_handle =
             crate::board::end_handle_at(&doc, &sel, ev.p(), ev.zoom).is_some() || crate::board::path_handle_at(&doc, &sel, ev.p(), ev.zoom).is_some();
-        if tool == ToolId::Move && !self.tool.dev_mode && on_handle {
+        if tool == ToolId::Move && on_handle {
             cursor = Cursor::Grab;
         }
         self.tool.overlay.measure_box = measure_box;

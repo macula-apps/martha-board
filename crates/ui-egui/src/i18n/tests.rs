@@ -16,7 +16,7 @@ fn dynamic_keys() -> BTreeSet<String> {
 
 /// Labels from engine and document data the UI shows through `tr(x.label())` and isn't written as
 /// a literal anywhere in the UI: node kinds (and the Design panel header's plurals), blend modes,
-/// stroke caps and width profiles, effects, brushes, image filters, frame preset categories, Dev Mode
+/// stroke caps and width profiles, effects, brushes, image filters, frame preset categories, compare
 /// properties, comment filters and sorts, change kinds, the live status.
 // shortcut: a hand-kept list; enumerate each enum's `ALL` here when a label goes missing in review.
 const DATA_LABELS: &[&str] = &[
@@ -28,6 +28,7 @@ const DATA_LABELS: &[&str] = &[
     "Black & white",
     "Blend",
     "Bristle",
+    "Changed",
     "Circle",
     "Color burn",
     "Color dodge",

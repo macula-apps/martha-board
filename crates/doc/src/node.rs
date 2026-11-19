@@ -226,8 +226,7 @@ impl DevStatus {
 pub struct Annotation {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub label: String,
-    /// Pinned property ids ("width", "fill", "fontSize"…; `figcraft_engine::annotations` lists
-    /// them). Unknown ids are kept and ignored.
+    /// Pinned property ids ("width", "fill", "fontSize"…). Unknown ids are kept and ignored.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub properties: Vec<String>,
     /// The id of its category ([`AnnotationCategory`]; `None`: uncategorised). An id the file
@@ -237,8 +236,8 @@ pub struct Annotation {
 }
 
 /// A main component (or component set) linked to the code component it is built as, in one
-/// language: Dev Mode shows the snippet its template makes instead of generated code
-/// (`figcraft_engine::code_connect`).
+/// language: Dev Mode showed the snippet its template makes instead of generated code. Dev Mode
+/// left the app (#11); files keep the links.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CodeLink {
     /// `react`, `leptos`, `vue`, `swiftui`, `compose`, `arkui` or `flutter`.

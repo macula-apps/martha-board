@@ -234,7 +234,6 @@ fn a_finished_background_render_wakes_the_ui() {
         outline_extras: Default::default(),
         outlined: vec![],
         skip: vec![],
-        solo: None,
         proof: false,
         dots: None,
         uid: 0,

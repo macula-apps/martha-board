@@ -62,8 +62,6 @@ pub struct Job {
     /// Layers drawn as outlines (outlines for the selection).
     pub outlined: Vec<NodeId>,
     pub skip: Vec<NodeId>,
-    /// Only this layer (the focus view).
-    pub solo: Option<NodeId>,
     /// Soft-proof sRGB: stripe the colours sRGB can't show.
     pub proof: bool,
     /// A board's dot grid under the layers.
@@ -124,7 +122,6 @@ fn options(job: &Job) -> figcraft_render::Options {
         outline: job.outline_extras,
         outlined: job.outlined.clone(),
         skip: job.skip.clone(),
-        solo: job.solo,
         lod: true,
         magnified_image_pixels: true,
         dots: job.dots,
@@ -263,7 +260,6 @@ fn same_settings(a: &Job, b: &Job) -> bool {
         && a.outline_extras == b.outline_extras
         && a.outlined == b.outlined
         && a.skip == b.skip
-        && a.solo == b.solo
         && a.proof == b.proof
         && a.dots == b.dots
 }

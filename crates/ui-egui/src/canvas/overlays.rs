@@ -23,10 +23,8 @@ pub(super) fn overlays(app: &FigApp, painter: &egui::Painter, t: &Tokens) -> Vec
     if view.pixel_grid_shown() {
         pixel_grid(app, painter);
     }
-    // Layout grids and frame labels for top-level frames (also those in sections); the focus view
-    // labels only its frame.
-    let focus = ds.focused();
-    for c in boards(&doc, page).iter().filter(|c| focus.is_none_or(|f| f == **c)) {
+    // Layout grids and frame labels for top-level frames (also those in sections).
+    for c in boards(&doc, page).iter() {
         let Some(n) = doc.node(*c) else { continue };
         let Some(b) = doc.world_bounds(*c) else { continue };
         // Off-screen frames draw neither grids nor a label (labels sit just outside the frame).
@@ -37,9 +35,8 @@ pub(super) fn overlays(app: &FigApp, painter: &egui::Painter, t: &Tokens) -> Vec
         if view.layout_grids && !n.grids.is_empty() && figcraft_layout::grids_shown(&doc, *c) {
             layout_grids(app, painter, &doc, *c, n);
         }
-        // The focus view's bar names its frame.
         // Board objects (stickies, shapes with text, stamps) are frames without a name label.
-        let labelled = focus.is_none() && (n.kind.is_frame_like() || matches!(n.kind, NodeKind::Section { .. })) && !n.is_board_atom();
+        let labelled = (n.kind.is_frame_like() || matches!(n.kind, NodeKind::Section { .. })) && !n.is_board_atom();
         if labelled && let Some(q) = crate::frame_labels::draw(app, painter, t, &doc, *c, sel.contains(c), ds.hover == Some(*c)) {
             labels.push((*c, q.map(|p| app.to_page(p))));
         }
@@ -397,11 +394,10 @@ fn selection_overlay(
         let tiny = figcraft_engine::tools::box_sides_px(&b, zoom).1 < figcraft_engine::tools::SMALL_BOX_PX;
         // Measuring to another layer (Alt held) shows just the outlines: no handles or size.
         let measuring = app.session.tool.overlay.measure_box.is_some();
-        // Locked layers (selected in the layers panel) can't be resized, nor anything in Dev
-        // Mode: no handles either.
+        // Locked layers (selected in the layers panel) can't be resized: no handles either.
         // Crop mode draws its own marks on the box instead (`handles::crop_marks`).
         let cropping = app.ui.crop.is_some();
-        let handles = if cropping || measuring || app.session.tool.dev_mode || connector.is_some() || geo.locked {
+        let handles = if cropping || measuring || connector.is_some() || geo.locked {
             0
         } else if is_line {
             2
@@ -420,13 +416,13 @@ fn selection_overlay(
             (!measuring && connector.is_none()).then_some(label),
         );
         // Its path handles, one for each portion that can be dragged.
-        let paths = if app.session.tool.dev_mode { Vec::new() } else { figcraft_engine::board::selected_connector_handles(doc, sel, zoom) };
+        let paths = figcraft_engine::board::selected_connector_handles(doc, sel, zoom);
         for (_, at) in paths {
             let c = app.to_screen(at.x, at.y);
             painter.circle_filled(c, 3.5, col);
             painter.circle_stroke(c, 3.5, stroke(Color32::WHITE, 1.0));
         }
-        for end in connector.into_iter().flatten().filter(|_| !app.session.tool.dev_mode) {
+        for end in connector.into_iter().flatten() {
             let c = app.to_screen(end.x, end.y);
             painter.circle_filled(c, 5.0, Color32::WHITE);
             painter.circle_stroke(c, 5.0, stroke(col, 1.5));

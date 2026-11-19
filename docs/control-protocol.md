@@ -194,16 +194,20 @@ layout (including grid `columnTracks` / `rowTracks`), sizing, `minWidth` / `maxW
 `minHeight` / `maxHeight`, `absolute`, constraints (children of plain frames and absolute
 children), `gridCell` (a grid auto layout child's column, row and spans), clip, text properties,
 component/instance links, overrides, `slot` (a slot layer's property name), boundVariables, interactions, exports,
-`devStatus` (handoff status), `devChanged` (changed since it was marked ready for dev),
+`devStatus` (handoff status), `devChanged` (changed since it was marked ready for dev), `devNote`
+(why it last changed),
 `textAlignVertical`, `textCase`, `paragraphSpacing`, `paragraphIndent`, `features` (OpenType
 toggles), `startCap` and `endCap` (when not none), `variableModes` (a frame's collection → mode),
 `propertyReferences` (which component property controls a field), `exposedInstance`,
-`annotations` (Developer Mode notes: `[{label, properties, category?}]`), `codeLinks` (a component's
-links to code: `[{language, importPath, name, template}]`), `devResources` (links for developers,
-its own and inherited: `[{name, url, index?, from?}]`), `measurements` (Developer Mode measurements
-starting from the layer: `[{to} | {side}]`), `pluginData` (layer data written with
+`annotations` (notes for developers: `[{label, properties, category?}]`), `codeLinks` (a component's
+links to code: `[{language, importPath, name, template}]`), `devResources` (links for developers:
+`[{name, url}]`), `measurements` (measurements starting from the layer: `[{to} | {side}]`),
+`pluginData` (layer data written with
 `node.set {props: {pluginData: {key: value}}}`, pages included: `{key: value}`, values as strings;
-only when there is some). The auto layout props
+only when there is some). The handoff fields (`devStatus`, `devChanged`, `devNote`, `annotations`, `codeLinks`,
+`devResources`, `measurements`) come from files made
+while Developer Mode was in the app (#11): they are kept and reported, and nothing sets them now.
+The auto layout props
 that `node.set` accepts are listed in [mcp.md](mcp.md#conventions-agents-must-know).
 
 Both inspection methods accept `fields: [string]`: exact, case-sensitive top-level node keys such
@@ -257,10 +261,9 @@ was resized to (`responsive`: `[w, h]`, else `null`), the size option (`scale`:
 far the view is panned (`pan`, `panRange`), whether a scroll is still coasting (`flinging`), the
 active screen's `hotspots` (`[{id, rect: [x0, y0, x1, y1]}]` in window points, bottom-most first),
 whether a click where nothing reacts flashes them (`hotspotHints`) and they are flashing now
-(`hotspotFlash`), and whether the Inspect panel shows (`inspect`) with the layer it shows
-(`inspected`), whether its bars are hidden (`hideUi`), and the link an Open link notice waits to open (`linkNotice`, else `null`) (`null`
+(`hotspotFlash`), whether its bars are hidden (`hideUi`), and the link an Open link notice waits to open (`linkNotice`, else `null`) (`null`
 when nothing plays). `presentOptions` holds the options the next presentation
-starts with (`scale`, `deviceFrame`, `comments`, `hotspotHints`, `inspect`, `hideUi`).
+starts with (`scale`, `deviceFrame`, `comments`, `hotspotHints`, `hideUi`).
 `textPreview` is true while a live text preview shows on the canvas (a hovered text style or named
 instance, a dragged axis slider; see `text.preview` in [mcp.md](mcp.md)).
 `focus` is keyboard navigation's state: the `region` with the keyboard (`toolbar`, `layers`,
@@ -349,9 +352,9 @@ separate calls. Returns `{queued}`.
 
 Invoke a menu item exactly like clicking it (this may open a dialog). Returns `{ok, lastError}`.
 
-### `ui.set {rightTab?, leftTab?, theme?, home?, homeSection?, homeSearch?, homeRecentsView?, homeRecentsSort?, homeRecentsOrder?, palette?, mainMenu?, focusRegion?, colorPicker?, variables?, layerFilter?, collapseLayers?, exportPreview?, preview?, presentScroll?, colorProfileDialog?, stylePicker?, stylePickerEdit?, stylePickerView?, iconGallery?, protoEditor?, contextMenu?, contextSelectLayer?, commentOpen?, commentDraft?, commentFilter?, commentSort?, commentSearch?, commentReply?, commentEdit?, presentComments?, devCompare?, devCompareMode?, devCompareSplit?, annotationFilter?, resetFrameStats?, pluginsWindow?, pluginsTab?, pluginConfirm?, pluginForm?, devCompareVersion?}`
+### `ui.set {rightTab?, leftTab?, theme?, home?, homeSection?, homeSearch?, homeRecentsView?, homeRecentsSort?, homeRecentsOrder?, palette?, mainMenu?, focusRegion?, colorPicker?, variables?, layerFilter?, collapseLayers?, exportPreview?, preview?, presentScroll?, colorProfileDialog?, stylePicker?, stylePickerEdit?, stylePickerView?, iconGallery?, protoEditor?, contextMenu?, contextSelectLayer?, commentOpen?, commentDraft?, commentFilter?, commentSort?, commentSearch?, commentReply?, commentEdit?, presentComments?, resetFrameStats?, pluginsWindow?, pluginsTab?, pluginConfirm?, pluginForm?}`
 
-Switch panels and modes: `rightTab` `design|prototype|inspect`, `leftTab` `file|assets`, `theme`,
+Switch panels and modes: `rightTab` `design|prototype`, `leftTab` `file|assets`, `theme`,
 `home` (bool), `homeSection` (`recents`, `online` or `templates`: which section the home screen shows, as `ui.inspect` reports it; opening
 `online` asks each server once what became of your online files), `homeRecentsView` (`grid|list`), `homeRecentsSort` (`modified|name|created`) and `homeRecentsOrder` (`desc|asc`): how the home screen shows its recent files (kept in the preferences; `ui.inspect` reports them under `homeRecents` with each file and whether its picture is in), `palette` (bool: the Actions palette), `mainMenu` (bool, or a top-level menu such
 as `"Plugins"` to open the main menu with it open), `homeSearch` (text, at most 256 characters: filters locally known open, recent and online files plus starter templates in Home; an empty string returns to the selected section),
@@ -385,16 +388,10 @@ closes it), `commentDraft` (`{x, y}`: start a new comment there), `commentFilter
 (`date|page`), `commentSearch` (the panel's search text), `commentReply` (the open thread's reply
 text, focused with the cursor at its end: an `@` there shows the mention picker), `commentEdit` (a
 message index of the open thread to edit, 0 for the first; `null` stops), `presentComments` (bool:
-the presenter shows the presented frame's comments, also Shift+C there). Developer Mode: `devCompare` (a
-frame or section id opens the Compare changes view, like `dev.compare {id, show:
-true}`; `null` closes it) with `devCompareVersion` (a version id to compare with; `null`: when it
-was marked ready for dev), `devCompareMode` (`sideBySide|overlay`) and `devCompareSplit` (the
-overlay slider, 0–1), `annotationFilter` (`all`, `none` for uncategorised, or a category id or name:
-the annotations the canvas shows). `resetFrameStats` (true: start `framesDrawn`,
+the presenter shows the presented frame's comments, also Shift+C there). `resetFrameStats` (true: start `framesDrawn`,
 `frameTimes` and `repaintCauses` over). Returns `ui.inspect` (which reports `stylePicker`,
 `stylePickerView`, `comments`: `open`, `draft`, `filter`, `sort`, `search`, `editing` and the
-`mentions` the picker offers, `devCompare` (`{id, mode, split, version}` or `null`), `devFocus` (the frame the
-focus view shows, or `null`) and `annotationFilter`).
+`mentions` the picker offers).
 
 ### `ui.screenshot {path?}`
 

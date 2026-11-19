@@ -95,10 +95,10 @@ pub fn under_white(c: Color32) -> Color32 {
 pub const AGENT: Color32 = Color32::from_rgb(0xF5, 0x9E, 0x0B);
 
 pub const COMPONENT: Color32 = Color32::from_rgb(0x97, 0x47, 0xFF);
-/// Handoff status badges (white text on these, in both themes).
+/// The `success` colour (white text on it, in both themes).
 pub const DEV_READY: Color32 = Color32::from_rgb(0x08, 0x7D, 0x4F);
+/// A changed layer in the branch review's compare.
 pub const DEV_CHANGED: Color32 = Color32::from_rgb(0xA7, 0x5B, 0x00);
-pub const DEV_COMPLETED: Color32 = Color32::from_rgb(0x6E, 0x6E, 0x73);
 
 impl Tokens {
     pub fn light() -> Self {

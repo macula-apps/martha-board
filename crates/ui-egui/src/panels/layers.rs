@@ -183,14 +183,9 @@ pub fn left_panel(app: &mut FigApp, ui: &mut Ui) {
 }
 
 /// Draw the page list with open/search/add controls, filtering, selection, rename,
-/// reorder/drag and layer drop-to-page; Dev Mode allows opening pages but blocks mutations.
+/// reorder/drag and layer drop-to-page.
 fn pages(app: &mut FigApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
-    // Dev Mode only inspects: rows open pages, but don't add, rename, reorder, duplicate or delete.
-    let dev = app.ui.right_tab == crate::RightTab::Inspect;
-    if dev {
-        app.ui.rename_page = None;
-    }
     let w = ui.available_width();
     let (hr, _) = ui.allocate_exact_size(vec2(w, 40.0), Sense::hover());
     let tresp = ui.interact(Rect::from_min_size(hr.min, vec2(w - 40.0, 40.0)), ui.scope_id().with("pages_toggle"), Sense::click());
@@ -221,9 +216,7 @@ fn pages(app: &mut FigApp, ui: &mut Ui) {
     icons::paint(ui.painter(), crate::widgets::icon_glyph_rect(ar), Icon::Plus, t.icon);
     if aresp.clicked() {
         app.ui.pages_focus = app.session.ds().ok().map(|d| d.uid);
-        if !crate::menus::dev_mode_refuses(app, "page.add") {
-            app.run("page.add", json!({}));
-        }
+        app.run("page.add", json!({}));
     }
     if !app.ui.pages_open {
         return;
@@ -259,16 +252,13 @@ fn pages(app: &mut FigApp, ui: &mut Ui) {
             }
             let sense = if filtering { Sense::click() } else { Sense::click_and_drag() };
             let (r, resp) = ui.allocate_exact_size(vec2(w, 32.0), sense);
-            if dev && resp.drag_started() {
-                crate::menus::dev_mode_refuses(app, "page.move");
-            }
             if id == cur {
                 current_row_rendered = true;
                 if scroll_to_cur {
                     ui.scroll_to_rect(r, None);
                 }
             }
-            if !filtering && !dev {
+            if !filtering {
                 reorder.row_by(&resp, k, r, || if divider { tr("Divider").to_string() } else { name.clone() });
             }
             a11y::list_item(&resp, if divider { tr("Divider") } else { &name }, id == cur);
@@ -313,7 +303,7 @@ fn pages(app: &mut FigApp, ui: &mut Ui) {
                 app.ui.pages_focus = Some(uid);
                 app.ui.layers_focus = false;
             }
-            if resp.double_clicked() && !crate::menus::dev_mode_refuses(app, "page.rename") {
+            if resp.double_clicked() {
                 app.ui.rename_page = Some((id, name.clone()));
                 // The field takes the focus next frame, once it's drawn: focusing it now would put a
                 // node that isn't there yet in the screen reader tree, which AccessKit aborts on.
@@ -321,16 +311,12 @@ fn pages(app: &mut FigApp, ui: &mut Ui) {
             }
             crate::right::context_popup(&resp).show(|ui| {
                 if ui.button(tr("Rename page")).clicked() {
-                    if !crate::menus::dev_mode_refuses(app, "page.rename") {
-                        app.ui.rename_page = Some((id, name.clone()));
-                        ui.data_mut(|d| d.insert_temp(page_rename_start_id(), true));
-                    }
+                    app.ui.rename_page = Some((id, name.clone()));
+                    ui.data_mut(|d| d.insert_temp(page_rename_start_id(), true));
                     ui.close();
                 }
                 if ui.button(tr("Duplicate page")).clicked() {
-                    if !crate::menus::dev_mode_refuses(app, "page.duplicate") {
-                        app.run("page.duplicate", json!({"id": id}));
-                    }
+                    app.run("page.duplicate", json!({"id": id}));
                     ui.close();
                 }
                 // Copy link to page (#2379); a divider can't be linked.
@@ -341,15 +327,11 @@ fn pages(app: &mut FigApp, ui: &mut Ui) {
                 }
                 // The page the file opens on, for everyone (#1817); a divider can't be one.
                 if !divider && ui.button(tr("Set as opening page")).clicked() {
-                    if !crate::menus::dev_mode_refuses(app, "page.setOpening") {
-                        app.run("page.setOpening", json!({"id": id}));
-                    }
+                    app.run("page.setOpening", json!({"id": id}));
                     ui.close();
                 }
                 if ui.button(tr("Delete page")).clicked() {
-                    if !crate::menus::dev_mode_refuses(app, "page.delete") {
-                        delete_page(app, id);
-                    }
+                    delete_page(app, id);
                     ui.close();
                 }
             });
@@ -367,7 +349,6 @@ fn pages(app: &mut FigApp, ui: &mut Ui) {
     }
     if let Some((from, to)) = moved.inner
         && let Some((id, ..)) = pages.get(from)
-        && !crate::menus::dev_mode_refuses(app, "page.move")
     {
         app.run("page.move", json!({"id": id, "index": to}));
     }
@@ -375,9 +356,7 @@ fn pages(app: &mut FigApp, ui: &mut Ui) {
         app.ui.rename_page = None;
         app.run("page.rename", json!({"id": id, "name": new}));
     }
-    if let Some((page, name)) = move_to
-        && !crate::menus::dev_mode_refuses(app, "object.moveToPage")
-    {
+    if let Some((page, name)) = move_to {
         let ids = dragged_layers(dragging, &sel);
         if app.run("object.moveToPage", json!({"ids": ids, "page": page})).is_some() {
             app.toast(trf("Moved to {name}", &[("name", &name)]));
@@ -897,10 +876,7 @@ fn finish_sweep(app: &mut FigApp, ui: &mut Ui, sw: Sweep) {
     let (released, down) = ui.input(|i| (i.pointer.any_released(), i.pointer.primary_down()));
     if released {
         let (cmd, key) = if sw.lock { ("object.toggleLock", "locked") } else { ("object.toggleVisible", "visible") };
-        // A sweep started in the design can end after a switch to Dev Mode.
-        if !crate::menus::dev_mode_refuses(app, cmd) {
-            app.run(cmd, json!({"ids": sw.ids, key: if sw.lock { sw.on } else { !sw.on }}));
-        }
+        app.run(cmd, json!({"ids": sw.ids, key: if sw.lock { sw.on } else { !sw.on }}));
     }
     // A sweep whose release the panel never saw (it wasn't shown) is dropped.
     if released || !down {
@@ -958,12 +934,8 @@ fn select_clicked(app: &mut FigApp, rows: &[Row], sel: &[NodeId], id: NodeId, m:
     }
 }
 
-/// Drops `moving` on `target` (`zone`: 0 into it, -1 above, 1 below), unless Dev Mode refuses
-/// (a drag started in the design can end after a switch to it).
+/// Drops `moving` on `target` (`zone`: 0 into it, -1 above, 1 below).
 fn drop_layers(app: &mut FigApp, doc: &Document, moving: &[NodeId], target: NodeId, zone: i8) {
-    if crate::menus::dev_mode_refuses(app, "node.reparent") {
-        return;
-    }
     let ids = moving.to_vec();
     match zone {
         0 => {
@@ -982,8 +954,8 @@ fn drop_layers(app: &mut FigApp, doc: &Document, moving: &[NodeId], target: Node
     }
 }
 
-/// The eye and padlock of a row: painted when hovered (`over`, false in Dev Mode) or set, and, outside
-/// Dev Mode, clickable; a drag over them starts a sweep. Returns the layers whose eye / padlock was clicked.
+/// The eye and padlock of a row: painted when hovered (`over`) or set, and clickable; a drag over
+/// them starts a sweep. Returns the layers whose eye / padlock was clicked.
 fn eye_lock(
     ui: &mut Ui,
     t: &Tokens,
@@ -991,7 +963,6 @@ fn eye_lock(
     row: &Row,
     n: &figcraft_doc::Node,
     over: bool,
-    dev: bool,
     sweep: &mut Option<Sweep>,
 ) -> (Option<NodeId>, Option<NodeId>) {
     let [r, rr] = rects;
@@ -1009,15 +980,12 @@ fn eye_lock(
     // Lock / eye on hover (or when set); a layer in a locked one shows a faint padlock.
     let hidden = swept(false).unwrap_or(!n.visible);
     let locked = swept(true).unwrap_or(n.locked);
-    // In Dev Mode they only show what is set.
     let show_lock = over || locked || row.locked_above;
     let show_eye = over || hidden;
     let er = Rect::from_center_size(pos2(rr.max.x - 14.0, r.center().y), vec2(20.0, 20.0));
     let lr = Rect::from_center_size(pos2(rr.max.x - 36.0, r.center().y), vec2(20.0, 20.0));
     if show_eye {
         icons::paint(ui.painter(), er.shrink(3.0), if hidden { Icon::EyeOff } else { Icon::Eye }, t.icon_secondary);
-    }
-    if show_eye && !dev {
         let eresp = ui.interact(er, ui.scope_id().with(("eye", row.id)), Sense::click_and_drag());
         a11y::toggle(&eresp, tr("Hidden"), hidden);
         if eresp.clicked() {
@@ -1030,8 +998,6 @@ fn eye_lock(
     if show_lock {
         let col = if locked || !row.locked_above { t.icon_secondary } else { t.text_tertiary };
         icons::paint(ui.painter(), lr.shrink(3.0), if locked || row.locked_above { Icon::Lock } else { Icon::Unlock }, col);
-    }
-    if show_lock && !dev {
         // A child of a locked layer can't be locked or unlocked on its own while the parent is
         // locked (Lock and unlock layers): its padlock is inert.
         let sense = if row.locked_above { Sense::hover() } else { Sense::click_and_drag() };
@@ -1101,14 +1067,9 @@ fn paint_row_bg(ui: &Ui, t: &Tokens, rr: Rect, state: [bool; 3], hovered: bool) 
 }
 
 /// Draw the layer tree with search, cached rows, reveal-selection expansion and scrolling,
-/// rename/Tab navigation, selection and drag/drop, sweep toggles and Dev Mode restrictions.
+/// rename/Tab navigation, selection and drag/drop and sweep toggles.
 fn layers(app: &mut FigApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
-    // Dev Mode only inspects: rows select and expand, but don't rename, reorder, hide or lock.
-    let dev = app.ui.right_tab == crate::RightTab::Inspect;
-    if dev {
-        app.ui.rename = None;
-    }
     let w = ui.available_width();
     let (hr, _) = ui.allocate_exact_size(vec2(w, 40.0), Sense::hover());
     ui.painter().text(pos2(hr.min.x + 16.0, hr.center().y), Align2::LEFT_CENTER, tr("Layers"), semibold(11.0), t.text);
@@ -1284,7 +1245,7 @@ fn layers(app: &mut FigApp, ui: &mut Ui) {
                 let max_w = (rr.max.x - 56.0 - name_x).clamp(20.0, NAME_ROOM);
                 crate::bidi::paint_name(ui.painter(), pos2(name_x, r.center().y), &name, font, col, max_w);
             }
-            let (v, l) = eye_lock(ui, &t, [r, rr], row, n, over && !dev, dev, &mut sweep);
+            let (v, l) = eye_lock(ui, &t, [r, rr], row, n, over, &mut sweep);
             vis = v.or(vis);
             lock = l.or(lock);
             if resp.clicked() {
@@ -1302,7 +1263,7 @@ fn layers(app: &mut FigApp, ui: &mut Ui) {
                     clicked = None;
                     // The layer is the anchor of the next Shift-click's range.
                     app.ui.layer_anchor = Some(row.id);
-                } else if !crate::menus::dev_mode_refuses(app, "object.rename") {
+                } else {
                     app.ui.rename = Some(Rename { id: row.id, start: true });
                 }
             }
@@ -1315,7 +1276,7 @@ fn layers(app: &mut FigApp, ui: &mut Ui) {
                 app.ui.context_menu_shown = false;
             }
             // Drag to reorder.
-            if resp.drag_started() && !crate::menus::dev_mode_refuses(app, "node.reparent") {
+            if resp.drag_started() {
                 ui.data_mut(|d| d.insert_temp(drag_id, row.id));
             }
             // In the row and in the list's view: a wide row runs on under the canvas (#1904), and a

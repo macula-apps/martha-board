@@ -171,9 +171,8 @@ pub fn normalize(doc: &mut Document, before: &Document) {
     board::settle_routes(doc, before, &touched);
     board::settle_stamps(doc, before, &touched);
     touched.extend(doc.take_dirty());
-    // 5. Ready-for-dev layers whose contents changed show "Changed".
-    mark_dev_changes(doc, before, &touched);
-    doc.take_dirty();
+    // 5. Snapshots of ready-for-dev layers from earlier builds go with their layers.
+    drop_stale_snapshots(doc);
     // 5. Comment pins follow their layers to other pages and stay put when the layers are deleted.
     cmd::comment::follow_anchors(doc, before);
 }
@@ -289,41 +288,9 @@ fn binding_scope(doc: &Document, before: &Document, touched: &BTreeSet<NodeId>) 
     Some(out)
 }
 
-/// Flag the frames and sections marked ready for dev (before this edit) that contain a layer whose
-/// design `touched` changed (added, removed or edited; the handoff status itself and hiding a
-/// section's contents don't count).
-fn mark_dev_changes(doc: &mut Document, before: &Document, touched: &BTreeSet<NodeId>) {
-    let ready = |d: &Document, id: NodeId| d.node(id).is_some_and(|n| n.dev_status == figcraft_doc::DevStatus::ReadyForDev);
-    let mut changed: BTreeSet<NodeId> = BTreeSet::new();
-    for &id in touched {
-        // Ready-for-dev frames around it first (the cheap test).
-        let mut chain = vec![id];
-        chain.extend(if doc.contains(id) { doc.ancestors(id) } else { before.ancestors(id) });
-        chain.retain(|m| ready(before, *m) && ready(doc, *m));
-        if chain.is_empty() {
-            continue;
-        }
-        let differs = match (before.node(id), doc.node(id)) {
-            (Some(a), Some(b)) => !a.same_design(b),
-            (None, None) => false,
-            _ => true,
-        };
-        if differs {
-            changed.extend(chain);
-        }
-    }
-    for m in changed {
-        if doc.node(m).is_some_and(|n| !n.dev_changed) {
-            // Its first change since it was marked: keep what it looked like (for Compare changes).
-            if let Some(snap) = before.snapshot_subtree(m) {
-                doc.dev_snapshots.insert(m, Arc::new(snap));
-            }
-            if let Some(n) = doc.node_mut(m) {
-                n.dev_changed = true;
-            }
-        }
-    }
-    // Snapshots last until the change is resolved, the layer is marked again or it's deleted.
+/// Drop the ready-for-dev snapshots a file carries (from earlier builds) once their layer is
+/// deleted or no longer marked as changed, so they don't outlive it.
+fn drop_stale_snapshots(doc: &mut Document) {
     if !doc.dev_snapshots.is_empty() {
         let keep = |d: &Document, id: NodeId| d.node(id).is_some_and(|n| n.dev_status == figcraft_doc::DevStatus::ReadyForDev && n.dev_changed);
         let stale: Vec<NodeId> = doc.dev_snapshots.keys().copied().filter(|id| !keep(doc, *id)).collect();

@@ -12,11 +12,11 @@ impl Session {
     /// A double-click on `leaf` that a board object or a widget's editable field takes (typing into
     /// a sticky or a shape on a board; editing the field like any text, its plugin told when editing
     /// ends). Whether it was taken.
-    fn object_double_click(&mut self, doc: &Document, leaf: NodeId, sel: &[NodeId], p: Point, edits: bool) -> Result<bool> {
+    fn object_double_click(&mut self, doc: &Document, leaf: NodeId, sel: &[NodeId], p: Point) -> Result<bool> {
         if matches!(self.tool.tool, ToolId::Move | ToolId::Scale) && self.board_double_click(doc, leaf, sel)? {
             return Ok(true);
         }
-        match crate::widgets::field_at(doc, leaf, p).filter(|_| edits) {
+        match crate::widgets::field_at(doc, leaf, p) {
             Some(field) => textedit::begin(self, field, None, false).map(|()| true),
             None => Ok(false),
         }
@@ -51,11 +51,9 @@ impl Session {
         if self.tool.tool == ToolId::Pen {
             return self.pen_double_click(ev);
         }
-        let edits = !self.tool.dev_mode;
         // A frame's or section's name label: rename it there (the canvas puts a field over it).
         // Labels come before widgets, as on a press; the second press began a move: undo it.
-        if edits
-            && matches!(self.tool.tool, ToolId::Move | ToolId::Scale)
+        if matches!(self.tool.tool, ToolId::Move | ToolId::Scale)
             && !(ev.shift || ev.cmd || ev.alt)
             && let Some(id) = label_at(&doc, page, &self.tool.labels, ev.p())
         {
@@ -68,8 +66,7 @@ impl Session {
             return Ok(());
         }
         // Quick clicks on a widget's clickable part are clicks, one by one.
-        if edits
-            && matches!(self.tool.tool, ToolId::Move | ToolId::Scale)
+        if matches!(self.tool.tool, ToolId::Move | ToolId::Scale)
             && !(ev.shift || ev.cmd || ev.alt)
             && self.hit(&doc, page, ev.p(), ev.tol() * 2.0).and_then(|hit| crate::widgets::target_at(&doc, hit, ev.p())).is_some()
         {
@@ -89,15 +86,14 @@ impl Session {
         // object's bounding box to set it to Hug contents." and "Hold ⌥ Option or Alt and
         // double-click the vertical or horizontal edge of an auto layout object's bounding box to
         // set it to Fill container.", Guide to auto layout).
-        if edits && matches!(self.tool.tool, ToolId::Move | ToolId::Scale) && !(ev.shift || ev.cmd) && self.edge_double_click(&doc, &sel, ev)? {
+        if matches!(self.tool.tool, ToolId::Move | ToolId::Scale) && !(ev.shift || ev.cmd) && self.edge_double_click(&doc, &sel, ev)? {
             return Ok(());
         }
         let hit_here = self.hit(&doc, page, ev.p(), ev.tol() * 2.0);
         // A double-click anywhere on the one selected shape edits its points, like Enter: also
         // inside a hollow (unfilled) closed shape, where the hit test finds nothing under the
         // pointer (an open path or a line has no inside: only its stroke counts).
-        if edits
-            && let [id] = sel[..]
+        if let [id] = sel[..]
             && doc.node(id).is_some_and(|n| n.kind.is_shape() && figcraft_doc::geometry::is_closed(n))
             && doc.world_bounds(id).is_some_and(|b| b.contains(ev.p()))
             && hit_here.is_none_or(|h| h == id || doc.is_ancestor(id, h))
@@ -105,13 +101,12 @@ impl Session {
             return crate::vectoredit::begin_many(self, &[id]);
         }
         let Some(leaf) = hit_here else { return Ok(()) };
-        if self.object_double_click(&doc, leaf, &sel, ev.p(), edits)? {
+        if self.object_double_click(&doc, leaf, &sel, ev.p())? {
             return Ok(());
         }
         let target = select_target(&doc, leaf, &sel, true);
         // Text: edit at the click.
-        if edits
-            && doc.node(target).is_some_and(|n| matches!(n.kind, NodeKind::Text(_)))
+        if doc.node(target).is_some_and(|n| matches!(n.kind, NodeKind::Text(_)))
             && (sel.contains(&target) || select_target(&doc, leaf, &sel, false) == target)
         {
             // Entering a text selects all of it; in the text being edited, the word. A
@@ -131,8 +126,7 @@ impl Session {
         // A shape clicked on its own edits even when the click that selects it and the double-click
         // arrived in one frame (a press and a release the canvas took together), so no selection was
         // made yet; another layer's shapes are reached one level at a time, as below.
-        if edits && doc.node(target).is_some_and(|n| n.kind.is_shape()) && (sel.contains(&target) || select_target(&doc, leaf, &sel, false) == target)
-        {
+        if doc.node(target).is_some_and(|n| n.kind.is_shape()) && (sel.contains(&target) || select_target(&doc, leaf, &sel, false) == target) {
             let mut ids = if sel.contains(&target) { crate::vectoredit::enter_targets(&doc, &sel).unwrap_or_default() } else { vec![target] };
             ids.retain(|i| *i != target);
             ids.insert(0, target);

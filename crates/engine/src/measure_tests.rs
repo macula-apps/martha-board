@@ -262,9 +262,4 @@ fn leaving_the_canvas_clears_the_hover_measurement() {
     s.pointer_left();
     assert!(s.tool.overlay.guides.is_empty(), "{:?}", s.tool.overlay.guides);
     assert_eq!(s.tool.overlay.measure_box, None);
-    // Dev Mode measures without Alt; leaving clears those too.
-    s.tool.dev_mode = true;
-    assert!(!hover(&mut s, 125.0, 25.0, false, false, false).is_empty());
-    s.pointer_left();
-    assert!(s.tool.overlay.guides.is_empty());
 }

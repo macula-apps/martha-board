@@ -37,14 +37,14 @@ fn the_context_menu_groups_the_copy_commands_under_copy_as() {
     // A row under Paste to replace; the items are in its submenu, not in the menu itself.
     let y = |s: &str| text_center(&shapes, s).y;
     assert!(y("Paste to replace") < y("Copy as") && y("Copy as") < y("Bring to front"), "Copy as sits under Paste to replace");
-    for item in ["Copy as CSS", "Copy as SVG", "Copy as PNG", "Copy link to selection"] {
+    for item in ["Copy as SVG", "Copy as PNG", "Copy link to selection"] {
         assert!(!has_text(&shapes, item), "{item} is inside the submenu");
     }
     let at = text_center(&shapes, "Copy as");
     u.button(at, true);
     u.button(at, false);
     let shapes = flat(&u.frame_output(vec![]).shapes);
-    for item in ["Copy as CSS", "Copy as SVG", "Copy as PNG", "Copy link to selection"] {
+    for item in ["Copy as SVG", "Copy as PNG", "Copy link to selection"] {
         assert!(has_text(&shapes, item), "{item} is in the submenu");
     }
     let at = text_center(&shapes, "Copy link to selection");

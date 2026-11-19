@@ -81,42 +81,6 @@ fn wrap_in_new_section() {
 }
 
 #[test]
-fn ready_for_dev_turns_changed_until_resolved() {
-    let mut s = Session::new();
-    let sec = section(&mut s, 0.0, 0.0, 400.0, 400.0);
-    let f = id(s.execute("frame.create", &json!({"x": 20, "y": 20, "width": 100, "height": 100, "parent": sec})).unwrap());
-    let r = id(s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 10, "height": 10, "parent": f})).unwrap());
-    let other = id(s.execute("frame.create", &json!({"x": 600, "y": 0, "width": 100, "height": 100})).unwrap());
-    s.execute("node.set", &json!({"ids": [sec, f], "props": {"devStatus": "readyForDev"}})).unwrap();
-    let changed = |s: &mut Session, n: NodeId| get(s, n).get("devChanged").is_some();
-    assert!(!changed(&mut s, sec) && !changed(&mut s, f), "marking isn't a change");
-    // Hiding contents and editing elsewhere aren't changes either.
-    s.execute("section.toggleContents", &json!({"ids": [sec]})).unwrap();
-    s.execute("section.toggleContents", &json!({"ids": [sec]})).unwrap();
-    s.execute("node.set", &json!({"id": other, "props": {"opacity": 0.5}})).unwrap();
-    assert!(!changed(&mut s, sec));
-    // Editing a layer inside: both the frame and the section around it changed.
-    s.execute("node.set", &json!({"id": r, "props": {"fills": ["#00FF00"]}})).unwrap();
-    assert!(changed(&mut s, sec) && changed(&mut s, f));
-    s.undo().unwrap();
-    assert!(!changed(&mut s, sec), "undo takes the change back");
-    s.redo().unwrap();
-    // Resolving keeps the reason and returns to Ready for dev.
-    s.execute("dev.resolveChange", &json!({"ids": [sec], "reason": "  New brand colour  "})).unwrap();
-    let v = get(&mut s, sec);
-    assert_eq!((v.get("devChanged"), v["devNote"].clone(), v["devStatus"].clone()), (None, json!("New brand colour"), json!("readyForDev")));
-    assert!(s.execute("dev.resolveChange", &json!({"ids": [sec]})).is_err(), "nothing left to resolve");
-    // Marking again also starts over; removing a layer is a change.
-    s.execute("node.set", &json!({"id": f, "props": {"devStatus": "readyForDev"}})).unwrap();
-    assert!(!changed(&mut s, f));
-    s.execute("edit.delete", &json!({"ids": [r]})).unwrap();
-    assert!(changed(&mut s, f) && changed(&mut s, sec));
-    // Other statuses never show changes.
-    s.execute("node.set", &json!({"id": f, "props": {"devStatus": "completed"}})).unwrap();
-    assert!(!changed(&mut s, f));
-}
-
-#[test]
 fn frames_in_sections_are_prototype_screens() {
     let mut s = Session::new();
     let page = s.page().unwrap();

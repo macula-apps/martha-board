@@ -306,7 +306,7 @@ pub(super) fn export_layers(s: &mut Session, p: &Value) -> Result<Value> {
     if ids.is_empty() {
         ids = if assets { vec![s.page()?] } else { exportable_layers(doc, s.page()?) };
     }
-    let jobs = if assets { crate::devinspect::asset_jobs(doc, &ids) } else { export_jobs(doc, &ids) };
+    let jobs = if assets { super::asset_jobs(doc, &ids) } else { export_jobs(doc, &ids) };
     if jobs.is_empty() {
         return Err(EngineError::Disabled(cmd.into(), "no export settings (add one with export.add)".into()));
     }

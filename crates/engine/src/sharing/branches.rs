@@ -26,7 +26,7 @@ use serde::Serialize;
 use serde_json::{Value, json};
 
 use crate::cmd::CommandSpec;
-use crate::devcompare::{self, ChangeKind, LayerChange, PropChange};
+use crate::compare::{self, ChangeKind, LayerChange, PropChange};
 use crate::params::{get, string};
 use crate::{DocState, EngineError, Result, Session, bad, normalize, spec};
 
@@ -104,7 +104,7 @@ pub struct SideChanges {
     pub layers: Vec<LayerChange>,
     /// Styles, variables, comments and file settings.
     pub document: Vec<DocChange>,
-    /// More than [`devcompare::MAX_CHANGES`] layers changed: the list stops there.
+    /// More than [`compare::MAX_CHANGES`] layers changed: the list stops there.
     pub truncated: bool,
 }
 
@@ -552,7 +552,7 @@ pub fn review_at(s: &Session, mi: usize, bi: usize) -> Result<Review> {
 }
 
 fn side_changes(plan: &Plan, side: Side, base: &Document, doc: &Document) -> SideChanges {
-    let cmp = devcompare::compare_docs(base, doc);
+    let cmp = compare::compare_docs(base, doc);
     let document = plan.changes(side).iter().filter_map(|c| doc_change(plan, c)).collect();
     SideChanges { layers: cmp.changes, document, truncated: cmp.truncated }
 }
@@ -636,7 +636,7 @@ fn conflict_row(plan: &Plan, c: &Conflict, base: &Document, head: &Document, mai
         Key::Node(id, prop) => {
             // Main's layer, and main's layer with only the branch's change to this property.
             let with = plan.with_changes(main, Side::Branch, &c.branch);
-            let changes = devcompare::layer_changes(main, &with, *id);
+            let changes = compare::layer_changes(main, &with, *id);
             let join = |f: fn(&PropChange) -> &str| changes.iter().map(|pc| format!("{} {}", pc.property, f(pc))).collect::<Vec<_>>().join(", ");
             let (b, m) = if changes.is_empty() { ("changed".into(), "changed".into()) } else { (join(|pc| &pc.after), join(|pc| &pc.before)) };
             let property = if *prop == Prop::Parent { "place in layers".to_string() } else { words(prop) };

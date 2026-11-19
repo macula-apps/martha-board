@@ -1,4 +1,4 @@
-//! `Options::solo` (Dev Mode's focus view): only one layer of the page is drawn, where it is, also
+//! `Options::solo` (a file's thumbnail of its chosen frame, `file/save.rs`): only one layer of the page is drawn, where it is, also
 //! by the retained renderer.
 
 use std::sync::Arc;

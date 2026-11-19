@@ -383,11 +383,8 @@ fn dev_props(doc: &Document, n: &Node, o: &mut serde_json::Map<String, Value>, o
     if !n.measurements.is_empty() {
         insert_prop(o, options, "measurements", || serde_json::to_value(&n.measurements).unwrap_or(Value::Null));
     }
-    if options.includes("devResources") {
-        let dev = crate::dev_resources::list_json(doc, n.id);
-        if dev.as_array().is_some_and(|a| !a.is_empty()) {
-            insert_prop(o, options, "devResources", || dev);
-        }
+    if options.includes("devResources") && !n.dev_resources.is_empty() {
+        insert_prop(o, options, "devResources", || serde_json::to_value(&n.dev_resources).unwrap_or(Value::Null));
     }
     if !n.interactions.is_empty() {
         insert_prop(o, options, "interactions", || serde_json::to_value(&n.interactions).unwrap_or(Value::Null));
