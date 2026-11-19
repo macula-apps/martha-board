@@ -298,7 +298,8 @@ fn font_weight_wins_over_font_style_when_a_file_carries_both() {
     let st = doc.styles.iter_mut().find(|x| x.id == body).unwrap();
     st.bound.insert("fontStyle".into(), f);
     st.bound.insert("fontWeight".into(), w);
-    crate::style_vars::after_load(doc);
+    crate::style_vars::settle(doc);
+    crate::style_vars::refresh(doc, None, None);
     assert_eq!(text_of(&s, t1).font_style, "Bold");
 }
 
