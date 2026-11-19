@@ -269,11 +269,9 @@ fn zoom_tool_steps_about_a_point_and_fits_an_area() {
 #[test]
 fn panel_toggles_request_the_ui() {
     let mut s = Session::new();
-    for (cmd, kind) in [("view.designPrototype", "panel.designPrototype"), ("view.leftSidebar", "panel.leftSidebar")] {
-        s.ui_requests.clear();
-        ex(&mut s, cmd, json!({}));
-        assert!(s.ui_requests.iter().any(|r| r.kind == kind), "{cmd}");
-    }
+    s.ui_requests.clear();
+    ex(&mut s, "view.leftSidebar", json!({}));
+    assert!(s.ui_requests.iter().any(|r| r.kind == "panel.leftSidebar"));
 }
 
 #[test]

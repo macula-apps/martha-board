@@ -30,7 +30,7 @@ enum Ours {
     Gesture(&'static str),
     /// A tool key in vector edit mode.
     VectorTool(VTool),
-    /// No such behaviour here (Dev Mode's left, #11).
+    /// No such behaviour here (Dev Mode's left, #11; prototyping's, #14).
     Missing,
 }
 use Ours::*;
@@ -159,8 +159,6 @@ static ROWS: &[Row] = &[
     pin(View, "view.rulers", &["Shift+R"], &[]),
     pin(View, "view.comments", &["Shift+C"], &[]),
     pin(View, "view.design", &["Alt+8"], &[]),
-    pin(View, "view.prototype", &["Alt+9"], &[]),
-    pin(View, "view.designPrototype", &["Shift+E"], &[]),
     pin(View, "view.nextRegion", &["F6"], &["F6"]),
     pin(View, "view.previousRegion", &["Shift+F6"], &[]),
     pin(View, "view.contextMenu", &["Shift+F10", "Menu"], &[]),
@@ -290,15 +288,15 @@ static ROWS: &[Row] = &[
     doc(Components, "Detach an instance", &["Alt+Cmd+B"], &["Ctrl+Alt+B"], Bound("component.detach"), ""),
     doc(Components, "Go to the main component", &["Ctrl+Alt+Cmd+K"], &["Ctrl+Alt+Shift+K"], Bound("component.goToMain"), "was unbound"),
     doc(Components, "Quick insert", &["Shift+I"], &[], Bound("view.assets"), "opens the Assets panel's search"),
-    // Prototype
-    doc(Prototype, "Preview in the canvas", &["Shift+Space"], &[], Bound("proto.preview"), ""),
-    doc(Prototype, "Present", &["Alt+Cmd+Enter"], &["Ctrl+Alt+Enter"], Bound("proto.present"), ""),
-    doc(Prototype, "Presenting: restart", &["R"], &[], Gesture("Presenting: restart"), "the inline preview too"),
-    doc(Prototype, "Presenting: next frame", &["ArrowRight", "Space", "N"], &[], Gesture("Presenting: next frame"), "Space and N were unbound"),
-    doc(Prototype, "Presenting: previous frame", &["ArrowLeft"], &[], Gesture("Presenting: previous frame"), ""),
-    doc(Prototype, "Presenting: cycle the size options", &["Z"], &[], Gesture("Presenting: cycle the size options"), ""),
-    doc(Prototype, "Presenting: comments", &["C"], &[], Gesture("Presenting: comments"), "Shift+C kept; keys the prototype uses go to it first"),
-    doc(Prototype, "Presenting: full screen", &["F"], &[], Gesture("Presenting: full screen"), "new"),
+    // Prototype: its tab left with prototyping (#14), so the rows sit under View.
+    doc(View, "Preview in the canvas", &["Shift+Space"], &[], Missing, "prototyping left (#14)"),
+    doc(View, "Present", &["Alt+Cmd+Enter"], &["Ctrl+Alt+Enter"], Missing, "prototyping left (#14)"),
+    doc(View, "Presenting: restart", &["R"], &[], Missing, "prototyping left (#14)"),
+    doc(View, "Presenting: next frame", &["ArrowRight", "Space", "N"], &[], Missing, "prototyping left (#14)"),
+    doc(View, "Presenting: previous frame", &["ArrowLeft"], &[], Missing, "prototyping left (#14)"),
+    doc(View, "Presenting: cycle the size options", &["Z"], &[], Missing, "prototyping left (#14)"),
+    doc(View, "Presenting: comments", &["C"], &[], Missing, "prototyping left (#14)"),
+    doc(View, "Presenting: full screen", &["F"], &[], Missing, "prototyping left (#14)"),
 ];
 
 /// Chords the operating system takes before any app sees them; no default binding may use one.
@@ -416,7 +414,7 @@ fn counts_match_the_docs() {
     let reserved = documented.iter().filter(|r| !r.reserved.is_empty()).count();
     let pinned = ROWS.len() - documented.len();
     // docs/ui-parity.md quotes these.
-    assert_eq!((documented.len(), bound, moved, missing, reserved, pinned), (137, 134, 1, 2, 2, 57));
+    assert_eq!((documented.len(), bound, moved, missing, reserved, pinned), (137, 126, 1, 10, 2, 55));
 }
 
 #[test]

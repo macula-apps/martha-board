@@ -251,19 +251,7 @@ area around the view). `importReport` holds the Import report window's content (
 Emulated user input counts as the user's action: `ui.input` and `ui.key` (for example a Cmd+V paste or a click
 on a menu item) can open it. Commands sent through this channel with `engine.execute`, MCP, `window.new {path}`
 and files named on the command line never open it.
-`file.open` and `file.import` return the counts as `summary`. While a prototype plays, `presenter`
-(full window) and `preview` (the preview pane) hold the player's state: the `current` frame and its
-`name`, `start`, `history`, open `overlays`, how many delayed mouse triggers are `waiting`, the screen's `scroll` offset and `scrollRange`, the
-`device` (and whether it is turned to `landscape`, its `deviceColor`) and the `viewport` of the frame
-its screen shows, the presented frame's `frameSize` and, for a responsive prototype, the screen it
-was resized to (`responsive`: `[w, h]`, else `null`), the size option (`scale`:
-`fit|fitWidth|fill|actual`, `deviceFrame`), the `zoom` it shows at, how
-far the view is panned (`pan`, `panRange`), whether a scroll is still coasting (`flinging`), the
-active screen's `hotspots` (`[{id, rect: [x0, y0, x1, y1]}]` in window points, bottom-most first),
-whether a click where nothing reacts flashes them (`hotspotHints`) and they are flashing now
-(`hotspotFlash`), whether its bars are hidden (`hideUi`), and the link an Open link notice waits to open (`linkNotice`, else `null`) (`null`
-when nothing plays). `presentOptions` holds the options the next presentation
-starts with (`scale`, `deviceFrame`, `comments`, `hotspotHints`, `hideUi`).
+`file.open` and `file.import` return the counts as `summary`.
 `textPreview` is true while a live text preview shows on the canvas (a hovered text style or named
 instance, a dragged axis slider; see `text.preview` in [mcp.md](mcp.md)).
 `focus` is keyboard navigation's state: the `region` with the keyboard (`toolbar`, `layers`,
@@ -335,10 +323,7 @@ popovers and fields (`ui.pointer` and `ui.key` drive the canvas tools and shortc
 mouse wheel at the pointer: the content moves by that many points, so a negative `dy` scrolls down)
 `{leave: true}` (the pointer left the window), `{hold: {alt?, shift?, cmd?}}` (keep those modifier
 keys down for the frames that follow, e.g. Alt while dragging a component from the Assets panel onto
-an instance to swap it; all false releases them) and `{gamepad: "A" | "Gamepad A" | 0}` (a
-controller button pressed in the prototype playing, the presenter's or else the preview pane's: a
-short name, a key/gamepad trigger's name or a standard layout index 0–16; an error when no prototype
-plays); positions are window points. Events of one call
+an instance to swap it; all false releases them); positions are window points. Events of one call
 arrive in the same frame, so send a press and its release (or a double-click's two clicks) as
 separate calls. Returns `{queued}`.
 
@@ -352,9 +337,9 @@ separate calls. Returns `{queued}`.
 
 Invoke a menu item exactly like clicking it (this may open a dialog). Returns `{ok, lastError}`.
 
-### `ui.set {rightTab?, leftTab?, theme?, home?, homeSection?, homeSearch?, homeRecentsView?, homeRecentsSort?, homeRecentsOrder?, palette?, mainMenu?, focusRegion?, colorPicker?, variables?, layerFilter?, collapseLayers?, exportPreview?, preview?, presentScroll?, colorProfileDialog?, stylePicker?, stylePickerEdit?, stylePickerView?, iconGallery?, protoEditor?, contextMenu?, contextSelectLayer?, commentOpen?, commentDraft?, commentFilter?, commentSort?, commentSearch?, commentReply?, commentEdit?, presentComments?, resetFrameStats?, pluginsWindow?, pluginsTab?, pluginConfirm?, pluginForm?}`
+### `ui.set {leftTab?, theme?, home?, homeSection?, homeSearch?, homeRecentsView?, homeRecentsSort?, homeRecentsOrder?, palette?, mainMenu?, focusRegion?, colorPicker?, variables?, layerFilter?, collapseLayers?, exportPreview?, colorProfileDialog?, stylePicker?, stylePickerEdit?, stylePickerView?, iconGallery?, contextMenu?, contextSelectLayer?, commentOpen?, commentDraft?, commentFilter?, commentSort?, commentSearch?, commentReply?, commentEdit?, resetFrameStats?, pluginsWindow?, pluginsTab?, pluginConfirm?, pluginForm?}`
 
-Switch panels and modes: `rightTab` `design|prototype`, `leftTab` `file|assets`, `theme`,
+Switch panels and modes: `leftTab` `file|assets`, `theme`,
 `home` (bool), `homeSection` (`recents`, `online` or `templates`: which section the home screen shows, as `ui.inspect` reports it; opening
 `online` asks each server once what became of your online files), `homeRecentsView` (`grid|list`), `homeRecentsSort` (`modified|name|created`) and `homeRecentsOrder` (`desc|asc`): how the home screen shows its recent files (kept in the preferences; `ui.inspect` reports them under `homeRecents` with each file and whether its picture is in), `palette` (bool: the Actions palette), `mainMenu` (bool, or a top-level menu such
 as `"Plugins"` to open the main menu with it open), `homeSearch` (text, at most 256 characters: filters locally known open, recent and online files plus starter templates in Home; an empty string returns to the selected section),
@@ -371,15 +356,11 @@ outside sRGB; `null` closes it), `variables` (bool,
 or a collection id or name to show, or `{library, collection?}` for an enabled library's collection: the
 Variables editor), `layerFilter` (string:
 open the layers search with that filter; `null` closes it), `collapseLayers` (true: collapse the
-layers tree), `exportPreview` (bool: the Design panel Export section's preview), `preview` (true or a
-frame id: open the prototype preview pane like `proto.preview`; false or `null` closes it),
-`presentScroll` (`[x, y]`: scroll the presented screen, the full window's else the pane's, clamped
-to what it can scroll), `colorProfileDialog` (`srgb|displayP3`: open File ▸ Color profile with that
+layers tree), `exportPreview` (bool: the Design panel Export section's preview), `colorProfileDialog` (`srgb|displayP3`: open File ▸ Color profile with that
 profile chosen; `null` closes it), `stylePicker` (`fill|stroke|effect|grid|text`: open the style
 picker for the selection, `text` being the text style browser of the Typography section; `null`
 closes it) with `stylePickerEdit` (a style id or name: open its editor), `stylePickerView`
-(`list|grid`), `protoEditor` (`[layer id, interaction index]`: open that interaction's editor in the
-Prototype panel; `null` closes it), `contextMenu` (`[sx, sy]`: right-click the canvas at that screen
+(`list|grid`), `contextMenu` (`[sx, sy]`: right-click the canvas at that screen
 point, selecting what is under it (with `cmd: true`, the nested layer) and opening the context menu;
 `null` closes it), `contextSelectLayer` (bool: open the context menu's Select layer submenu, which
 lists every layer under the click). Comments: `commentOpen` (a thread id opens its popover, `null`
@@ -387,8 +368,7 @@ closes it), `commentDraft` (`{x, y}`: start a new comment there), `commentFilter
 (`open|resolved|mine|unread|all`: what the Comments panel and the pins show), `commentSort`
 (`date|page`), `commentSearch` (the panel's search text), `commentReply` (the open thread's reply
 text, focused with the cursor at its end: an `@` there shows the mention picker), `commentEdit` (a
-message index of the open thread to edit, 0 for the first; `null` stops), `presentComments` (bool:
-the presenter shows the presented frame's comments, also Shift+C there). `resetFrameStats` (true: start `framesDrawn`,
+message index of the open thread to edit, 0 for the first; `null` stops). `resetFrameStats` (true: start `framesDrawn`,
 `frameTimes` and `repaintCauses` over). Returns `ui.inspect` (which reports `stylePicker`,
 `stylePickerView`, `comments`: `open`, `draft`, `filter`, `sort`, `search`, `editing` and the
 `mentions` the picker offers).

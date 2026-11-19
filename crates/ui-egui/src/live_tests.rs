@@ -12,7 +12,7 @@ use figcraft_engine::Session;
 use figcraft_engine::live::{Event as LiveEvent, HostOptions, LiveLink, Peer, Presence, Role, SessionInfo, Status};
 use serde_json::json;
 
-use crate::present_tests::id;
+use crate::headless_tests::id;
 use crate::{FigApp, NoServices};
 
 pub(crate) const HANA: Color32 = Color32::from_rgb(0x97, 0x47, 0xFF);

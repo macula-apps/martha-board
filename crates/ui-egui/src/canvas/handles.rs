@@ -10,9 +10,9 @@ use figcraft_doc::{Blur, ContentAlign, Effect, LayoutMode, NodeId};
 use figcraft_geom::Point;
 use serde_json::json;
 
+use crate::FigApp;
 use crate::colorpicker::PickerTarget;
 use crate::theme::semibold;
-use crate::{FigApp, RightTab};
 
 pub(crate) const PINK: Color32 = Color32::from_rgb(0xF2, 0x48, 0x8C);
 
@@ -251,9 +251,6 @@ fn gradient_target(app: &FigApp) -> Option<(NodeId, bool, usize, figcraft_color:
 /// The progressive blur being edited: a single selected layer's first visible progressive blur
 /// whose settings are open in the Design panel (layer index, effect).
 fn blur_target(app: &FigApp, ctx: &egui::Context) -> Option<(NodeId, usize, Effect)> {
-    if app.ui.right_tab != RightTab::Design {
-        return None;
-    }
     let sel = app.session.selection();
     let [id] = sel.as_slice() else { return None };
     let n = app.session.doc().ok()?.node(*id)?;

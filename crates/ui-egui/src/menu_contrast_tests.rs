@@ -1,4 +1,4 @@
-//! Panel dropdowns (the prototype device picker, Preferences, blend modes…), a file tab's menu and
+//! Panel dropdowns (Preferences, blend modes…), a file tab's menu and
 //! the board bar's shape menu draw on the theme's popup fill, so what is in them must read on it
 //! in both themes (#972): drawn headless.
 
@@ -9,7 +9,7 @@ use figcraft_doc::BoardShape;
 use figcraft_engine::Session;
 use serde_json::json;
 
-use crate::present_tests::Ui;
+use crate::headless_tests::Ui;
 use crate::right::{menu_check, menu_item, menu_popup};
 use crate::theme::{self, Tokens};
 

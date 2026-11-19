@@ -44,8 +44,6 @@ fn labels() -> Vec<(String, &'static str)> {
 fn command_labels_and_parameter_docs_read_developer_mode() {
     let bad: Vec<String> = labels().into_iter().filter(|(_, text)| retired(text)).map(|(what, text)| format!("{what}: {text:?}")).collect();
     assert!(bad.is_empty(), "a label still names the retired mode:\n{}", bad.join("\n"));
-    let board = figcraft_engine::board::NOT_ON_BOARDS;
-    assert!(!retired(board), "{board:?}");
 }
 
 #[test]

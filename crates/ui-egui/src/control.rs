@@ -11,12 +11,11 @@
 //! - `ui.key {key, shift?, cmd?, alt?}` — a shortcut as if typed on the canvas
 //! - `ui.type {text}` — type into the text being edited
 //! - `ui.input {events: [{move|down|up: [x, y], button?} | {key, shift?, alt?, cmd?} | {text} | {leave}
-//!   | {hold: {alt?, shift?, cmd?}} | {gamepad: "A" | "Gamepad A" | 0}]}` — raw pointer and key events
-//!   for the next frame, as if from the window (panels, popovers); `hold` keeps modifier keys down
-//!   for the frames that follow (all false: released); `gamepad` presses a controller button in the
-//!   prototype playing (presenter or preview pane)
+//!   | {hold: {alt?, shift?, cmd?}}]}` — raw pointer and key events for the next frame, as if from
+//!   the window (panels, popovers); `hold` keeps modifier keys down for the frames that follow (all
+//!   false: released)
 //! - `ui.menu.invoke {id}` — a menu item exactly like clicking it (may open a dialog)
-//! - `ui.set {rightTab?, leftTab?, theme?, home?, homeSection?, homeSearch?, homeRecentsView?, homeRecentsSort?, homeRecentsOrder?, palette?, focusRegion?, preview?, presentScroll?, …}`
+//! - `ui.set {leftTab?, theme?, home?, homeSection?, homeSearch?, homeRecentsView?, homeRecentsSort?, homeRecentsOrder?, palette?, focusRegion?, …}`
 //! - `ui.screenshot {path?}` — PNG of the window, written to `path` or returned as base64 `data`;
 //!   a hidden window is asked to paint (`RequestPaintWhileHidden`) and the request expires once at
 //!   its deadline (native; the shared web runner does not implement hidden paint yet)
@@ -978,17 +977,6 @@ fn commit_shot(
     .is_some()
 }
 
-/// A controller button given as its standard-layout index, its key trigger name ("Gamepad A") or
-/// its short name ("A", "LB", "Up").
-fn pad_name(v: &Value) -> Option<&'static str> {
-    use figcraft_doc::proto::{GAMEPAD_BUTTONS, gamepad_button};
-    if let Some(i) = v.as_u64() {
-        return usize::try_from(i).ok().and_then(gamepad_button);
-    }
-    let s = v.as_str()?.trim();
-    GAMEPAD_BUTTONS.iter().copied().find(|b| b.eq_ignore_ascii_case(s) || b.get(8..).is_some_and(|short| short.eq_ignore_ascii_case(s)))
-}
-
 fn b(p: &Value, k: &str) -> bool {
     p.get(k).and_then(Value::as_bool).unwrap_or(false)
 }
@@ -1084,7 +1072,6 @@ fn ui_input(app: &mut FigApp, ctx: &Context, p: &Value) -> Result<Value, String>
         p.is_finite().then_some(p)
     };
     let mut events = Vec::new();
-    let mut pads = Vec::new();
     for e in list.iter().take(256) {
         let button =
             if e.get("button").and_then(Value::as_str) == Some("secondary") { egui::PointerButton::Secondary } else { egui::PointerButton::Primary };
@@ -1111,9 +1098,6 @@ fn ui_input(app: &mut FigApp, ctx: &Context, p: &Value) -> Result<Value, String>
                 phase: egui::TouchPhase::Move,
                 modifiers: mods,
             });
-        } else if let Some(g) = e.get("gamepad") {
-            let names = figcraft_doc::proto::GAMEPAD_BUTTONS.join(", ");
-            pads.push(pad_name(g).ok_or_else(|| format!("unknown controller button {g} (an index 0-16 or one of {names})"))?.to_string());
         } else if b(e, "leave") {
             events.push(egui::Event::PointerGone);
         } else if let Some(h) = e.get("hold") {
@@ -1129,26 +1113,12 @@ fn ui_input(app: &mut FigApp, ctx: &Context, p: &Value) -> Result<Value, String>
             return Err(format!("unknown input event {e}"));
         }
     }
-    // Controller buttons go straight to the prototype playing (its next frame takes them).
-    if !pads.is_empty() {
-        match (app.ui.present.as_mut(), app.ui.preview.as_mut()) {
-            (Some(p), _) => p.pads.extend(pads),
-            (None, Some(pane)) => pane.player.pads.extend(pads),
-            (None, None) => return Err("controller buttons go to a prototype that is playing: run proto.present or proto.preview".into()),
-        }
-    }
     app.control_input_queued = app.push_control_input(events);
     ctx.request_repaint();
     Ok(json!({"queued": list.len().min(256)}))
 }
 
 fn ui_set_view(app: &mut FigApp, ctx: &Context, p: &Value) -> Result<(), String> {
-    if let Some(t) = p.get("rightTab").and_then(Value::as_str) {
-        app.ui.right_tab = match t {
-            "prototype" => crate::RightTab::Prototype,
-            _ => crate::RightTab::Design,
-        };
-    }
     if let Some(t) = p.get("leftTab").and_then(Value::as_str) {
         app.ui.left_tab = if t == "assets" { crate::LeftTab::Assets } else { crate::LeftTab::File };
     }
@@ -1286,16 +1256,10 @@ fn ui_set_comments(app: &mut FigApp, ctx: &Context, p: &Value) -> Result<(), Str
             _ => None,
         };
     }
-    if let Some(v) = p.get("presentComments").and_then(Value::as_bool) {
-        app.ui.present_view.comments = v;
-        if let Some(pres) = app.ui.present.as_mut() {
-            pres.view.comments = v;
-        }
-    }
     Ok(())
 }
 
-fn ui_set_panels(app: &mut FigApp, ctx: &Context, p: &Value) -> Result<(), String> {
+fn ui_set_panels(app: &mut FigApp, p: &Value) -> Result<(), String> {
     // Colour picker on the selection's paint `{fills?, index?}`; null closes it.
     if let Some(v) = p.get("colorPicker") {
         app.ui.picker = v.is_object().then(|| crate::colorpicker::PickerTarget::Paint {
@@ -1325,36 +1289,6 @@ fn ui_set_panels(app: &mut FigApp, ctx: &Context, p: &Value) -> Result<(), Strin
     }
     if p.get("collapseLayers").and_then(Value::as_bool) == Some(true) {
         app.ui.expanded.clear();
-    }
-    // The interaction editor popover in the Prototype panel: [layer id, index]; null closes it.
-    match p.get("protoEditor") {
-        Some(Value::Null) => crate::proto_panel::open_editor(ctx, None),
-        Some(Value::Array(a)) => {
-            let id = a.first().and_then(Value::as_u64).ok_or("protoEditor: [layer id, interaction index]")?;
-            let k = a.get(1).and_then(Value::as_u64).unwrap_or(0) as usize;
-            crate::proto_panel::open_editor(ctx, Some((figcraft_doc::NodeId(id), k)));
-        }
-        _ => {}
-    }
-    // The prototype preview pane: true / a frame id opens it, false or null closes it.
-    match p.get("preview") {
-        Some(Value::Bool(false) | Value::Null) => app.ui.preview = None,
-        Some(v @ (Value::Bool(true) | Value::Number(_))) => {
-            let params = if v.is_number() { json!({"start": v}) } else { json!({}) };
-            app.session.execute("proto.preview", &params).map_err(|e| e.to_string())?;
-            app.handle_ui_requests();
-        }
-        _ => {}
-    }
-    // Scroll the presented screen (the full-window player, else the preview pane) to [x, y].
-    if let Some(s) = p.get("presentScroll").and_then(Value::as_array) {
-        let at = |i: usize| s.get(i).and_then(Value::as_f64).unwrap_or(0.0);
-        let player = match (app.ui.present.as_mut(), app.ui.preview.as_mut()) {
-            (Some(p), _) => Some(p),
-            (None, Some(pane)) => Some(&mut pane.player),
-            _ => None,
-        };
-        player.ok_or("nothing is presented")?.scroll_to(at(0), at(1));
     }
     Ok(())
 }
@@ -1499,7 +1433,7 @@ pub fn handle(app: &mut FigApp, ctx: &Context, method: &str, p: &Value) -> Resul
             ui_set_view(app, ctx, p)?;
             ui_set_plugins(app, ctx, p)?;
             ui_set_comments(app, ctx, p)?;
-            ui_set_panels(app, ctx, p)?;
+            ui_set_panels(app, p)?;
             ui_set_styles(app, p)?;
             Ok(app.inspect())
         }

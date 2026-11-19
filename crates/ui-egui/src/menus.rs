@@ -61,9 +61,6 @@ pub fn record_recent(app: &mut FigApp, key: &str) {
 /// clipboard) are handled here, the rest go to the engine.
 pub fn invoke(app: &mut FigApp, id: &str) {
     match id {
-        // Edit ▸ Delete (and the Delete binding) with an interaction open in the Prototype tab
-        // removes that interaction, not the layer (#767).
-        "edit.delete" if app.ui_context.clone().is_some_and(|ctx| crate::proto_panel::delete_selected_interaction(app, &ctx)) => {}
         // After a click in the Pages list, while the list is on screen and its file open, with no
         // layers selected, it deletes the current page (#859).
         "edit.delete" if crate::layers::pages_have_keyboard(app) && app.session.selection().is_empty() => {

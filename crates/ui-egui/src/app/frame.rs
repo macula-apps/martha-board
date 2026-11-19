@@ -1,6 +1,6 @@
 use super::{
-    Arc, CJK_CHANGES, FigApp, LEFT_PANEL, MobilePanel, PANEL_DEFAULT, RIGHT_PANEL, RightTab, TOAST_SECS, ToastClock, Value, a11y, cjk, i18n, icons,
-    json, repaint_in, theme,
+    Arc, CJK_CHANGES, FigApp, LEFT_PANEL, MobilePanel, PANEL_DEFAULT, RIGHT_PANEL, TOAST_SECS, ToastClock, Value, a11y, cjk, i18n, icons, json,
+    repaint_in, theme,
 };
 
 impl FigApp {
@@ -69,19 +69,6 @@ impl FigApp {
             if self.ui.picker.is_some() {
                 self.ui.picker_button_id = Some(response.id);
             }
-        }
-    }
-
-    /// Leaving Design ends a pen path as Escape does and goes back to Move: Prototype doesn't draw
-    /// (#307). Checked as the frame starts (the control channel) and after the panels and
-    /// shortcuts (the mode switcher, the tabs, Shift+E), before the canvas sees more.
-    pub(super) fn end_pen_outside_design(&mut self) {
-        if self.ui.right_tab == self.ui.last_right_tab {
-            return;
-        }
-        self.ui.last_right_tab = self.ui.right_tab;
-        if self.ui.right_tab != RightTab::Design && self.session.tool.tool == figcraft_engine::tools::ToolId::Pen {
-            self.run("tool.set", json!({"tool": "move"}));
         }
     }
 
@@ -212,12 +199,9 @@ impl FigApp {
     }
 
     /// Whether the right panel shows: never with the UI `hidden`; always on a design file; on a
-    /// board, which has no prototypes (its tab stays Design), only when asked for.
+    /// board only when asked for.
     pub(super) fn right_panel_shown(&mut self, hidden: bool) -> bool {
         let board = self.session.doc().is_ok_and(figcraft_engine::board::is_board);
-        if board {
-            self.ui.right_tab = RightTab::Design;
-        }
         !hidden && (!board || self.ui.board_panel)
     }
 

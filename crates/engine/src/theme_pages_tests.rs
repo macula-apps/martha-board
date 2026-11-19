@@ -4,6 +4,7 @@
 //! light default. Text drawn with the Text tool is white on a dark page and black on a light one.
 
 use figcraft_color::{Color, Paint};
+use figcraft_doc::proto::Flow;
 use figcraft_doc::{NodeId, NodeKind};
 use serde_json::{Value, json};
 
@@ -183,15 +184,28 @@ fn text_drawn_on_a_dark_page_is_white_and_on_a_light_page_black() {
     assert_eq!(s.doc().unwrap().node(made).unwrap().fills, vec![Paint::solid(Color::WHITE)]);
 }
 
+/// A flow named `name` starting at `start`, written straight into the shown page (nothing sets
+/// flows any more; a file can still carry them).
+fn add_flow(s: &mut Session, start: NodeId, name: &str) {
+    let page = s.page().unwrap();
+    if let NodeKind::Page { flows, .. } = &mut s.doc_mut().unwrap().get_mut(page).unwrap().kind {
+        flows.push(Flow { name: name.into(), start, description: String::new() });
+    }
+}
+
 /// `page.duplicate` copies the page's flows (pointing at the copied frames), prototype settings
-/// and guides.
+/// and guides that a file carries.
 #[test]
 fn a_copy_of_a_page_keeps_its_flows_prototype_settings_and_guides() {
     let mut s = Session::new();
     ex(&mut s, "frame.create", json!({"x": 0, "y": 0, "width": 100, "height": 100}));
-    let start = ex(&mut s, "frame.create", json!({"x": 200, "y": 0, "width": 100, "height": 100}))["id"].clone();
-    ex(&mut s, "proto.flow.add", json!({"start": start, "name": "Checkout"}));
-    ex(&mut s, "proto.settings", json!({"device": "iPhone 16", "responsive": true}));
+    let start = id_of(&ex(&mut s, "frame.create", json!({"x": 200, "y": 0, "width": 100, "height": 100}))["id"]).unwrap();
+    add_flow(&mut s, start, "Checkout");
+    let page = s.page().unwrap();
+    if let NodeKind::Page { prototype, .. } = &mut s.doc_mut().unwrap().get_mut(page).unwrap().kind {
+        prototype.device = "iPhone 16".into();
+        prototype.responsive = true;
+    }
     ex(&mut s, "guide.add", json!({"vertical": true, "offset": 25}));
     ex(&mut s, "select.none", json!({}));
     let source = s.page().unwrap();
@@ -209,13 +223,12 @@ fn a_copy_of_a_page_keeps_its_flows_prototype_settings_and_guides() {
     assert_eq!(flows.len(), 1);
     assert_eq!(flows[0].name, "Checkout");
     assert_eq!(flows[0].start, frames[1], "the flow starts at the copied frame");
-    assert_eq!(src_flows[0].start, id_of(&start).unwrap(), "the source keeps its own");
+    assert_eq!(src_flows[0].start, start, "the source keeps its own");
     assert_eq!(prototype, src_prototype);
     assert_eq!(prototype.device, "iPhone 16");
     assert!(prototype.responsive);
     assert_eq!(guides, src_guides);
     assert_eq!(guides.len(), 1);
-    assert_eq!(ex(&mut s, "proto.present", json!({}))["start"].as_u64(), Some(frames[1].0));
 }
 
 #[test]
@@ -223,7 +236,7 @@ fn a_copy_of_a_page_keeps_a_flow_that_starts_in_a_section() {
     let mut s = Session::new();
     let start = id_of(&ex(&mut s, "frame.create", json!({"x": 0, "y": 0, "width": 100, "height": 100}))["id"]).unwrap();
     ex(&mut s, "object.wrapInSection", json!({"ids": [start]}));
-    ex(&mut s, "proto.flow.add", json!({"start": start, "name": "Onboarding"}));
+    add_flow(&mut s, start, "Onboarding");
     let copy = id_of(&ex(&mut s, "page.duplicate", json!({}))["id"]).unwrap();
     let doc = s.doc().unwrap();
     let section = doc.node(copy).unwrap().children[0];

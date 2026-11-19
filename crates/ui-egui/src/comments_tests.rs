@@ -1,7 +1,6 @@
-//! Comments in the UI, driven headless through egui (the harness is `present_tests`'): crowded
+//! Comments in the UI, driven headless through egui (the harness is `headless_tests`'): crowded
 //! pins cluster and zoom apart, your pins drag onto another frame, Shift+C hides the pins, the
-//! arrows step through threads, `@` offers names, Escape closes, the presenter shows the presented
-//! frame's comments; and the helpers on their own.
+//! arrows step through threads, `@` offers names, Escape closes; and the helpers on their own.
 
 use std::sync::{Arc, Mutex};
 
@@ -10,7 +9,7 @@ use figcraft_engine::Session;
 use serde_json::{Value, json};
 
 use crate::comments::{cluster, insert_mention, mention_matches, mention_query, start_draft};
-use crate::present_tests::{Ui, id};
+use crate::headless_tests::{Ui, id};
 use crate::{FigApp, Services};
 
 fn add(s: &mut Session, x: f64, y: f64, text: &str, author: &str) -> u64 {
@@ -245,148 +244,6 @@ fn typing_at_offers_names_and_enter_inserts_one() {
 }
 
 #[test]
-fn the_presenter_shows_the_frames_comments() {
-    let mut s = Session::new();
-    let f = id(&s.execute("node.create", &json!({"type": "frame", "x": 0, "y": 0, "width": 400, "height": 300})).unwrap());
-    let other = id(&s.execute("node.create", &json!({"type": "frame", "x": 600, "y": 0, "width": 400, "height": 300})).unwrap());
-    let c = add(&mut s, 100.0, 100.0, "On the frame", "Sam");
-    add(&mut s, 700.0, 100.0, "Elsewhere", "Sam");
-    let mut u = Ui::new(s);
-    u.run("proto.present", json!({"start": f}));
-    assert!(u.app.ui.present.is_some());
-    // Off by default; Shift+C shows them.
-    assert_eq!(u.app.inspect()["presenter"]["comments"], false);
-    key(&mut u, Key::C, Modifiers::SHIFT);
-    assert_eq!(u.app.inspect()["presenter"]["comments"], true);
-    // The frame is presented at 100% (Fit never scales up), centred under the bar.
-    let screen = egui::Rect::from_min_size(pos2(0.0, 80.0), vec2(1440.0, 820.0));
-    let frame_min = screen.center() - vec2(200.0, 150.0);
-    let pin = frame_min + vec2(100.0, 100.0) + vec2(14.0, -14.0);
-    click(&mut u, pin);
-    assert_eq!(comments(&u)["open"], c);
-    assert!(u.app.ui.present.is_some(), "the click didn't reach the prototype or close it");
-    // Escape closes the thread first, then the presenter.
-    key(&mut u, Key::Escape, Modifiers::NONE);
-    assert_eq!(comments(&u)["open"], Value::Null);
-    assert!(u.app.ui.present.is_some());
-    let _ = other;
-}
-
-/// A presenter on a 400 x 300 frame (at page 50, 40) with a second frame, the comment mode on.
-/// Returns the harness, the frame, the other frame and the presented frame's top-left on screen.
-fn present_comment_mode() -> (Ui, figcraft_doc::NodeId, figcraft_doc::NodeId, Pos2) {
-    let mut s = Session::new();
-    let f = id(&s.execute("node.create", &json!({"type": "frame", "x": 50, "y": 40, "width": 400, "height": 300})).unwrap());
-    let other = id(&s.execute("node.create", &json!({"type": "frame", "x": 700, "y": 0, "width": 400, "height": 300})).unwrap());
-    let mut u = Ui::new(s);
-    u.run("proto.present", json!({"start": f}));
-    key(&mut u, Key::C, Modifiers::NONE);
-    assert_eq!(u.app.inspect()["presenter"]["comments"], true);
-    let screen = egui::Rect::from_min_size(pos2(0.0, 80.0), vec2(1440.0, 820.0));
-    (u, f, other, screen.center() - vec2(200.0, 150.0))
-}
-
-fn comment_count(u: &Ui) -> usize {
-    u.app.session.doc().unwrap().comments.len()
-}
-
-#[test]
-fn a_click_in_the_presenters_comment_mode_adds_a_comment_on_the_frame() {
-    let (mut u, f, _, frame_min) = present_comment_mode();
-    click(&mut u, frame_min + vec2(120.0, 90.0));
-    assert!(comments(&u)["draft"].is_array(), "the click opens a draft");
-    u.frame(vec![Event::Text("hello".into())]);
-    key(&mut u, Key::Enter, Modifiers::NONE);
-    assert_eq!(comment_count(&u), 1);
-    let doc = u.app.session.doc().unwrap();
-    let c = &doc.comments[0];
-    assert_eq!(c.first.text, "hello");
-    assert_eq!(c.anchor, Some(f));
-    assert!((c.x - 120.0).abs() <= 1.0 && (c.y - 90.0).abs() <= 1.0, "frame-relative spot {},{}", c.x, c.y);
-    assert_eq!(u.app.inspect()["presenter"]["comments"], true, "the mode stays on");
-    assert!(u.app.ui.present.is_some());
-}
-
-#[test]
-fn a_click_on_the_presenters_draft_pin_keeps_the_typed_draft() {
-    let (mut u, _, _, frame_min) = present_comment_mode();
-    let at = frame_min + vec2(120.0, 90.0);
-    click(&mut u, at);
-    u.frame(vec![Event::Text("typed".into())]);
-    // The pin's body sits above and right of the point it marks.
-    click(&mut u, at + vec2(6.0, -6.0));
-    let draft = u.app.ui.comments.draft.clone();
-    assert_eq!(draft.as_ref().map(|d| d.2.as_str()), Some("typed"), "the draft stays open with its text: {draft:?}");
-}
-
-#[test]
-fn a_click_off_the_frame_in_the_presenters_comment_mode_adds_no_draft() {
-    let (mut u, _, _, frame_min) = present_comment_mode();
-    click(&mut u, frame_min + vec2(-60.0, 90.0));
-    assert!(comments(&u)["draft"].is_null());
-    assert_eq!(comment_count(&u), 0);
-    assert_eq!(u.app.inspect()["presenter"]["comments"], true);
-}
-
-#[test]
-fn escape_closes_the_presenters_draft_then_the_mode() {
-    let (mut u, _, _, frame_min) = present_comment_mode();
-    click(&mut u, frame_min + vec2(120.0, 90.0));
-    u.frame(vec![Event::Text("draft".into())]);
-    key(&mut u, Key::Escape, Modifiers::NONE);
-    assert!(comments(&u)["draft"].is_null(), "Escape closes the draft");
-    assert_eq!(comment_count(&u), 0, "and adds no comment");
-    assert_eq!(u.app.inspect()["presenter"]["comments"], true);
-    assert!(u.app.ui.present.is_some());
-    key(&mut u, Key::Escape, Modifiers::NONE);
-    assert_eq!(u.app.inspect()["presenter"]["comments"], false, "Escape with no draft turns the mode off");
-    assert!(u.app.ui.present.is_some(), "and keeps the presentation open");
-    key(&mut u, Key::Escape, Modifiers::NONE);
-    assert!(u.app.ui.present.is_none(), "with the mode off Escape still ends the presentation");
-}
-
-#[test]
-fn a_click_in_the_presenters_comment_mode_does_not_navigate() {
-    let (mut u, f, other, frame_min) = present_comment_mode();
-    u.run("proto.interaction.add", json!({"id": f, "trigger": {"type": "onClick"}, "action": {"type": "navigate", "dest": other}}));
-    u.frames(2, Vec::new);
-    click(&mut u, frame_min + vec2(120.0, 90.0));
-    u.frames(30, Vec::new);
-    assert_eq!(u.app.inspect()["presenter"]["current"], json!(f), "the click placed a comment, it didn't follow the link");
-    assert!(comments(&u)["draft"].is_array());
-}
-
-#[test]
-fn typing_c_into_the_presenters_draft_keeps_the_mode_on() {
-    let (mut u, _, _, frame_min) = present_comment_mode();
-    click(&mut u, frame_min + vec2(120.0, 90.0));
-    u.frame(vec![Event::Text("c".into())]);
-    key(&mut u, Key::C, Modifiers::NONE);
-    assert_eq!(u.app.inspect()["presenter"]["comments"], true);
-    assert!(comments(&u)["draft"].is_array());
-}
-
-#[test]
-fn a_comment_posted_in_the_overlap_anchors_to_the_presented_frame() {
-    let mut s = Session::new();
-    let a = id(&s.execute("node.create", &json!({"type": "frame", "x": 50, "y": 40, "width": 400, "height": 300})).unwrap());
-    // Stacked after `a` and overlapping its right part.
-    s.execute("node.create", &json!({"type": "frame", "x": 250, "y": 40, "width": 400, "height": 300})).unwrap();
-    let mut u = Ui::new(s);
-    u.run("proto.present", json!({"start": a}));
-    key(&mut u, Key::C, Modifiers::NONE);
-    let screen = egui::Rect::from_min_size(pos2(0.0, 80.0), vec2(1440.0, 820.0));
-    let frame_min = screen.center() - vec2(200.0, 150.0);
-    click(&mut u, frame_min + vec2(250.0, 90.0));
-    u.frame(vec![Event::Text("overlap".into())]);
-    key(&mut u, Key::Enter, Modifiers::NONE);
-    assert_eq!(comment_count(&u), 1);
-    let c = u.app.session.doc().unwrap().comments[0].clone();
-    assert_eq!(c.anchor, Some(a), "the comment is on the presented frame, not the one stacked over it");
-    assert_eq!(comments(&u)["open"], c.id, "its pin shows in the presenter");
-}
-
-#[test]
 fn a_draft_that_fails_to_post_keeps_its_text() {
     let (mut h, _) = crate::live_tests::Harness::new();
     // A view-only link: the session refuses every edit, a comment too.
@@ -401,25 +258,6 @@ fn a_draft_that_fails_to_post_keeps_its_text() {
     assert!(h.app.session.doc().unwrap().comments.is_empty(), "the session refused the comment");
     let draft = h.app.ui.comments.draft.clone();
     assert_eq!(draft.as_ref().map(|d| d.2.as_str()), Some("hello"), "the draft and its text stay: {draft:?}");
-}
-
-#[test]
-fn a_press_held_into_the_presenters_comment_mode_does_not_navigate_on_release() {
-    let mut s = Session::new();
-    let f = id(&s.execute("node.create", &json!({"type": "frame", "x": 50, "y": 40, "width": 400, "height": 300})).unwrap());
-    let other = id(&s.execute("node.create", &json!({"type": "frame", "x": 700, "y": 0, "width": 400, "height": 300})).unwrap());
-    let mut u = Ui::new(s);
-    u.run("proto.interaction.add", json!({"id": f, "trigger": {"type": "onClick"}, "action": {"type": "navigate", "dest": other}}));
-    u.run("proto.present", json!({"start": f}));
-    u.frames(2, Vec::new);
-    let screen = egui::Rect::from_min_size(pos2(0.0, 80.0), vec2(1440.0, 820.0));
-    let at = screen.center() - vec2(200.0, 150.0) + vec2(120.0, 90.0);
-    u.button(at, true);
-    key(&mut u, Key::C, Modifiers::NONE);
-    assert_eq!(u.app.inspect()["presenter"]["comments"], true);
-    u.button(at, false);
-    u.frames(30, Vec::new);
-    assert_eq!(u.app.inspect()["presenter"]["current"], json!(f), "the press began before comment mode, so its release is no click");
 }
 
 #[derive(Clone, Default)]

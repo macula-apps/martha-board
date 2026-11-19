@@ -533,7 +533,7 @@ fn a_frame_observes_the_ime_once_even_when_it_ends_early() {
     u.frame(vec![]);
     assert_eq!(u.app.ime_observations - before, 1, "one final observation for the editor pass");
 
-    // The home/present early returns make the same single idle observation.
+    // The home early return makes the same single idle observation.
     u.app.ui.home = true;
     let before = u.app.ime_observations;
     u.frame(vec![]);

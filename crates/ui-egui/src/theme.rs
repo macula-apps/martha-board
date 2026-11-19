@@ -214,7 +214,7 @@ pub fn apply(ctx: &Context, t: Tokens) {
 }
 
 /// [`apply`], with egui's own animations (hover fades, openings, smooth scrolling to a target) off
-/// when the system or the preferences ask for reduced motion. Prototype transitions still play.
+/// when the system or the preferences ask for reduced motion.
 pub fn apply_with(ctx: &Context, t: Tokens, reduce_motion: bool) {
     ctx.data_mut(|d| d.insert_temp(tokens_id(), t));
     ctx.set_visuals(visuals(t));

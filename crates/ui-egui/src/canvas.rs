@@ -41,7 +41,6 @@ pub mod guides;
 pub mod handles;
 pub mod live_text;
 pub mod measure_overlay;
-pub mod proto_canvas;
 pub mod render_worker;
 pub(crate) mod selection_spacing;
 pub mod widget_bar;

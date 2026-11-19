@@ -22,7 +22,6 @@ pub mod fonts;
 pub mod guard;
 pub mod keymap;
 pub mod measure;
-pub mod proto_run;
 mod selection;
 mod sharing;
 pub use assets::components;
@@ -469,26 +468,6 @@ mod progressive_blur_tests;
 mod prop_order_tests;
 #[cfg(test)]
 mod property_copy_tests;
-#[cfg(test)]
-mod proto_behaviour_tests;
-#[cfg(test)]
-mod proto_conditional_tests;
-#[cfg(test)]
-mod proto_delay_tests;
-#[cfg(test)]
-mod proto_multi_tests;
-#[cfg(test)]
-mod proto_overlay_anchor_tests;
-#[cfg(test)]
-mod proto_polish_tests;
-#[cfg(test)]
-mod proto_present_tests;
-#[cfg(test)]
-mod proto_responsive_tests;
-#[cfg(test)]
-mod proto_run_tests;
-#[cfg(test)]
-mod proto_tail_tests;
 #[cfg(test)]
 mod retained_walk_tests;
 #[cfg(test)]

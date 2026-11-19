@@ -9,7 +9,6 @@ use figcraft_engine::Session;
 use figcraft_engine::keymap::KEYS;
 use serde_json::json;
 
-use crate::RightTab;
 use crate::layers_drag_tests::Ui;
 
 fn id(v: serde_json::Value) -> NodeId {
@@ -122,10 +121,6 @@ fn alignment_keys() {
 #[test]
 fn panel_keys_and_cmd_k() {
     let (mut u, _, _) = setup();
-    press(&mut u, Key::E, Modifiers::SHIFT);
-    assert_eq!(u.app.ui.right_tab, RightTab::Prototype, "Shift+E: Prototype");
-    press(&mut u, Key::E, Modifiers::SHIFT);
-    assert_eq!(u.app.ui.right_tab, RightTab::Design, "and back to Design");
     let collapsed = u.app.ui.left_collapsed;
     let minimized = |u: &Ui| u.app.session.ds().unwrap().view.ui_minimized;
     press(&mut u, Key::Backslash, Modifiers::SHIFT | Modifiers::COMMAND);

@@ -1,4 +1,4 @@
-//! The branch review dialog, driven headless (the harness is `present_tests`'): it opens on a
+//! The branch review dialog, driven headless (the harness is `headless_tests`'): it opens on a
 //! branch with a conflict, keeps chosen sides while they still name a conflict, and closes with
 //! Escape.
 
@@ -7,7 +7,7 @@ use figcraft_engine::Session;
 use figcraft_engine::branches::Side;
 use serde_json::json;
 
-use crate::present_tests::{Ui, id};
+use crate::headless_tests::{Ui, id};
 
 #[test]
 fn review_dialog_opens_keeps_choices_and_closes() {

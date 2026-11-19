@@ -182,8 +182,7 @@ fn handles(app: &FigApp, axis: &Axis) -> Vec<Handle> {
 }
 
 fn available(app: &FigApp) -> bool {
-    app.ui.right_tab == crate::RightTab::Design
-        && app.ui.picker.is_none()
+    app.ui.picker.is_none()
         && app.session.tool.tool == figcraft_engine::ToolId::Move
         && !app.session.tool.busy()
         && app.session.ds().is_ok_and(|d| d.text_edit.is_none() && d.vector_edit.is_none())

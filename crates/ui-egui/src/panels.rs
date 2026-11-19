@@ -6,8 +6,6 @@ pub mod frame_presets;
 pub mod layers;
 pub mod layout_panel;
 pub mod list_drag;
-pub mod proto_editor;
-pub mod proto_panel;
 pub mod right;
 pub mod scale_panel;
 pub mod section_panel;

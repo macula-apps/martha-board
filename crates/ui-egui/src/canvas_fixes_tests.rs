@@ -10,9 +10,9 @@ use egui::{Event, Modifiers, PointerButton, Pos2, Shape};
 use figcraft_engine::Session;
 use serde_json::json;
 
+use crate::headless_tests::id;
 use crate::layers_drag_tests::Ui;
 use crate::live_tests::flat;
-use crate::present_tests::id;
 
 /// Whether `shapes` hold a closed outline through the corners `q`.
 fn outlined(shapes: &[Shape], q: [Pos2; 4]) -> bool {

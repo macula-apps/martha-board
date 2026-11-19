@@ -21,8 +21,7 @@ pub fn section(app: &mut FigApp, ui: &mut Ui, doc: &Document, sel: &[NodeId]) {
     };
     widgets::section_header(ui, tr("Scale"), &[], false);
     // The factor field takes the keyboard, with its text selected, whenever the section shows
-    // after a frame without it: the tool was chosen, or the panel came back from another tab or a
-    // hidden UI.
+    // after a frame without it: the tool was chosen, or the panel came back from a hidden UI.
     let k_id = Id::unique("scale_k");
     let shown_id = Id::unique("scale_shown_frame");
     let frame = ui.ctx().cumulative_frame_nr();
@@ -37,7 +36,7 @@ pub fn section(app: &mut FigApp, ui: &mut Ui, doc: &Document, sel: &[NodeId]) {
     // shortcut layer may let go of it before this frame's panel runs, and a click or Tab that moved
     // it to another field during the last frame counts.
     let in_k_id = Id::unique("scale_in_k");
-    // A flag left from before a gap (another tab, a hidden panel) is stale: the field didn't have
+    // A flag left from before a gap (a hidden panel) is stale: the field didn't have
     // the keyboard on the frame before this one.
     let in_k = !reappeared && ui.data(|d| d.get_temp::<bool>(in_k_id)).unwrap_or(false);
     // Plain Enter or Escape only: Ctrl+Enter and Alt+Enter are not the tool's exit.

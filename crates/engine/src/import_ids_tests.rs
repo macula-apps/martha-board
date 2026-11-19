@@ -4,7 +4,7 @@
 //! it brought the first time.
 
 use base64::Engine as _;
-use figcraft_doc::proto::Action;
+use figcraft_doc::proto::{Action, Expr, Interaction};
 use figcraft_doc::{Document, Node, NodeId, VariableValue};
 use serde_json::{Value, json};
 
@@ -55,11 +55,22 @@ fn other() -> Session {
     ex(&mut s, "variable.bind", json!({"ids": [card], "field": "cornerRadius", "variable": "size"}));
     let swatch = idv(&ex(&mut s, "shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40, "parent": card, "name": "Swatch"})));
     ex(&mut s, "variable.bind", json!({"ids": [swatch], "field": "fill", "variable": "b2"}));
-    let actions = json!([
-        {"type": "setVariableMode", "collection": "B", "mode": "Dark"},
-        {"type": "setVariable", "variable": "size", "expression": "size + 1"}
-    ]);
-    ex(&mut s, "proto.interaction.add", json!({"id": swatch, "actions": actions}));
+    // Nothing sets interactions any more; a file can still carry them, so this one is written in.
+    let doc = s.doc().unwrap();
+    let b = doc.variables.collection("B").unwrap();
+    let mode = Action::SetVariableMode { collection: b.id.clone(), mode: b.find_mode("Dark").unwrap().id.clone() };
+    let size = doc.variables.get("size").unwrap().id.clone();
+    let expr = Expr::parse("size + 1", &doc.variables).unwrap();
+    let set = Action::SetVariable { variable: size, value: Value::Null, expr: Some(expr) };
+    let ia = Interaction {
+        trigger: Default::default(),
+        actions: vec![mode, set],
+        transition: Default::default(),
+        duration_ms: 300,
+        easing: Default::default(),
+        delay_ms: 0,
+    };
+    s.doc_mut().unwrap().get_mut(swatch).unwrap().interactions = vec![ia];
     let styled = idv(&ex(&mut s, "shape.rectangle", json!({"x": 60, "y": 10, "width": 40, "height": 40, "parent": card, "name": "Styled"})));
     ex(&mut s, "style.apply", json!({"ids": [styled], "style": "Brand"}));
     s

@@ -57,25 +57,6 @@ pub const PROMPTS: &[PromptDef] = &[
         defaults: &[("width", "1440"), ("accent", "#7048E8")],
     },
     PromptDef {
-        name: "prototype_flow",
-        title: "Wire a prototype flow",
-        description: "Connect screens with click interactions, add a flow starting point and check it.",
-        args: &[
-            PromptArg {
-                name: "screens",
-                description: "Comma-separated screen names, in flow order (default \"Home, Details, Checkout\")",
-                required: false,
-            },
-            PromptArg {
-                name: "transition",
-                description: "Transition: instant|dissolve|smartAnimate|moveIn|push|slideIn (default smartAnimate)",
-                required: false,
-            },
-        ],
-        template: "Build a clickable prototype in FigCraft with these screens, in order: {screens}.\n\n1. If the frames don't exist, create one phone frame per screen (run_command frame.create {\"preset\": \"iPhone 16\", …}) side by side 100 units apart, each with a title and a \"Next\" button (a frame with text inside).\n2. For each screen except the last, add an interaction on its button: run_command proto.interaction.add {\"id\": <button>, \"trigger\": {\"type\": \"onClick\"}, \"action\": {\"type\": \"navigate\", \"dest\": <next frame>}, \"transition\": {\"type\": \"{transition}\"}, \"durationMs\": 300}. Add a back button on later screens with {\"action\": {\"type\": \"back\"}}.\n3. run_command proto.flow.add {\"start\": <first frame>, \"name\": \"Main flow\"}.\n4. Check get_node on each button shows `interactions`, and inspect_document shows the page's `flows`.{verify}",
-        defaults: &[("screens", "Home, Details, Checkout"), ("transition", "smartAnimate")],
-    },
-    PromptDef {
         name: "fix_comments",
         title: "Fix comments",
         description: "Read the open comment threads and fix each one, replying and resolving it after verifying.",

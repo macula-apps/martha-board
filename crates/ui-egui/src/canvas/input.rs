@@ -156,14 +156,6 @@ fn import_dropped(app: &mut FigApp, ctx: &egui::Context, hover_pos: Option<egui:
     }
 }
 
-/// A press ends the keyboard selection box and pick select.
-fn end_keyboard_box(app: &mut FigApp, ctx: &egui::Context) {
-    if ctx.input(|i| i.pointer.any_pressed()) {
-        app.ui.key_box = None;
-        app.ui.pick = None;
-    }
-}
-
 /// One frame of a pan (the middle or a side button held, or Space + drag): the view follows the
 /// pointer from where the pan began, and the pan ends once no button that pans is held.
 fn pan_view(app: &mut FigApp, ctx: &egui::Context, pos: Pos2, mods: &egui::Modifiers, middle_down: bool) {
@@ -193,13 +185,6 @@ fn pan_view(app: &mut FigApp, ctx: &egui::Context, pos: Pos2, mods: &egui::Modif
 /// the pointer (a comment pin, a ruler guide, a gradient or padding handle): the tool's cursor
 /// then doesn't show.
 pub(super) fn input(app: &mut FigApp, ui: &mut Ui, resp: &egui::Response) -> bool {
-    if crate::proto_canvas::input(app, ui, resp) {
-        // A prototype gesture is a press on the canvas too: the Pages list gives up the keyboard.
-        app.ui.pages_focus = None;
-        // And it ends the keyboard selection box and pick select, as any canvas press does.
-        end_keyboard_box(app, ui.ctx());
-        return true;
-    }
     let ctx = ui.ctx().clone();
     // Two fingers pan as well as pinch (a touch screen has no scroll wheel).
     let (mods, pan, zoom_delta, hover_pos, space) = ctx.input(|i| {

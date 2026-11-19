@@ -7,9 +7,9 @@ use figcraft_doc::{NodeId, NodeKind};
 use figcraft_engine::Session;
 use serde_json::json;
 
+use crate::headless_tests::id;
 use crate::layers_drag_tests::Ui;
 use crate::live_tests::{flat, has_text, text_center};
-use crate::present_tests::id;
 
 const COMBINE: &str = "Combine as variants";
 

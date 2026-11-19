@@ -1,4 +1,4 @@
-use super::{FigApp, PendingAck, Value, cursors, home_recents, import_report, json, live, missing_fonts, online, present, tabs, windows};
+use super::{FigApp, PendingAck, Value, cursors, home_recents, import_report, json, live, missing_fonts, online, tabs, windows};
 
 impl FigApp {
     /// Queue raw input injected through the control channel for the window drawing next, tagged
@@ -39,7 +39,6 @@ impl FigApp {
     /// UI state as JSON (control channel `ui.inspect`).
     pub fn inspect(&self) -> Value {
         let mut state = json!({
-            "rightTab": self.ui.right_tab,
             "leftTab": self.ui.left_tab,
             "home": self.ui.home,
             "online": online::inspect(self),
@@ -49,10 +48,6 @@ impl FigApp {
             "dark": self.ui.dark,
             "focus": {"region": self.ui.nav.region.id(), "keyboard": self.ui.nav.keyboard},
             "reduceMotion": self.reduce_motion(),
-            "presenting": self.ui.present.is_some(),
-            "presenter": tabs::shown_or_paused(self).map(present::Presenter::inspect),
-            "presentOptions": {"scale": self.ui.present_view.scale.id(), "deviceFrame": self.ui.present_view.device_frame, "comments": self.ui.present_view.comments, "hotspotHints": self.ui.present_view.hotspot_hints, "hideUi": self.ui.present_view.hide_ui},
-            "preview": self.ui.preview.as_ref().map(|p| p.player.inspect()),
             "mainMenu": self.ui.main_menu,
             "palette": self.ui.palette.is_some(),
             "variables": self.ui.variables.is_some(),
@@ -104,7 +99,6 @@ impl FigApp {
         state["uiScale"] = json!({"choice": self.session.prefs.ui_scale, "zoom": self.ui.ui_scale.zoom, "drawn": self.ui.ui_scale.drawn, "limited": self.ui.ui_scale.limited});
         state["pendingOpens"] = json!(self.ui.pending_opens.len());
         state["missingFonts"] = json!(self.ui.missing_fonts.as_ref().map(missing_fonts::Shown::inspect));
-        state["presentTabs"] = tabs::present_tabs_inspect(self);
         state["frameTimes"] = self.frame_stats.times();
         state
     }

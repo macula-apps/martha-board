@@ -83,9 +83,7 @@ fn the_screen_reader_tree_names_tools_layers_fields_tabs_and_the_canvas() {
     let w = find(&nodes, Role::SpinButton, "Width");
     assert_eq!((w.value(), w.numeric_value()), (Some("40"), Some(40.0)));
     assert_eq!(find(&nodes, Role::SpinButton, "Rotation").value(), Some("0°"));
-    // Tabs and dropdowns.
-    assert_eq!(find(&nodes, Role::Tab, "Design").is_selected(), Some(true));
-    assert_eq!(find(&nodes, Role::Tab, "Prototype").is_selected(), Some(false));
+    // Dropdowns.
     assert_eq!(find(&nodes, Role::ComboBox, "Zoom").is_expanded(), Some(false));
     // Icon buttons are named by their tooltip.
     find(&nodes, Role::Button, "Add new page");

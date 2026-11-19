@@ -1,6 +1,6 @@
 use super::{
-    Done, FigApp, LeftTab, MobilePanel, NodeId, PANEL_DEFAULT, RightTab, Value, comments, dialogs, home, import_report, layers, live, menus,
-    missing_fonts, plugins_ui, present, tabs, updates_ui, versions,
+    Done, FigApp, LeftTab, MobilePanel, NodeId, PANEL_DEFAULT, Value, comments, dialogs, home, import_report, layers, live, menus, missing_fonts,
+    plugins_ui, updates_ui, versions,
 };
 
 impl FigApp {
@@ -115,17 +115,14 @@ impl FigApp {
                 "panel.shortcuts" => self.ui.shortcuts_panel = !self.ui.shortcuts_panel,
                 "palette.actions" => menus::toggle_palette(&mut self.ui),
                 "panel.design" if self.session.doc().is_ok_and(figcraft_engine::board::is_board) => self.ui.board_panel = !self.ui.board_panel,
-                "panel.design" => self.ui.right_tab = RightTab::Design,
+                // The right panel holds the Design panel alone: on a design file it always shows.
+                "panel.design" => {}
                 "board.editText" => {
                     if let Some(id) = r.data.get("id").and_then(figcraft_engine::params::id_of)
                         && let Err(e) = figcraft_engine::board::edit_text(&mut self.session, id)
                     {
                         self.toast(e.to_string());
                     }
-                }
-                "panel.prototype" => self.ui.right_tab = RightTab::Prototype,
-                "panel.designPrototype" => {
-                    self.ui.right_tab = if self.ui.right_tab == RightTab::Prototype { RightTab::Design } else { RightTab::Prototype };
                 }
                 "panel.leftSidebar" => {
                     let shown = if self.ui.narrow { self.ui.mobile_panel == Some(MobilePanel::Left) } else { !self.ui.left_collapsed };
@@ -170,38 +167,6 @@ impl FigApp {
                 }
                 "dialog.saveAs" => self.save_as_dialog(),
                 "dialog.colorProfile" => self.ui.color_profile = self.session.doc().ok().map(|d| d.color_profile),
-                "present" => {
-                    if let Some(start) = r.data.get("start").and_then(figcraft_engine::params::id_of) {
-                        tabs::open_present(self, start);
-                    }
-                }
-                "present.options" => {
-                    let v = &mut self.ui.present_view;
-                    if let Some(s) = r.data.get("scale").and_then(|s| s.as_str()).and_then(present::PresentScale::parse) {
-                        v.scale = s;
-                    }
-                    if let Some(f) = r.data.get("deviceFrame").and_then(|f| f.as_bool()) {
-                        v.device_frame = f;
-                    }
-                    if let Some(h) = r.data.get("hotspotHints").and_then(|h| h.as_bool()) {
-                        v.hotspot_hints = h;
-                    }
-                    if let Some(h) = r.data.get("hideUi").and_then(|h| h.as_bool()) {
-                        v.hide_ui = h;
-                    }
-                    if let Some(p) = self.ui.present.as_mut() {
-                        p.view.device_frame = v.device_frame;
-                        p.view.hotspot_hints = v.hotspot_hints;
-                        p.view.hide_ui = v.hide_ui;
-                        p.set_scale(v.scale);
-                    }
-                }
-                "preview" => {
-                    if let Some(start) = r.data.get("start").and_then(figcraft_engine::params::id_of) {
-                        self.ui.preview = Some(present::Pane::new(start, &self.session));
-                    }
-                }
-                "preview.close" => self.ui.preview = None,
                 "open.help" => self.services.open_url("https://getartcraft.com/apps/figcraft"),
                 // A link in text activated while editing (`text.openLink`): the engine checked it
                 // is a web or mail link.

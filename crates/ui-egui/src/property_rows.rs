@@ -19,7 +19,7 @@ use egui::{Color32, Context, Rect, Response};
 use figcraft_doc::NodeId;
 use serde_json::json;
 
-use crate::{FigApp, RightTab};
+use crate::FigApp;
 
 /// Which list of the Design panel a row belongs to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -101,7 +101,7 @@ pub struct Copied {
 pub(crate) fn current(app: &FigApp) -> Option<&Highlight> {
     let h = app.ui.property_row.as_ref()?;
     let ds = app.session.ds().ok()?;
-    (app.ui.right_tab == RightTab::Design && ds.uid == h.doc && ds.selection == h.ids).then_some(h)
+    (ds.uid == h.doc && ds.selection == h.ids).then_some(h)
 }
 
 /// Let the highlight go once it no longer belongs to what the Design panel shows (another file or

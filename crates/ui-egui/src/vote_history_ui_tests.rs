@@ -13,7 +13,7 @@ fn two_votes() -> Ui {
     let mut s = Session::new();
     s.execute("file.newBoard", &json!({})).unwrap();
     let sticky =
-        |s: &mut Session, x: i32, text: &str| crate::present_tests::id(&s.execute("board.sticky", &json!({"x": x, "y": 0, "text": text})).unwrap());
+        |s: &mut Session, x: i32, text: &str| crate::headless_tests::id(&s.execute("board.sticky", &json!({"x": x, "y": 0, "text": text})).unwrap());
     let (a, b) = (sticky(&mut s, 0, "Ship it"), sticky(&mut s, 300, "Wait"));
     for on in [a, b] {
         s.execute("board.vote", &json!({"action": "start"})).unwrap();

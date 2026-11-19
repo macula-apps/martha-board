@@ -67,8 +67,6 @@ fn templates_use_the_features_they_show() {
     let sets = |d: &Document| count(d, |k| matches!(k, NodeKind::ComponentSet { .. }));
     let app = built("mobile-app");
     assert!(components(&app) >= 4 && sets(&app) == 1 && instances(&app) >= 7);
-    assert!(matches!(&app.node(app.first_page().unwrap()).unwrap().kind, NodeKind::Page { flows, .. } if flows.len() == 1), "a prototype flow");
-    assert!(app.ids().filter(|id| app.node(*id).is_some_and(|n| !n.interactions.is_empty())).count() >= 5, "prototype links");
     let ds = built("design-system");
     assert_eq!(ds.variables.collections.len(), 2);
     assert!(ds.variables.collections.iter().any(|c| c.modes.iter().map(|m| m.name.as_str()).eq(["Light", "Dark"])));

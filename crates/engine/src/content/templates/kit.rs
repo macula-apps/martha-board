@@ -72,7 +72,7 @@ impl Kit {
         self.page()
     }
 
-    /// Go back to `page` (flows are added to the page shown).
+    /// Go back to `page`.
     pub fn go(&mut self, page: NodeId) -> Result<()> {
         self.run("page.select", json!({"id": page.0})).map(drop)
     }
@@ -264,17 +264,6 @@ impl Kit {
             self.set(id, props)?;
         }
         Ok(id)
-    }
-
-    /// Clicking `from` goes to frame `to` in the prototype.
-    pub fn link(&mut self, from: NodeId, to: NodeId) -> Result<()> {
-        let params = json!({"id": from.0, "action": {"type": "navigate", "dest": to.0}, "transition": {"type": "dissolve"}, "durationMs": 200});
-        self.run("proto.interaction.add", params).map(drop)
-    }
-
-    /// The prototype starts at frame `start`.
-    pub fn flow(&mut self, start: NodeId, name: &str) -> Result<()> {
-        self.run("proto.flow.add", json!({"start": start.0, "name": name})).map(drop)
     }
 }
 

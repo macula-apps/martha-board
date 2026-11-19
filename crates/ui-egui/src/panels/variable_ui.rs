@@ -26,8 +26,6 @@ enum Target {
     Bind { ids: Vec<NodeId>, field: String },
     /// Make `variable`'s value in `mode` an alias of it.
     Alias { variable: VariableId, mode: ModeId },
-    /// Use it in a prototype action (a set variable's variable, a condition's operand).
-    Proto(crate::proto_editor::VarSlot),
     /// Bind it to `field` of the shared style `style`.
     Style { style: String, field: String },
     /// Bind it to the weight of the shared text style `style`: a string variable names the face
@@ -187,11 +185,6 @@ pub fn group_caption(ui: &mut Ui, lib: Option<&PublishedLibrary>, coll: &Collect
 pub fn open(ui: &Ui, ids: &[NodeId], field: &str, kind: VariableType, at: Pos2) {
     let target = Target::Bind { ids: ids.to_vec(), field: field.to_string() };
     ui.data_mut(|d| d.insert_temp(picker_id(), Picker { target, kind: Some(kind), at }));
-}
-
-/// Open the picker at `at` to pick a variable (of `kind`, or any) for a prototype action.
-pub fn open_proto(ui: &Ui, slot: crate::proto_editor::VarSlot, kind: Option<VariableType>, at: Pos2) {
-    ui.data_mut(|d| d.insert_temp(picker_id(), Picker { target: Target::Proto(slot), kind, at }));
 }
 
 /// Open the picker at `at` to bind a variable of `kind` to `field` of the shared style `style`.
@@ -408,15 +401,15 @@ pub fn picker(app: &mut FigApp, ctx: &egui::Context) {
     let (scope, own) = match &p.target {
         Target::Bind { ids, field } => (ids.first().and_then(|id| figcraft_engine::cmd::variables::field_scope(&doc, *id, field)), None),
         Target::Alias { variable, .. } => (None, doc.variables.get_by_id(variable)),
-        Target::Proto(_) | Target::Style { .. } | Target::StyleWeight { .. } => (None, None),
+        Target::Style { .. } | Target::StyleWeight { .. } => (None, None),
     };
     // A style's fields offer variables scoped to one of the properties the field sets.
     let style_scopes = match &p.target {
         Target::Style { style, field } => doc.style(style).and_then(|st| figcraft_engine::style_vars::field_scopes(&st.kind, field)),
         _ => None,
     };
-    // Prototypes and styles use this file's variables.
-    let local_only = matches!(p.target, Target::Proto(_) | Target::Style { .. } | Target::StyleWeight { .. });
+    // Styles use this file's variables.
+    let local_only = matches!(p.target, Target::Style { .. } | Target::StyleWeight { .. });
     let weight_target = matches!(p.target, Target::StyleWeight { .. });
     let field = match &p.target {
         Target::Bind { field, .. } => Some(field.as_str()),
@@ -508,7 +501,6 @@ pub fn picker(app: &mut FigApp, ctx: &egui::Context) {
             (Target::Alias { variable, mode }, Some(lib)) => {
                 app.run("library.aliasVariable", json!({"library": lib, "alias": pick.id, "variable": variable, "mode": mode}));
             }
-            (Target::Proto(slot), _) => crate::proto_editor::pick_variable(app, slot, &pick.id),
             (Target::Style { style, field }, _) => {
                 app.run("style.bind", json!({"style": style, "field": field, "variable": pick.id}));
             }
