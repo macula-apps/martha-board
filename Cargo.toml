@@ -134,6 +134,9 @@ unsafe_code = "forbid"
 
 [workspace.lints.clippy]
 cognitive_complexity = "deny"
+# Structural caps; thresholds in clippy.toml.
+excessive_nesting = "deny"
+too_many_lines = "deny"
 too_many_arguments = "deny"
 wildcard_imports = "deny"
 dbg_macro = "warn"

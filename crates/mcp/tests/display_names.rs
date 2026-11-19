@@ -21,7 +21,6 @@ fn banned_display(text: &str) -> bool {
 
 // Read ordinary and raw Rust string literals, ignoring comments. No compiler dependency is
 // needed, so this guard can also run by itself when a full application build is unavailable.
-#[allow(clippy::cognitive_complexity)] // This small test-only lexer keeps raw-string/comment state together.
 fn literals(source: &str) -> Vec<String> {
     let chars: Vec<char> = source.chars().collect();
     let mut out = Vec::new();

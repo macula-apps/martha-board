@@ -7,4 +7,10 @@ too-many-arguments-threshold = 10
 disallowed-types = [
     { path = "egui::ComboBox", reason = "use craft_ui::ComboBox: egui's combo box menu can't grow back while open (egui#5225)" },
 ]
+# Structural caps (macula-apps/martha-board#2, P0). Each starts at the highest value the imported
+# FigCraft code passes today, measured on main 6982957, and only goes down, to the house floor of
+# nesting 3, cognitive complexity 15 and 60 lines (the follow-up issue). No baseline file, no
+# `#[allow]` on these lints: a finding fails CI.
 cognitive-complexity-threshold = 30
+excessive-nesting-threshold = 11
+too-many-lines-threshold = 770

@@ -1,0 +1,100 @@
+name: CI
+
+# MarthaBoard's gate on every push to main and every pull request: formatting, clippy with the
+# structural caps, the build and the whole test suite, all with the committed Cargo.lock.
+#
+# The structural caps (nesting depth, function length, cognitive complexity) are clippy lints set
+# in Cargo.toml's [workspace.lints.clippy] and given their thresholds in clippy.toml, so a local
+# `cargo clippy` holds the same limits as this job. They start at the highest value the imported
+# code passes today and only go down (macula-apps/martha-board#2, P0). There is no baseline file:
+# a finding fails the job.
+#
+# Hosted runners: the repository is public, and the runner rule puts public repositories on
+# GitHub-hosted runners.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to a pull request cancels its older run; every push to main runs to the end.
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  RUST_TOOLCHAIN: "1.99.0"
+  # storytold/craft-fonts at the commit FigCraft d4b4387's CI pinned. The text tests measure
+  # with its fonts (Inter and the rest); without it, three board mind-map tests measure with
+  # whatever the runner's system fonts are and fail.
+  CRAFT_FONTS_REF: 37827adc41fd165f9a9234ac40f94dbad353aa69
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUST_BACKTRACE: 1
+
+jobs:
+  gate:
+    name: fmt, clippy, build, test
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check out craft-fonts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: storytold/craft-fonts
+          ref: ${{ env.CRAFT_FONTS_REF }}
+          path: .craft-fonts
+          persist-credentials: false
+
+      # .cargo/config.toml points CRAFT_FONTS_DIR at ../craft-fonts for local builds; cargo's
+      # [env] does not override a variable the environment already sets. CRAFT_FONTS_REQUIRED
+      # makes a build that silently drops the fonts fail.
+      - name: Use craft-fonts
+        run: |
+          echo "CRAFT_FONTS_DIR=$GITHUB_WORKSPACE/.craft-fonts" >> "$GITHUB_ENV"
+          echo "CRAFT_FONTS_REQUIRED=1" >> "$GITHUB_ENV"
+
+      - name: Ubuntu packages the desktop build links against
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends \
+            libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev \
+            libgtk-3-dev
+
+      - name: Rust toolchain
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component clippy,rustfmt
+          rustup default "$RUST_TOOLCHAIN"
+          rustc --version
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+
+      - name: Formatting
+        run: cargo fmt --all --check
+
+      # clippy reads only the nearest clippy.toml, and crates/engine has its own. The structural caps
+      # must be the same lines in both, or the engine would quietly run on clippy's defaults.
+      - name: The engine's clippy.toml carries the workspace's structural caps
+        run: |
+          caps='^(cognitive-complexity|excessive-nesting|too-many-lines)-threshold'
+          diff <(grep -E "$caps" clippy.toml) <(grep -E "$caps" crates/engine/clippy.toml) \
+            || { echo "::error::crates/engine/clippy.toml and clippy.toml differ in their structural caps (above)"; exit 1; }
+          [ "$(grep -cE "$caps" clippy.toml)" -eq 3 ] \
+            || { echo "::error::clippy.toml must set all three structural caps"; exit 1; }
+
+      - name: Clippy, with the structural caps
+        run: cargo clippy --workspace --all-targets --locked --keep-going -- -D warnings
+
+      - name: Build
+        run: cargo build --workspace --locked
+
+      - name: Tests
+        run: cargo test --workspace --locked --no-fail-fast

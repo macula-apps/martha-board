@@ -5,6 +5,10 @@ allow-unwrap-in-tests = true
 allow-expect-in-tests = true
 allow-panic-in-tests = true
 too-many-arguments-threshold = 10
+# The structural caps, the same lines as ../../clippy.toml (CI fails when the two differ).
+cognitive-complexity-threshold = 30
+excessive-nesting-threshold = 11
+too-many-lines-threshold = 770
 disallowed-methods = [
     { path = "std::fs::read", reason = "use file_access::read_capped (automation roots, size caps)" },
     { path = "std::fs::read_to_string", reason = "use file_access::read_capped (automation roots, size caps)" },
