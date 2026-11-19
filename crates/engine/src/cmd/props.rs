@@ -34,7 +34,7 @@ fontVariations / variationSettings ({axis: number}, e.g. {\"wght\": 550, \"wdth\
 path (a vector's SVG path data: replaces its geometry, keeping the layer, its paints, styles and bindings; width/height in the same call scale it as \
 node.create does; its own box goes at the layer's x/y, or with x/y given, at x + its left edge and y + its top as node.create places it), pointCount, innerRadius, arcStart, arcSweep, \
 arcInner, booleanOperation (a boolean group's operation, or an operand's own; null: the group's), operandOperation (a layer in a boolean \
-group: how it combines with the operands below it; null: the group's), constrainProportions, description, overflow, pluginData {k: v}";
+group: how it combines with the operands below it; null: the group's), constrainProportions, description, pluginData {k: v}";
 
 /// CRLF, bare CR, U+2028 and U+2029 become LF, the only line ending text layout understands (editor insertion does the same).
 pub(crate) fn normalize_line_endings(s: &str) -> String {
@@ -937,8 +937,6 @@ fn apply_meta(cmd: &str, doc: &mut Document, id: NodeId, k: &str, v: &Value) -> 
     match k {
         "grids" | "layoutGrids" => doc.get_mut(id)?.grids = serde_json::from_value(snake(v)).map_err(|e| bad(cmd, format!("grids: {e}")))?,
         "exports" | "exportSettings" => doc.get_mut(id)?.exports = serde_json::from_value(snake(v)).map_err(|e| bad(cmd, format!("exports: {e}")))?,
-        "overflow" => doc.get_mut(id)?.overflow = enum_of(v).ok_or_else(|| bad(cmd, "overflow: none|horizontal|vertical|both"))?,
-        "scrollPosition" => doc.get_mut(id)?.scroll_position = enum_of(v).ok_or_else(|| bad(cmd, "scrollPosition: scrolls|fixed|sticky"))?,
         "constrainProportions" => doc.get_mut(id)?.constrain_proportions = v.as_bool().ok_or_else(|| bad(cmd, format!("`{k}` must be a boolean")))?,
         _ => return Ok(false),
     }
