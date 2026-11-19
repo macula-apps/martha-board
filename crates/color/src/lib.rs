@@ -313,8 +313,6 @@ fn css_hue(p: &str) -> Option<f32> {
     v.is_finite().then_some(v)
 }
 
-/// A CSS `<alpha-value>`: a number, a percentage or `none` (0: a missing alpha is transparent, CSS
-/// Color 4 §4.4); finite only. An *omitted* alpha is the caller's default of 1.
 /// The alpha of an `rgb()` or `hsl()` argument list: its fourth argument, 1 when there are three,
 /// and `None` for a bad alpha or more than four arguments.
 fn css_alpha(parts: &[String]) -> Option<f32> {
@@ -325,6 +323,8 @@ fn css_alpha(parts: &[String]) -> Option<f32> {
     (parts.len() <= 4).then_some(alpha)
 }
 
+/// A CSS `<alpha-value>`: a number, a percentage or `none` (0: a missing alpha is transparent, CSS
+/// Color 4 §4.4); finite only. An *omitted* alpha is the caller's default of 1.
 fn parse_alpha(a: &str) -> Option<f32> {
     let v = css_fraction(a, 1.0)?;
     v.is_finite().then_some(v)
