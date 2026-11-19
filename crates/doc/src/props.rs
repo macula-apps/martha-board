@@ -1314,14 +1314,16 @@ pub enum ExportFormat {
     Svg,
     Pdf,
     Webp,
-    /// Android Vector Drawable (an `.xml` drawable resource).
+    /// Android Vector Drawable (an `.xml` drawable resource). Kept only so a saved file whose export
+    /// setting names it still loads and saves unchanged; nothing creates it, and exporting it is
+    /// refused (martha-board#20).
     VectorDrawable,
 }
 
 impl ExportFormat {
-    /// Every format, in the order the export menus list them.
-    pub const ALL: [ExportFormat; 6] =
-        [ExportFormat::Png, ExportFormat::Jpg, ExportFormat::Svg, ExportFormat::Pdf, ExportFormat::Webp, ExportFormat::VectorDrawable];
+    /// Every format that exports, in the order the export menus list them (not the kept
+    /// [`ExportFormat::VectorDrawable`]).
+    pub const ALL: [ExportFormat; 5] = [ExportFormat::Png, ExportFormat::Jpg, ExportFormat::Svg, ExportFormat::Pdf, ExportFormat::Webp];
 
     /// Pixel formats (their size depends on the export scale).
     pub fn is_raster(self) -> bool {
@@ -1362,7 +1364,6 @@ impl ExportFormat {
             "svg" => Some(ExportFormat::Svg),
             "pdf" => Some(ExportFormat::Pdf),
             "webp" => Some(ExportFormat::Webp),
-            "xml" | "vd" | "vectordrawable" => Some(ExportFormat::VectorDrawable),
             _ => None,
         }
     }
@@ -1543,12 +1544,13 @@ pub struct ExportSetting {
     #[serde(skip_serializing_if = "is_true")]
     #[serde(alias = "svg_simplify_stroke")]
     pub svg_simplify_stroke: bool,
-    /// Android Vector Drawable: what to do with what a drawable can't hold exactly.
+    /// Android Vector Drawable: what to do with what a drawable can't hold exactly. Kept only so a
+    /// saved file that carries it still loads and saves unchanged; nothing sets it (martha-board#20).
     #[serde(skip_serializing_if = "VdCompat::is_default")]
     #[serde(alias = "vd_compat")]
     pub vd_compat: VdCompat,
-    /// PNG, JPG and WebP: the color profile the file is written in. SVG, PDF and XML are always
-    /// sRGB, whatever this says.
+    /// PNG, JPG and WebP: the color profile the file is written in. SVG and PDF are always sRGB,
+    /// whatever this says.
     #[serde(skip_serializing_if = "ExportColorProfile::is_default")]
     #[serde(alias = "color_profile")]
     pub color_profile: ExportColorProfile,
@@ -1598,8 +1600,9 @@ impl ExportColorProfile {
     }
 }
 
-/// How an Android Vector Drawable export handles what the format can't draw exactly (layer
-/// opacity over overlapping shapes, even-odd fills, diamond gradients, alpha masks).
+/// How an Android Vector Drawable export handled what the format can't draw exactly (layer
+/// opacity over overlapping shapes, even-odd fills, diamond gradients, alpha masks). Kept only so a
+/// saved file that carries it still loads and saves unchanged; nothing creates it (martha-board#20).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub enum VdCompat {

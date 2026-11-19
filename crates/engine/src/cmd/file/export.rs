@@ -66,12 +66,6 @@ fn slice_container(doc: &Document, slice: NodeId) -> Option<NodeId> {
     doc.node(parent).is_some_and(|p| p.kind.is_frame_like() || matches!(p.kind, NodeKind::Group)).then_some(parent)
 }
 
-/// [`export_bytes`] with an export setting's format and options (its size is `scale`: see
-/// [`export_scale`]): contents only, include bounding box, the SVG, PDF and Vector Drawable options.
-pub fn export_bytes_with(doc: &Document, ids: &[NodeId], setting: &ExportSetting, scale: f64) -> Result<Vec<u8>> {
-    export_file(doc, ids, setting, scale).map(|(bytes, _)| bytes)
-}
-
 /// What Copy as PNG puts on the clipboard: the layers together, at 2x (in the document's colour
 /// profile; the clipboard wants sRGB).
 pub fn copy_png(doc: &Document, ids: &[NodeId]) -> Option<figcraft_render::Pixmap> {
@@ -97,19 +91,20 @@ pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
         None => num_or(p, "scale", 1.0).clamp(0.01, ExportSize::MAX_SCALE),
     };
     let format = setting.format;
-    let (bytes, warnings) = export_file(doc, &ids, &setting, scale)?;
-    let mut out = match string(p, "path") {
+    let bytes = export_bytes_with(doc, &ids, &setting, scale)?;
+    Ok(match string(p, "path") {
         Some(path) => {
             write(&path, &bytes)?;
             json!({"path": path, "bytes": bytes.len(), "format": format.ext()})
         }
         None => json!({"format": format.ext(), "data": base64::engine::general_purpose::STANDARD.encode(&bytes)}),
-    };
-    // Android Vector Drawables say what they changed or left out (an empty list when nothing).
-    if format == ExportFormat::VectorDrawable {
-        out["warnings"] = json!(warnings);
-    }
-    Ok(out)
+    })
+}
+
+/// Whether `format` names the removed Android Vector Drawable: its extension or its name in a file.
+fn is_vector_drawable(format: &str) -> bool {
+    let removed = ExportFormat::VectorDrawable;
+    format.eq_ignore_ascii_case(removed.ext()) || serde_json::from_value::<ExportFormat>(json!(format)).is_ok_and(|f| f == removed)
 }
 
 /// The scale that gives `ids` (their export area together) `setting`'s export size.
@@ -123,7 +118,7 @@ pub fn export_scale(doc: &Document, ids: &[NodeId], setting: &ExportSetting) -> 
 }
 
 /// `e` with the `size` ("2x", "512w", "512h" or `{by, value}`), `suffix`, `format` and the
-/// format options (`quality`, `vdCompat`, PDF print options, the SVG flags) that `p` sets.
+/// format options (`quality`, PDF print options, the SVG flags) that `p` sets.
 pub(in crate::cmd) fn export_setting(cmd: &str, mut e: ExportSetting, p: &Value) -> Result<ExportSetting> {
     if let Some(size) = size_param(cmd, p)? {
         e.size = size;
@@ -132,10 +127,12 @@ pub(in crate::cmd) fn export_setting(cmd: &str, mut e: ExportSetting, p: &Value)
         e.suffix = s.chars().filter(|c| !c.is_control()).take(200).collect();
     }
     if let Some(f) = string(p, "format") {
-        e.format = ExportFormat::from_ext(&f).ok_or_else(|| bad(cmd, "format: png|jpg|svg|pdf|webp|xml"))?;
-    }
-    if let Some(c) = vd_compat_param(cmd, p)? {
-        e.vd_compat = c;
+        e.format = match ExportFormat::from_ext(&f) {
+            Some(format) => format,
+            // Its extension, or its name in a stored setting passed back: say that it left.
+            None if is_vector_drawable(&f) => return Err(super::vector_drawable_removed(cmd)),
+            None => return Err(bad(cmd, "format: png|jpg|svg|pdf|webp")),
+        };
     }
     if let Some(c) = color_profile_param(cmd, p)? {
         e.color_profile = c;
@@ -316,24 +313,18 @@ pub(super) fn export_layers(s: &mut Session, p: &Value) -> Result<Value> {
     let mut members = Vec::new();
     // Print options passed here stand in for every PDF setting's own.
     let print = has_print_param(p).then(|| print_param(cmd, p, PrintSettings::default())).transpose()?;
-    // And a compatibility mode for every Android Vector Drawable.
-    let compat = vd_compat_param(cmd, p)?;
     // And a color profile for every PNG, JPG and WebP.
     let profile = color_profile_param(cmd, p)?;
     let mut files = Vec::with_capacity(jobs.len());
     for job in &jobs {
         let setting = ExportSetting {
             print: print.unwrap_or(job.setting.print),
-            vd_compat: compat.unwrap_or(job.setting.vd_compat),
             color_profile: profile.unwrap_or(job.setting.color_profile),
             ..job.setting.clone()
         };
         let scale = export_scale(doc, &[job.id], &setting);
-        let (bytes, warnings) = export_file(doc, &[job.id], &setting, scale)?;
+        let bytes = export_bytes_with(doc, &[job.id], &setting, scale)?;
         let mut f = json!({"name": job.file, "id": job.id, "bytes": bytes.len()});
-        if setting.format == ExportFormat::VectorDrawable {
-            f["warnings"] = json!(warnings);
-        }
         match &dir {
             Some(d) => {
                 let path = std::path::Path::new(d).join(&job.file);

@@ -420,7 +420,7 @@ fn export_vs_canvas(d: &figcraft_doc::Document, ids: &[NodeId]) -> (image::RgbaI
     let area = crate::cmd::file::export_area(d, ids, &setting).unwrap();
     let canvas = figcraft_render::render_area(d, &d.get(page).unwrap().children.clone(), area, 1.0).unwrap();
     let canvas = image::RgbaImage::from_raw(canvas.width(), canvas.height(), figcraft_render::to_rgba8(&canvas)).unwrap();
-    let (bytes, _) = crate::cmd::file::export_file(d, ids, &setting, 1.0).unwrap();
+    let bytes = crate::cmd::file::export_bytes_with(d, ids, &setting, 1.0).unwrap();
     (pixels(&bytes), canvas)
 }
 
@@ -534,10 +534,24 @@ fn node_set_takes_back_the_export_settings_node_get_returns() {
         json!({"ids": [a], "setting": {
             "format": "jpg", "suffix": "@3x", "bleed": 9, "cropMarks": true, "bleedMarks": true, "cmyk": true,
             "contentsOnly": false, "includeBoundingBox": true, "svgOutlineText": false, "svgIdAttribute": true,
-            "svgSimplifyStroke": false, "vdCompat": "exact", "colorProfile": "displayP3", "quality": 55,
+            "svgSimplifyStroke": false, "colorProfile": "displayP3", "quality": 55,
         }}),
     );
-    assert_eq!(stored(&s), vec![expected.clone()], "export.add stores every field");
+    // `vdCompat` left the commands with the Android Vector Drawable export (martha-board#20); a
+    // file still carries it, so node.set below still takes it.
+    let added = ExportSetting { vd_compat: VdCompat::default(), ..expected.clone() };
+    assert_eq!(stored(&s), vec![added], "export.add stores every field it takes");
+    set(
+        &mut s,
+        &[a],
+        json!({"exports": [{
+            "format": "jpg", "suffix": "@3x",
+            "print": {"bleed": 9, "cropMarks": true, "bleedMarks": true, "cmyk": true},
+            "contentsOnly": false, "includeBoundingBox": true, "svgOutlineText": false, "svgIdAttribute": true,
+            "svgSimplifyStroke": false, "vdCompat": "exact", "colorProfile": "displayP3", "quality": 55,
+        }]}),
+    );
+    assert_eq!(stored(&s), vec![expected.clone()], "node.set takes the camelCase keys");
 
     // What node.get returns goes back through node.set unchanged.
     let got = ex(&mut s, "node.get", json!({"id": a}))["exports"].clone();
@@ -609,4 +623,59 @@ fn exporting_assets_writes_settings_icons_and_images() {
     assert!(read("Badge.jpg").starts_with(&[0xFF, 0xD8, 0xFF]), "export settings as they say: a JPG");
     assert!(text(&read("Glyph.svg")).contains("<svg"), "an icon as SVG");
     assert_eq!(png_size(&read("Photo.png")), (200, 100), "an image as a PNG of the layer at 1x");
+}
+
+/// martha-board#20: an earlier build's file can hold an Android Vector Drawable export setting.
+/// Saved and opened again it keeps that setting as it was, and exporting it fails with a message
+/// that names the format and says it was removed, writing no file of any format.
+#[test]
+fn a_kept_vector_drawable_setting_survives_a_save_and_its_export_is_refused() {
+    use figcraft_doc::{Document, ExportFormat, ExportSetting, NodeKind, VdCompat};
+
+    // Set on the document directly, as an earlier build's file carries it.
+    let mut d = Document::new("Icons");
+    let page = d.first_page().unwrap();
+    let icon = d.create(page, NodeKind::Rectangle, "Icon", 0.0, 0.0, 24.0, 24.0).unwrap();
+    let carried = ExportSetting { format: ExportFormat::VectorDrawable, vd_compat: VdCompat::Exact, ..Default::default() };
+    d.get_mut(icon).unwrap().exports = vec![carried.clone()];
+    // The setting as the file writes it.
+    const STORED_JSON: &str = r#"[{"size":{"by":"scale","value":1.0},"suffix":"","format":"vectorDrawable","vdCompat":"exact"}]"#;
+
+    // Saved with the native format and loaded, twice.
+    let first = figcraft_format::load_bytes(&figcraft_format::save_bytes(&d, None).unwrap()).unwrap().0;
+    let saved = figcraft_format::save_bytes(&first, None).unwrap();
+    let second = figcraft_format::load_bytes(&saved).unwrap().0;
+    for (round, doc) in [("first", &first), ("second", &second)] {
+        let exports = &doc.node(icon).unwrap().exports;
+        assert_eq!(exports, &vec![carried.clone()], "the {round} load changed the setting");
+        assert_eq!(serde_json::to_string(exports).unwrap(), STORED_JSON, "the {round} load writes the setting differently");
+    }
+
+    let scratch = ScratchDir::new("figcraft-removed-vector-drawable");
+    let file = scratch.0.join("icons.figcraft");
+    std::fs::write(&file, &saved).unwrap();
+    let mut s = Session::new();
+    ex(&mut s, "file.open", json!({"path": file.to_string_lossy()}));
+    let stored = s.doc().unwrap().node(icon).unwrap().exports[0].clone();
+    assert_eq!(stored, carried, "file.open keeps the setting");
+    let removed = |e: crate::EngineError| {
+        let msg = e.to_string();
+        assert!(msg.contains("Android Vector Drawable") && msg.contains("removed"), "not the removed-format error: {msg}");
+    };
+
+    // The library export the CLI and the app use, with the stored setting.
+    removed(crate::cmd::file::export_bytes_with(s.doc().unwrap(), &[icon], &stored, 1.0).unwrap_err());
+    // file.export with the format the setting stores, and with its old extension.
+    let out = scratch.0.join("Icon.xml");
+    for format in [serde_json::to_value(stored.format).unwrap(), json!("xml")] {
+        removed(s.execute("file.export", &json!({"ids": [icon], "format": format, "path": out.to_string_lossy()})).unwrap_err());
+    }
+    // file.exportLayers with the layer's own settings.
+    let dir = scratch.0.join("layers");
+    removed(s.execute("file.exportLayers", &json!({"ids": [icon], "dir": dir.to_string_lossy()})).unwrap_err());
+
+    // No file was written, and the setting is still there.
+    let written: Vec<_> = std::fs::read_dir(&scratch.0).unwrap().map(|e| e.unwrap().file_name()).collect();
+    assert_eq!(written, vec![std::ffi::OsString::from("icons.figcraft")], "an export wrote a file");
+    assert_eq!(s.doc().unwrap().node(icon).unwrap().exports, vec![carried]);
 }

@@ -29,7 +29,6 @@ fn export_settings_with_every_option_are_taken() {
             svg_outline_text: false,
             svg_id_attribute: true,
             svg_simplify_stroke: false,
-            vd_compat: VdCompat::Exact,
             color_profile: ExportColorProfile::DisplayP3,
             quality: 70,
             ..ExportSetting::default()
@@ -44,6 +43,18 @@ fn export_settings_with_every_option_are_taken() {
     p["ids"] = json!([id]);
     p["index"] = json!(0);
     app.session.execute("export.update", &p).unwrap_or_else(|e| panic!("export.update {p}: {e}"));
+}
+
+/// An earlier build's Android Vector Drawable setting, exported from the Export section as one file,
+/// fails with the removed-format error, not a complaint about its stored options (martha-board#20).
+#[test]
+fn a_carried_vector_drawable_setting_is_refused_by_name() {
+    let (mut app, id) = app_with("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10}));
+    let setting = ExportSetting { format: ExportFormat::VectorDrawable, vd_compat: VdCompat::Exact, ..ExportSetting::default() };
+    let mut p = crate::export_panel::setting_params(&setting);
+    p["ids"] = json!([id]);
+    let e = app.session.execute("file.export", &p).unwrap_err().to_string();
+    assert!(e.contains("Android Vector Drawable") && e.contains("removed"), "{e}");
 }
 
 /// The Typography section on selected characters: every character property it sets goes through

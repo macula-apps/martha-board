@@ -78,11 +78,10 @@ fn bad_qualities_are_refused() {
 
 #[test]
 fn a_bad_quality_is_refused_whatever_the_format() {
-    // As `vdCompat`, `bleed` and the SVG flags are: a value is checked for every format, so a
+    // As `bleed` and the SVG flags are: a value is checked for every format, so a
     // setting that becomes a JPG later never holds one the encoder can't take.
     let mut s = Session::new();
     let r = gradient_rect(&mut s);
-    assert!(s.execute("file.export", &json!({"ids": [r], "format": "png", "vdCompat": "junk"})).is_err());
     let png = std::env::temp_dir().join(format!("figcraft-bad-quality-{}.png", std::process::id()));
     for mut p in [json!({"format": "png"}), json!({"format": "webp"}), json!({"format": "svg"}), json!({"path": png.to_string_lossy()})] {
         p["ids"] = json!([r]);

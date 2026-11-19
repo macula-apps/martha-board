@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use base64::Engine as _;
 use figcraft_doc::{
-    BOARD_PAGE, Document, ExportColorProfile, ExportFormat, ExportSetting, ExportSize, FileKind, Node, NodeId, NodeKind, PrintSettings, VdCompat,
+    BOARD_PAGE, Document, ExportColorProfile, ExportFormat, ExportSetting, ExportSize, FileKind, Node, NodeId, NodeKind, PrintSettings,
 };
 use figcraft_format::Version;
 use serde_json::{Value, json};
@@ -27,8 +27,8 @@ pub(crate) use export::FORBIDDEN_FILE_NAME_CHARS;
 use export::add_member;
 pub(super) use export::export_setting;
 pub use export::{
-    ExportJob, backdrop_layers, copy_png, drawn_layers, export_area, export_bytes, export_bytes_with, export_jobs, export_scale, exportable_layers,
-    frames_pdf, jobs_for, safe_file_name,
+    ExportJob, backdrop_layers, copy_png, drawn_layers, export_area, export_bytes, export_jobs, export_scale, exportable_layers, frames_pdf,
+    jobs_for, safe_file_name,
 };
 use export::{export, export_frames_pdf, export_layers, pdf_bytes};
 use load::font_report;
@@ -117,14 +117,14 @@ pub fn specs() -> Vec<CommandSpec> {
         spec!(
             "file.export",
             "Export",
-            "{ids? (default selection, else the page), format? (png|jpg|svg|pdf|webp|xml (an Android Vector Drawable, with `warnings` for what it changed or left out)), scale? (default 1) | size? (2x|512w|512h or {by: scale|width|height, value}: a scale, or a width or height in pixels), path? (else returns base64 `data`), bleed? (PDF: points, or with a unit: \"3mm\", \"0.125in\", \"9pt\"), cropMarks?, bleedMarks?, cmyk? (PDF print options), contentsOnly? (default true; false also draws the layers that show in their area), includeBoundingBox? (true: only the layers' own boxes, cutting off shadows and outside strokes), svgOutlineText? (default true), svgSimplifyStroke? (default true), svgIdAttribute? (SVG ids, XML android:name), vdCompat? (XML: bestEffort (default: approximate with a warning)|exact (leave out what can't be exact, with a warning)|ignore (no warnings)), colorProfile? (PNG, JPG and WebP: sameAsFile (default: the document's profile)|srgb|displayP3; colors convert, out-of-gamut ones clip; SVG, XML and RGB PDF output are always sRGB; PDF with cmyk is DeviceCMYK), quality? (JPG: 1-100, default 90)}",
+            "{ids? (default selection, else the page), format? (png|jpg|svg|pdf|webp), scale? (default 1) | size? (2x|512w|512h or {by: scale|width|height, value}: a scale, or a width or height in pixels), path? (else returns base64 `data`), bleed? (PDF: points, or with a unit: \"3mm\", \"0.125in\", \"9pt\"), cropMarks?, bleedMarks?, cmyk? (PDF print options), contentsOnly? (default true; false also draws the layers that show in their area), includeBoundingBox? (true: only the layers' own boxes, cutting off shadows and outside strokes), svgOutlineText? (default true), svgSimplifyStroke? (default true), svgIdAttribute? (SVG ids), colorProfile? (PNG, JPG and WebP: sameAsFile (default: the document's profile)|srgb|displayP3; colors convert, out-of-gamut ones clip; SVG and RGB PDF output are always sRGB; PDF with cmyk is DeviceCMYK), quality? (JPG: 1-100, default 90)}",
             false,
             export
         ),
         spec!(
             "file.exportLayers",
             "Export layers",
-            "{ids? (default the selection, else every layer on the page with export settings), assets? (true: the assets in and under them instead: layers with export settings, icons as SVG, images as PNG), dir? (folder to write into; else each file comes back as base64 `data`), zip? (no dir: the files come back together as one base64 zip `data` instead), bleed? (PDF: points, or with a unit: \"3mm\", \"0.125in\", \"9pt\"), cropMarks?, bleedMarks?, cmyk? (PDF print options): for every PDF instead of each setting's own, vdCompat? (bestEffort|exact|ignore: for every XML instead of each setting's own), colorProfile? (sameAsFile|srgb|displayP3: for every PNG, JPG and WebP instead of each setting's own)}  every layer once per export setting, named `<layer><suffix>.<format>` (\"@2x\" when a scaled export has no suffix; repeats get \" 2\"; slashes in a layer name make folders). Returns {files: [{name, id, bytes, path | data, warnings (XML only)}], skipped (layers without settings), data? (zip)}",
+            "{ids? (default the selection, else every layer on the page with export settings), assets? (true: the assets in and under them instead: layers with export settings, icons as SVG, images as PNG), dir? (folder to write into; else each file comes back as base64 `data`), zip? (no dir: the files come back together as one base64 zip `data` instead), bleed? (PDF: points, or with a unit: \"3mm\", \"0.125in\", \"9pt\"), cropMarks?, bleedMarks?, cmyk? (PDF print options): for every PDF instead of each setting's own, colorProfile? (sameAsFile|srgb|displayP3: for every PNG, JPG and WebP instead of each setting's own)}  every layer once per export setting, named `<layer><suffix>.<format>` (\"@2x\" when a scaled export has no suffix; repeats get \" 2\"; slashes in a layer name make folders). Returns {files: [{name, id, bytes, path | data}], skipped (layers without settings), data? (zip)}",
             false,
             export_layers
         ),
@@ -352,9 +352,10 @@ pub fn specs() -> Vec<CommandSpec> {
     ]
 }
 
-/// [`export_bytes_with`] and what the export changed or left out (Android Vector Drawable only;
-/// empty for the other formats).
-pub fn export_file(doc: &Document, ids: &[NodeId], setting: &ExportSetting, scale: f64) -> Result<(Vec<u8>, Vec<String>)> {
+/// [`export_bytes`] with an export setting's format and options (its size is `scale`: see
+/// [`export_scale`]): contents only, include bounding box, the SVG and PDF options. A setting that
+/// still asks for an Android Vector Drawable (an earlier build's file carries one) is refused.
+pub fn export_bytes_with(doc: &Document, ids: &[NodeId], setting: &ExportSetting, scale: f64) -> Result<Vec<u8>> {
     let nothing = || EngineError::Disabled("file.export".into(), "nothing to export".into());
     if ids.is_empty() {
         return Err(nothing());
@@ -382,28 +383,16 @@ pub fn export_file(doc: &Document, ids: &[NodeId], setting: &ExportSetting, scal
                 figcraft_svg::SvgError::Empty => nothing(),
                 other => EngineError::Other(other.to_string()),
             })?;
-            Ok((svg.into_bytes(), Vec::new()))
+            Ok(svg.into_bytes())
         }
-        // Android colours are sRGB too.
-        ExportFormat::VectorDrawable => {
-            let compat = match setting.vd_compat {
-                VdCompat::BestEffort => figcraft_vectordrawable::Compat::BestEffort,
-                VdCompat::Exact => figcraft_vectordrawable::Compat::Exact,
-                VdCompat::Ignore => figcraft_vectordrawable::Compat::Ignore,
-            };
-            let opts = figcraft_vectordrawable::VdOptions { bounds: Some(area), include_names: setting.svg_id_attribute, compat };
-            let out = figcraft_vectordrawable::try_export(&doc.in_srgb(), &drawn, &opts).map_err(|e| match e {
-                figcraft_vectordrawable::VdError::Empty => nothing(),
-                other => EngineError::Other(other.to_string()),
-            })?;
-            Ok((out.xml.into_bytes(), out.warnings))
-        }
+        // Kept in the file format so an earlier build's file still opens; never written as another format.
+        ExportFormat::VectorDrawable => Err(vector_drawable_removed("file.export")),
         ExportFormat::Pdf => {
             let doc = &*doc.in_srgb();
             // Frames export one page each; anything else shares one page.
             let all_frames = own_area && ids.iter().all(|i| doc.node(*i).is_some_and(|n| n.kind.is_frame_like()));
             let groups: Vec<Vec<NodeId>> = if all_frames { ids.iter().map(|i| vec![*i]).collect() } else { vec![drawn] };
-            Ok((pdf_bytes(doc, &groups, &setting.print, (!own_area).then_some(area))?, Vec::new()))
+            pdf_bytes(doc, &groups, &setting.print, (!own_area).then_some(area))
         }
         _ => {
             // Layers exported on their own still read the page beneath them for a background blur
@@ -428,7 +417,7 @@ pub fn export_file(doc: &Document, ids: &[NodeId], setting: &ExportSetting, scal
             }
             conversion.apply_pixels(pix.data_mut());
             let bytes = figcraft_render::encode_export_with(&pix, setting.format, profile, setting.quality());
-            Ok((bytes.map_err(EngineError::Other)?, Vec::new()))
+            bytes.map_err(EngineError::Other)
         }
     }
 }
@@ -441,12 +430,18 @@ fn color_profile_param(cmd: &str, p: &Value) -> Result<Option<ExportColorProfile
     }
 }
 
-/// The `vdCompat` `p` passes: bestEffort, exact or ignore (anything else is an error).
-fn vd_compat_param(cmd: &str, p: &Value) -> Result<Option<VdCompat>> {
-    match get(p, "vdCompat") {
-        None | Some(Value::Null) => Ok(None),
-        Some(v) => v.as_str().and_then(VdCompat::from_key).map(Some).ok_or_else(|| bad(cmd, "vdCompat: bestEffort|exact|ignore")),
-    }
+/// What `cmd` returns for an export that still asks for an Android Vector Drawable: a setting an
+/// earlier build's file carries, or the format by name (martha-board#20).
+fn vector_drawable_removed(cmd: &str) -> EngineError {
+    let labels: Vec<&str> = ExportFormat::ALL.iter().map(|f| f.label()).collect();
+    let formats = match labels.split_last() {
+        Some((last, rest)) if !rest.is_empty() => format!("{} or {last}", rest.join(", ")),
+        _ => labels.join(""),
+    };
+    EngineError::Disabled(
+        cmd.into(),
+        format!("Android Vector Drawable ({}) export was removed; set this export to {formats}", ExportFormat::VectorDrawable.label()),
+    )
 }
 
 fn close(s: &mut Session, p: &Value) -> Result<Value> {

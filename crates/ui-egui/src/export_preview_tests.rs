@@ -80,7 +80,7 @@ fn export_rows_offer_a_size_for_images_only() {
     let size_menu = |u: &crate::layers_drag_tests::Ui| u.ctx.read_response(egui::Id::unique(("export_size", 0)).with("menu")).is_some();
     u.frame(vec![]);
     assert!(size_menu(&u), "PNG has sizes");
-    for format in ["svg", "pdf", "xml"] {
+    for format in ["svg", "pdf"] {
         u.app.run("export.update", json!({"ids": [r], "index": 0, "format": format}));
         u.frame(vec![]);
         u.frame(vec![]);
@@ -119,10 +119,11 @@ pub(crate) fn click(u: &mut crate::layers_drag_tests::Ui, p: egui::Pos2) {
     u.frame(vec![]);
 }
 
-/// Android Vector Drawable is in the format dropdown as "XML", and choosing it sets the format.
+/// The format dropdown lists PNG, JPG, SVG, PDF and WebP; the Android Vector Drawable ("XML") left
+/// (martha-board#20).
 #[test]
-fn the_format_dropdown_offers_android_vector_drawable() {
-    assert!(figcraft_doc::ExportFormat::ALL.contains(&figcraft_doc::ExportFormat::VectorDrawable));
+fn the_format_dropdown_offers_five_formats_and_no_xml() {
+    assert_eq!(figcraft_doc::ExportFormat::ALL.map(figcraft_doc::ExportFormat::label), ["PNG", "JPG", "SVG", "PDF", "WebP"]);
     let mut s = Session::new();
     let r = crate::headless_tests::id(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 80})).unwrap());
     s.execute("select.set", &json!({"ids": [r]})).unwrap();
@@ -133,15 +134,15 @@ fn the_format_dropdown_offers_android_vector_drawable() {
     let field = nodes.iter().find(|(l, _)| l == "PNG").map(|n| n.1).unwrap_or_else(|| panic!("no PNG dropdown in {nodes:?}"));
     click(&mut u, field);
     let nodes = labelled(&mut u);
-    let xml = nodes.iter().find(|(l, _)| l == "XML").map(|n| n.1).unwrap_or_else(|| panic!("no XML row in {nodes:?}"));
-    click(&mut u, xml);
-    let doc = u.app.session.doc().unwrap();
-    assert_eq!(doc.node(r).unwrap().exports[0].format, figcraft_doc::ExportFormat::VectorDrawable);
+    for f in ["JPG", "SVG", "PDF", "WebP"] {
+        assert!(nodes.iter().any(|(l, _)| l == f), "no {f} row in {nodes:?}");
+    }
+    assert!(!nodes.iter().any(|(l, _)| l == "XML"), "an XML row in {nodes:?}");
 }
 
-/// The File > Export dialog has an XML preset.
+/// The File > Export dialog has no XML preset any more (martha-board#20).
 #[test]
-fn the_export_dialog_has_an_xml_preset() {
+fn the_export_dialog_has_no_xml_preset() {
     let mut s = Session::new();
     let r = crate::headless_tests::id(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 80})).unwrap());
     s.execute("select.set", &json!({"ids": [r]})).unwrap();
@@ -149,7 +150,8 @@ fn the_export_dialog_has_an_xml_preset() {
     u.frame(vec![]);
     crate::menus::invoke(&mut u.app, "file.export");
     let nodes = labelled(&mut u);
-    assert!(nodes.iter().any(|(l, _)| l == "XML"), "no XML preset in {nodes:?}");
+    assert!(nodes.iter().any(|(l, _)| l == "SVG"), "no SVG preset in {nodes:?}");
+    assert!(!nodes.iter().any(|(l, _)| l == "XML"), "an XML preset in {nodes:?}");
 }
 
 /// The advanced options: Ignore overlapping layers (the `contentsOnly` setting), and Include
@@ -207,7 +209,7 @@ fn advanced_options_offer_a_color_profile_for_images() {
     u.app.run("file.colorProfile", json!({"profile": "displayP3"}));
     let shown = options(&mut u);
     assert!(shown.iter().any(|s| s == "Same as file (Display P3)"), "{shown:?}");
-    for f in ["svg", "pdf", "xml"] {
+    for f in ["svg", "pdf"] {
         u.app.run("export.update", json!({"ids": [r], "index": 0, "format": f}));
         let shown = options(&mut u);
         assert!(!shown.iter().any(|s| s == "Color profile" || s.starts_with("Same as file")), "{f}: {shown:?}");

@@ -49,7 +49,6 @@ pub(super) fn export_dialog(app: &mut FigApp, ctx: &Context) {
         preset(2.0, ExportFormat::Webp),
         preset(1.0, ExportFormat::Svg),
         preset(1.0, ExportFormat::Pdf),
-        preset(1.0, ExportFormat::VectorDrawable),
     ];
     let mut choice = None;
     window(tr("Export"), ctx).open(&mut open).show(ctx, |ui| {
@@ -63,16 +62,13 @@ pub(super) fn export_dialog(app: &mut FigApp, ctx: &Context) {
             ui.painter().line_segment([r.left_center(), r.right_center()], Stroke::new(1.0, t.border));
             ui.add_space(10.0);
         };
-        let row_tip = |ui: &mut egui::Ui, label: &str, tip: Option<&str>| {
+        let row = |ui: &mut egui::Ui, label: &str| {
             let (r, resp) = ui.allocate_exact_size(vec2(320.0, 30.0), Sense::click());
             if resp.hovered() {
                 ui.painter().rect_filled(r, CornerRadius::same(5), t.hover);
             }
             ui.painter().text(r.left_center() + vec2(10.0, 0.0), Align2::LEFT_CENTER, label, regular(12.0), t.text);
-            match tip {
-                Some(tip) => resp.on_hover_text(tip).clicked(),
-                None => resp.clicked(),
-            }
+            resp.clicked()
         };
         if !jobs.is_empty() {
             caption(ui, tr("With the layers' export settings"));
@@ -95,7 +91,7 @@ pub(super) fn export_dialog(app: &mut FigApp, ctx: &Context) {
         ui.add_space(4.0);
         for p in &presets {
             let label = if p.format.is_raster() { format!("{} @{}", p.format.label(), p.size.label()) } else { p.format.label().to_string() };
-            if row_tip(ui, &label, crate::export_panel::format_tip(p.format)) {
+            if row(ui, &label) {
                 choice = Some(ExportChoice::Once(p.clone()));
             }
         }
