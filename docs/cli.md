@@ -97,13 +97,6 @@ of a damaged file and import warnings go to stderr as `note:` lines (`notes` wit
 file names that aren't installed are listed as `missing font` lines (`missingFonts: [{family,
 layers}]` with `--json`); their text renders in a fallback font.
 
-Every subcommand that reads a file also takes the public REST API file JSON (the response of
-`GET /v1/files/:key` or of its nodes endpoint, written to a `.json` file): it is imported on the fly.
-Image fills come from `images/<imageRef>.png` (or `.jpg`, …) next to the JSON when present, else a
-missing-image placeholder (light grey with darker diagonal stripes). `.fig` files are read the same way (best effort, images from the file itself), and
-so are `.sketch` files saved by Sketch 48 or newer;
-`info` lists what wasn't imported as `note:` lines.
-
 ```text
 $ figcraft-cli info app.figcraft
 app.figcraft — App (412 nodes, 6 styles, 12 variables, 3 images)
@@ -112,7 +105,7 @@ page 1 "Screens": 380 nodes, 4 top-level
   …
 ```
 
-### `export <file> -o <out> [--format png|jpg|svg|webp|pdf|xml|fig|penpot] [--scale N] [--page NAME] [--node ID|NAME] [--bleed LENGTH] [--crop-marks] [--bleed-marks] [--cmyk] [--vd-compat bestEffort|exact|ignore]`
+### `export <file> -o <out> [--format png|jpg|svg|webp|pdf|xml] [--scale N] [--page NAME] [--node ID|NAME] [--bleed LENGTH] [--crop-marks] [--bleed-marks] [--cmyk] [--vd-compat bestEffort|exact|ignore]`
 
 - `<out>` is a directory: one file per top-level frame of the page (default the first page), named
   after the frame (`Home.png`, `Settings.png`…); with no frames, one file per top-level layer.
@@ -123,25 +116,12 @@ page 1 "Screens": 380 nodes, 4 top-level
   `/` makes a folder). Two layers with the same name get `Name 2`, `Name 3`…
 - `<out>` has an image extension: one file with the given `--node`, or the whole page composited.
 - `--node` takes a layer id (`12` or `0:12`) or a layer name.
-- `--format fig` (or an `<out>` ending in `.fig`) writes the whole file as `.fig`, experimental:
-  written from public format notes, including variables with their modes and bindings and shared
-  styles with their layer links. Checked by opening it again in FigCraft and, on the example
-  documents and small test files, in other software; other apps may not open every file. What was
-  left out (comments, Developer Mode data, some bindings and settings…) is printed as `note:` lines;
-  `docs/file-format-parity.md` lists what was checked and what is unchecked.
 - `--format xml` (or an `<out>` ending in `.xml`) writes an Android Vector Drawable, e.g.
   `figcraft-cli export app.figcraft --node Icon -o ic_icon.xml`. What the format can't draw is
   printed as `note:` lines; `--vd-compat` picks how it's handled: `bestEffort` (default:
   approximated), `exact` (left out) or `ignore` (no notes: overlapping layer opacity is dropped,
   even-odd fills keep `fillType="evenOdd"`, diamond gradients are left out). See
   `docs/file-format-parity.md`.
-- `--format penpot` (or an `<out>` ending in `.penpot`) writes the whole file as a Penpot 2.x
-  archive (`manifest.json` plus one JSON per file, page and shape) that Penpot imports into a team:
-  pages, boards, groups, rectangles, ellipses, paths, booleans and text, fills, strokes, shadows and
-  blurs, flex and grid layout, components and variants, design tokens and prototype interactions.
-  Layers opened from a `.penpot` keep their Penpot ids, and unchanged text, layouts, interactions
-  and tokens are written back from the original. What Penpot cannot represent is printed as
-  `note:` lines.
 - The format comes from `--format`, else `<out>`'s extension, else png. `--scale` (default 1, max 64)
   applies to raster formats.
 - SVG/PDF/XML exports with visible descendants more than 256 levels below an exported root fail with
@@ -164,17 +144,16 @@ figcraft-cli export app.figcraft -o exports/ --scale 2
 figcraft-cli export app.figcraft -o hero.svg --node "Hero"
 figcraft-cli export app.figcraft -o screens.pdf --page "Screens"
 figcraft-cli export app.figcraft -o poster.pdf --node "Poster" --bleed 3mm --crop-marks --cmyk
-figcraft-cli export app.figcraft -o handoff.fig
 ```
 
 ### `convert <in> <out>`
 
-By extension. Inputs: `.figcraft`, `.json` (FigCraft or REST API file JSON), `.fig` (best effort), `.sketch` (Sketch 48 or newer, best effort), `.svg` (an editable frame: groups,
+By extension. Inputs: `.figcraft`, `.json` (FigCraft JSON), `.svg` (an editable frame: groups,
 shapes, text, gradients, masks and effects; `info` lists what it left out as `note:` lines), `.png/.jpg/.webp/.gif/.tif/.bmp`
 (an image layer). Outputs: `.figcraft`, `.json` (FigCraft JSON, pretty-printed), `.svg`,
 `.png/.jpg/.webp` (the current page rendered at 1x with its background), `.pdf` (the current page's
-frames, one page each), `.fig` (the whole file, experimental, as `export --format fig`), `.penpot`
-(the whole file as a Penpot 2.x archive, as `export --format penpot`).
+frames, one page each). The files of other design apps (`.fig`, `.jam`, `.sketch`, `.penpot`, REST
+API file JSON) are neither read nor written.
 
 ### `render <file> -o <out.png> [--scale N] [--page NAME]`
 

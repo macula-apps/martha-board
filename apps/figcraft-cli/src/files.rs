@@ -17,13 +17,7 @@ pub(crate) fn plain(text: &str) -> String {
 }
 
 pub fn load(path: &str) -> CliResult<Document> {
-    let (doc, notes) = load_noted(path)?;
-    if ext(path) == "penpot" {
-        for note in notes {
-            eprintln!("note: {note}");
-        }
-    }
-    Ok(doc)
+    Ok(load_noted(path)?.0)
 }
 
 /// The document with the loader's notes (repairs of a damaged file, or import warnings).
@@ -131,28 +125,9 @@ pub fn write_doc(doc: &Document, page: NodeId, out: &str) -> CliResult<()> {
             .into_bytes(),
         "png" | "jpg" | "jpeg" | "webp" => encode(doc, &render_page(doc, page, 1.0)?, &e)?,
         "pdf" => page_pdf(doc, page, &PrintSettings::default())?,
-        "fig" => fig_bytes(doc)?,
-        "penpot" => penpot_bytes(doc)?,
-        other => return Err(CliError::Usage(format!("unknown output format `.{other}` (figcraft, json, svg, png, jpg, webp, pdf, fig, penpot)"))),
+        other => return Err(CliError::Usage(format!("unknown output format `.{other}` (figcraft, json, svg, png, jpg, webp, pdf)"))),
     };
     write(out, &bytes)
-}
-
-/// `doc` as a `.fig` file (experimental), printing what was left out.
-fn fig_bytes(doc: &Document) -> CliResult<Vec<u8>> {
-    let (bytes, warnings) = figcraft_engine::cmd::file::fig_bytes(doc).map_err(|e| CliError::Failed(e.to_string()))?;
-    for w in warnings {
-        eprintln!("note: {w}");
-    }
-    Ok(bytes)
-}
-
-fn penpot_bytes(doc: &Document) -> CliResult<Vec<u8>> {
-    let (bytes, warnings) = figcraft_engine::cmd::file::penpot_bytes(doc).map_err(|e| CliError::Failed(e.to_string()))?;
-    for w in warnings {
-        eprintln!("note: {w}");
-    }
-    Ok(bytes)
 }
 
 /// A page as PDF: its top-level frames one page each, or (without frames) everything on one page.
@@ -262,22 +237,12 @@ pub struct Target {
 
 pub fn export(file: &str, out: &str, t: &Target) -> CliResult<ExitCode> {
     let doc = load(file)?;
-    // `.fig`: the whole file.
-    if t.format.as_deref().map_or(ext(out) == "fig", |f| f.eq_ignore_ascii_case("fig")) {
-        write(out, &fig_bytes(&doc)?)?;
-        println!("{out}");
-        return Ok(ExitCode::SUCCESS);
-    }
-    if t.format.as_deref().map_or(ext(out) == "penpot", |f| f.eq_ignore_ascii_case("penpot")) {
-        write(out, &penpot_bytes(&doc)?)?;
-        println!("{out}");
-        return Ok(ExitCode::SUCCESS);
-    }
     let page = page_named(&doc, t.page.as_deref())?;
     let (scale, node, print) = (t.scale, t.node.as_deref(), &t.print);
     let fmt = match t.format.as_deref() {
-        Some(f) => image_format(&f.to_ascii_lowercase())
-            .ok_or_else(|| CliError::Usage(format!("unknown --format `{f}` (png|jpg|svg|webp|pdf|xml|fig|penpot)")))?,
+        Some(f) => {
+            image_format(&f.to_ascii_lowercase()).ok_or_else(|| CliError::Usage(format!("unknown --format `{f}` (png|jpg|svg|webp|pdf|xml)")))?
+        }
         None => image_format(&ext(out)).unwrap_or(ExportFormat::Png),
     };
     let target = node.map(|q| find_node(&doc, page, q)).transpose()?;
@@ -285,7 +250,7 @@ pub fn export(file: &str, out: &str, t: &Target) -> CliResult<ExitCode> {
     let bytes_of = |ids: &[NodeId]| {
         let setting = ExportSetting { format: fmt, print: *print, vd_compat: t.vd_compat, ..Default::default() };
         let (bytes, warnings) = figcraft_engine::cmd::file::export_file(&doc, ids, &setting, scale).map_err(|e| CliError::Failed(e.to_string()))?;
-        // What an Android Vector Drawable changed or left out, like the .fig notes.
+        // What an Android Vector Drawable changed or left out.
         for w in warnings {
             eprintln!("note: {w}");
         }
@@ -354,13 +319,8 @@ fn refuse_dropping_images_from_script(input: Option<(&str, usize)>, active: &fig
 }
 
 pub fn convert(input: &str, out: &str) -> CliResult<ExitCode> {
-    let (loaded, _) = figcraft_engine::cmd::file::load_path(input, None).map_err(|e| CliError::Failed(format!("can't open {input}: {e}")))?;
+    let loaded = figcraft_engine::cmd::file::load_path(input).map_err(|e| CliError::Failed(format!("can't open {input}: {e}")))?;
     refuse_dropping_images(input, out, loaded.images_past_budget)?;
-    if ext(input) == "penpot" {
-        for note in &loaded.issues {
-            eprintln!("note: {note}");
-        }
-    }
     let doc = loaded.doc;
     let page = doc
         .current_page

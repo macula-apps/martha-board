@@ -4,7 +4,7 @@
 use std::sync::{Arc, Mutex};
 
 use figcraft_engine::Session;
-use serde_json::{Value, json};
+use serde_json::json;
 
 use crate::variables_panel::export_dialog;
 use crate::{FigApp, NoServices, Services};
@@ -52,20 +52,6 @@ fn toast(app: &FigApp) -> String {
 }
 
 #[test]
-fn json_export_downloads_what_variable_export_writes() {
-    let (mut app, got) = browser(true);
-    let expected = app.session.execute("variable.export", &json!({"format": "json"})).unwrap()["text"].as_str().unwrap().to_string();
-    export_dialog(&mut app, "json");
-    let got = got.lock().unwrap();
-    let [(name, bytes)] = got.as_slice() else { panic!("one download, got {}", got.len()) };
-    assert!(name.ends_with(".variables.json"), "{name}");
-    assert_eq!(String::from_utf8(bytes.clone()).unwrap(), expected);
-    let parsed: Value = serde_json::from_slice(bytes).unwrap();
-    assert!(parsed.is_object());
-    assert!(toast(&app).contains(name.as_str()), "{}", toast(&app));
-}
-
-#[test]
 fn css_export_downloads_custom_properties() {
     let (mut app, got) = browser(true);
     export_dialog(&mut app, "css");
@@ -79,7 +65,7 @@ fn css_export_downloads_custom_properties() {
 #[test]
 fn a_refused_download_says_so() {
     let (mut app, got) = browser(false);
-    export_dialog(&mut app, "json");
+    export_dialog(&mut app, "css");
     assert_eq!(got.lock().unwrap().len(), 1);
     assert_eq!(toast(&app), "Couldn't download the variables");
 }
@@ -88,6 +74,6 @@ fn a_refused_download_says_so() {
 fn platforms_with_save_dialogs_keep_them() {
     // No dialog answer (cancelled) and no downloads: nothing happens, as before.
     let mut app = FigApp::new(session(), Box::new(NoServices));
-    export_dialog(&mut app, "json");
+    export_dialog(&mut app, "css");
     assert!(app.ui.toast.is_none());
 }

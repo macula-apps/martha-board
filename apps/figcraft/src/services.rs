@@ -436,13 +436,9 @@ fn read_clipboard<T>(c: &mut arboard::Clipboard, read: fn(&mut arboard::Clipboar
     read(c)
 }
 
-/// Native Save as filters; other callers keep their existing combined filter.
+/// The native Save as filter is named; other callers keep their existing combined filter.
 fn save_filters<'a>(exts: &'a [&'a str]) -> Vec<(&'static str, &'a [&'a str])> {
-    if exts == ["figcraft", "fig"] {
-        vec![("FigCraft (.figcraft)", &exts[..1]), (figcraft_ui_egui::i18n::tr(".fig (experimental)"), &exts[1..])]
-    } else {
-        vec![("File", exts)]
-    }
+    if exts == ["figcraft"] { vec![("FigCraft (.figcraft)", exts)] } else { vec![("File", exts)] }
 }
 
 /// The folder to start the next dialog in once `path` was picked: the file's folder, or the folder
@@ -507,9 +503,6 @@ impl Services for Desktop {
     }
     fn clipboard_get_text(&mut self) -> Option<String> {
         read_clipboard(self.clipboard.as_mut()?, |c| c.get_text().ok())
-    }
-    fn clipboard_get_html(&mut self) -> Option<String> {
-        read_clipboard(self.clipboard.as_mut()?, |c| c.get().html().ok())
     }
     fn clipboard_set_png(&mut self, w: u32, h: u32, rgba: &[u8]) {
         if let Some(c) = self.clipboard.as_mut() {
@@ -642,17 +635,14 @@ mod save_filter_tests {
     use super::save_filters;
 
     #[test]
-    fn native_and_fig_save_filters_are_separate_with_native_first() {
-        let extensions = ["figcraft", "fig"];
-        assert_eq!(
-            save_filters(&extensions),
-            vec![("FigCraft (.figcraft)", &extensions[..1]), (figcraft_ui_egui::i18n::tr(".fig (experimental)"), &extensions[1..])]
-        );
+    fn the_native_save_filter_is_named() {
+        let extensions = ["figcraft"];
+        assert_eq!(save_filters(&extensions), vec![("FigCraft (.figcraft)", &extensions[..])]);
     }
 
     #[test]
     fn other_save_filters_keep_one_combined_group() {
-        for extensions in [&["figcraft"][..], &["fig"][..], &["png"][..], &["png", "jpg", "webp"][..], &[][..]] {
+        for extensions in [&["figcraft", "fig"][..], &["fig"][..], &["png"][..], &["png", "jpg", "webp"][..], &[][..]] {
             assert_eq!(save_filters(extensions), vec![("File", extensions)]);
         }
     }

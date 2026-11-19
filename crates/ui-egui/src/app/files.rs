@@ -10,10 +10,10 @@ impl FigApp {
             return;
         }
         let Ok(name) = self.session.doc().map(|d| d.name.clone()) else { return };
-        self.pick_save(i18n::tr("Save as"), &format!("{name}.figcraft"), &["figcraft", "fig"], |app, mut p| {
+        self.pick_save(i18n::tr("Save as"), &format!("{name}.figcraft"), &["figcraft"], |app, mut p| {
             if p.extension().is_none_or(OsStr::is_empty) {
                 if !p.set_extension("figcraft") {
-                    app.toast(i18n::tr("Use the .figcraft or .fig extension."));
+                    app.toast(i18n::tr("Use the .figcraft extension."));
                     return;
                 }
                 // This name wasn't confirmed by the system dialog: don't replace an existing file.
@@ -28,8 +28,8 @@ impl FigApp {
                         return;
                     }
                 }
-            } else if !p.extension().and_then(OsStr::to_str).is_some_and(|e| e.eq_ignore_ascii_case("figcraft") || e.eq_ignore_ascii_case("fig")) {
-                app.toast(i18n::tr("Use the .figcraft or .fig extension."));
+            } else if !p.extension().and_then(OsStr::to_str).is_some_and(|e| e.eq_ignore_ascii_case("figcraft")) {
+                app.toast(i18n::tr("Use the .figcraft extension."));
                 return;
             }
             if let Some(r) = app.run("file.saveAs", json!({"path": p.to_string_lossy()})) {
@@ -52,7 +52,8 @@ impl FigApp {
     pub fn save(&mut self) {
         // A branch tab saves its main file.
         let tab = figcraft_engine::branches::file_tab(&self.session);
-        // A path ending in .fig is never saved over silently: a .fig destination is an export copy.
+        // Earlier builds wrote native data under a .fig name: such a path goes through Save as and
+        // is never saved over.
         let native_path = self
             .session
             .docs
@@ -84,7 +85,7 @@ impl FigApp {
         let exts: &[&str] = if place {
             &["png", "jpg", "jpeg", "webp", "gif", "tif", "tiff"]
         } else {
-            &["penpot", "svg", "png", "jpg", "jpeg", "webp", "gif", "tif", "tiff", "figcraft", "fig", "jam", "sketch"]
+            &["svg", "png", "jpg", "jpeg", "webp", "gif", "tif", "tiff", "figcraft"]
         };
         let title = if place { i18n::tr("Place image") } else { i18n::tr("Import") };
         self.pick_file(title, exts, true, |app, file| {
@@ -309,7 +310,7 @@ impl FigApp {
     }
 }
 
-/// A `.figcraft` file name: the document format a Save writes (a `.fig` is an export copy).
+/// A `.figcraft` file name: the document format a Save writes.
 fn is_document_file(name: &str) -> bool {
     Path::new(name).extension().and_then(OsStr::to_str).is_some_and(|e| e.eq_ignore_ascii_case("figcraft"))
 }

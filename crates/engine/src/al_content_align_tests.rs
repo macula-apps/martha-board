@@ -73,31 +73,6 @@ fn an_instance_keeps_its_own_line_alignment() {
 }
 
 #[test]
-fn rest_and_fig_carry_the_setting() {
-    let frame = |extra: Value| {
-        let mut f = json!({"id": "1:2", "name": "Wrap", "type": "FRAME", "relativeTransform": [[1, 0, 0], [0, 1, 0]], "size": {"x": 100, "y": 100},
-            "layoutMode": "HORIZONTAL", "layoutWrap": "WRAP", "children": []});
-        f.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
-        json!({"name": "File", "document": {"id": "0:0", "type": "DOCUMENT", "children": [{"id": "0:1", "name": "Page", "type": "CANVAS", "children": [f]}]}})
-    };
-    let read = |file: &Value| {
-        let (doc, _) = figcraft_format::rest::import(file, &figcraft_format::rest::no_images).unwrap();
-        doc
-    };
-    let of = |doc: &figcraft_doc::Document| doc.nodes().find(|n| n.name == "Wrap").unwrap().layout.as_ref().unwrap().content_align;
-    assert_eq!(of(&read(&frame(json!({})))), ContentAlign::Auto);
-    assert_eq!(of(&read(&frame(json!({"counterAxisAlignContent": "AUTO"})))), ContentAlign::Auto);
-    let spread = read(&frame(json!({"counterAxisAlignContent": "SPACE_BETWEEN"})));
-    assert_eq!(of(&spread), ContentAlign::SpaceBetween);
-    // Written to `.fig` and read back, both values survive.
-    for doc in [spread, read(&frame(json!({})))] {
-        let (bytes, _) = figcraft_format::fig::export(&doc, None).unwrap();
-        let (back, _) = figcraft_format::fig::import(&bytes, "x").unwrap();
-        assert_eq!(of(&back), of(&doc));
-    }
-}
-
-#[test]
 fn junk_values_are_refused_not_fatal() {
     let junk =
         [json!(null), json!(true), json!(-1), json!(1e308), json!(""), json!("sideways"), json!([1, 2]), json!({"a": 1}), json!("x".repeat(10_000))];

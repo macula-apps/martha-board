@@ -39,9 +39,6 @@ pub trait Services {
     fn clipboard_get_text(&mut self) -> Option<String> {
         None
     }
-    fn clipboard_get_html(&mut self) -> Option<String> {
-        None
-    }
     fn clipboard_set_png(&mut self, _w: u32, _h: u32, _rgba: &[u8]) {}
     /// An image on the system clipboard as (width, height, straight RGBA).
     fn clipboard_get_image(&mut self) -> Option<(u32, u32, Vec<u8>)> {

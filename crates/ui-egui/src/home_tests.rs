@@ -890,31 +890,17 @@ fn queued_canvas_import_is_cancelled_if_its_document_is_closed() {
 
 #[test]
 fn dropping_an_unsupported_file_on_the_home_screen_opens_nothing() {
-    let dir = Temp::new();
-    let path = dir.path("unsupported.txt");
-    std::fs::write(&path, "not a design").unwrap();
-    let mut u = first_run();
-    u.app.ui.home = true;
-    drop_file(&mut u, &path);
-    assert!(u.app.session.docs.is_empty());
-    assert!(u.app.ui.home);
-    assert_eq!(u.app.ui.toast.as_ref().map(|t| t.0.as_str()), Some("Drop a .figcraft, .fig, .jam, .sketch, .json, .svg or image file."));
-}
-
-#[test]
-fn sketch_files_open_and_drop_as_documents() {
-    let p = std::path::Path::new("/tmp/Design.SKETCH");
-    assert!(crate::opens(p));
-    assert!(crate::is_document(p));
-}
-
-#[test]
-fn a_jam_file_is_a_document_open_and_drops_take() {
-    // FigJam `.jam` files (#1342) open like `.fig` files, from File ▸ Open, a drop or the
-    // command line, and a drop on the canvas opens one as a file of its own.
-    for name in ["Board.jam", "BOARD.JAM"] {
-        let path = std::path::Path::new(name);
-        assert!(crate::open::opens(path) && crate::open::is_document(path), "{name}");
+    // The formats of other apps are not read: they are as unsupported as a text file.
+    for name in ["unsupported.txt", "other.fig", "board.jam", "other.sketch"] {
+        let dir = Temp::new();
+        let path = dir.path(name);
+        std::fs::write(&path, "not a design").unwrap();
+        let mut u = first_run();
+        u.app.ui.home = true;
+        drop_file(&mut u, &path);
+        assert!(u.app.session.docs.is_empty(), "{name}");
+        assert!(u.app.ui.home, "{name}");
+        assert_eq!(u.app.ui.toast.as_ref().map(|t| t.0.as_str()), Some("Drop a .figcraft, .json, .svg or image file."), "{name}");
     }
 }
 

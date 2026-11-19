@@ -5,8 +5,8 @@ use serde_json::{Value, json};
 
 use crate::params::id_of;
 use crate::{EngineError, Session};
+use figcraft_doc::NodeId;
 use figcraft_doc::proto::{Action, Interaction, OverlayPosition, Trigger};
-use figcraft_doc::{Document, NodeId};
 
 fn frame(s: &mut Session, x: f64) -> NodeId {
     id_of(&s.execute("frame.create", &json!({"x": x, "y": 0, "width": 100, "height": 200})).unwrap()["id"]).unwrap()
@@ -77,53 +77,6 @@ fn an_offset_belongs_to_a_manual_overlay() {
     // A file from before the field reads as no offset.
     let old: Action = serde_json::from_value(json!({"type": "openOverlay", "dest": menu, "position": "manual"})).unwrap();
     assert!(matches!(old, Action::OpenOverlay { offset: None, position: OverlayPosition::Manual, .. }));
-}
-
-fn rest(trigger: Value, action: Value) -> Document {
-    let at = |x: f64| json!([[1, 0, x], [0, 1, 0]]);
-    let file = json!({"name": "File", "document": {"id": "0:0", "type": "DOCUMENT", "children": [{"id": "0:1", "name": "Page", "type": "CANVAS", "children": [
-        {"id": "1:1", "name": "A", "type": "FRAME", "relativeTransform": at(0.0), "size": {"x": 100, "y": 100}, "children": [
-            {"id": "1:2", "name": "Hot", "type": "RECTANGLE", "relativeTransform": at(10.0), "size": {"x": 20, "y": 20},
-             "interactions": [{"trigger": trigger, "actions": [action]}]}]},
-        {"id": "1:3", "name": "Menu", "type": "FRAME", "relativeTransform": at(200.0), "size": {"x": 50, "y": 50}, "overlayPositionType": "MANUAL", "children": []}
-    ]}]}});
-    let (doc, warnings) = figcraft_format::rest::import(&file, &figcraft_format::rest::no_images).unwrap();
-    assert!(warnings.iter().all(|w| !w.contains("delay")), "{warnings:?}");
-    doc
-}
-
-fn hot(doc: &Document) -> Interaction {
-    doc.nodes().find(|n| n.name == "Hot").unwrap().interactions[0].clone()
-}
-
-#[test]
-fn rest_and_fig_carry_delays_and_offsets() {
-    let overlay = json!({"type": "NODE", "destinationId": "1:3", "navigation": "OVERLAY", "overlayRelativePosition": {"x": 12, "y": -8}});
-    let doc = rest(json!({"type": "MOUSE_ENTER", "delay": 300}), overlay.clone());
-    let it = hot(&doc);
-    assert_eq!((it.trigger.clone(), it.delay_ms), (Trigger::MouseEnter, 300));
-    assert!(matches!(it.actions[0], Action::OpenOverlay { position: OverlayPosition::Manual, offset: Some([12.0, -8.0]), .. }), "{it:?}");
-    // A click has no delay to read; a manual overlay without a position sits below its layer.
-    let plain = hot(&rest(json!({"type": "ON_CLICK", "delay": 300}), json!({"type": "NODE", "destinationId": "1:3", "navigation": "OVERLAY"})));
-    assert_eq!(plain.delay_ms, 0);
-    assert!(matches!(plain.actions[0], Action::OpenOverlay { offset: None, .. }));
-    // Junk reads as nothing.
-    let junk = hot(&rest(
-        json!({"type": "MOUSE_UP", "delay": "soon"}),
-        json!({"type": "NODE", "destinationId": "1:3", "navigation": "OVERLAY", "overlayRelativePosition": {"x": "a"}}),
-    ));
-    assert_eq!(junk.delay_ms, 0);
-    assert!(matches!(junk.actions[0], Action::OpenOverlay { offset: None, .. }));
-    // Written to `.fig` and read back.
-    let (bytes, _) = figcraft_format::fig::export(&doc, None).unwrap();
-    let (back, _) = figcraft_format::fig::import(&bytes, "x").unwrap();
-    let again = hot(&back);
-    assert_eq!((again.trigger, again.delay_ms), (Trigger::MouseEnter, 300));
-    assert!(
-        matches!(again.actions[0], Action::OpenOverlay { position: OverlayPosition::Manual, offset: Some([12.0, -8.0]), .. }),
-        "{:?}",
-        again.actions
-    );
 }
 
 #[test]

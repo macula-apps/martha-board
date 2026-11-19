@@ -4,8 +4,7 @@ use std::sync::Arc;
 
 use base64::Engine as _;
 use figcraft_doc::{
-    BOARD_PAGE, Document, ExportColorProfile, ExportFormat, ExportSetting, ExportSize, FileKind, LineHeight, Node, NodeId, NodeKind, PrintSettings,
-    StyleKind, TextStyle, VdCompat,
+    BOARD_PAGE, Document, ExportColorProfile, ExportFormat, ExportSetting, ExportSize, FileKind, Node, NodeId, NodeKind, PrintSettings, VdCompat,
 };
 use figcraft_format::Version;
 use serde_json::{Value, json};
@@ -27,17 +26,13 @@ use export::add_member;
 pub(super) use export::export_setting;
 pub use export::{
     ExportJob, backdrop_layers, copy_png, drawn_layers, export_area, export_bytes, export_bytes_with, export_jobs, export_scale, exportable_layers,
-    fig_bytes, frames_pdf, jobs_for, penpot_bytes, safe_file_name,
+    frames_pdf, jobs_for, safe_file_name,
 };
 use export::{export, export_frames_pdf, export_layers, pdf_bytes};
 use load::font_report;
 pub use load::{MAX_DOCUMENT_FILE, load, load_bytes, load_path};
-#[cfg(test)]
-pub(crate) use load::{installed_family, sketch_line};
-pub(crate) use load::{load_fig, read_capped, recovered, recovered_from, variables_param, write};
+pub(crate) use load::{read_capped, recovered, recovered_from, write};
 pub use open::MAX_RECENT;
-#[cfg(test)]
-use open::append_pages;
 pub(crate) use open::open;
 use open::{import, open_recent, revert};
 pub(crate) use save::save_ends_preview;
@@ -78,7 +73,7 @@ pub fn specs() -> Vec<CommandSpec> {
         spec!(
             "file.open",
             "Open",
-            "{path | data (base64) + name (tells the format; opens as a new unsaved document), variables? (REST: the local variables JSON as an object, JSON text or a path; default `<name>.variables.json` or `variables.json` next to the file), reload? (a file already open: read it again into its tab, which must have no unsaved changes)} (.figcraft, .json: FigCraft or REST API file JSON, .fig (best effort), .penpot, .sketch (Sketch 48 or newer, best effort), .svg, .png, .jpg …); REST, .fig, .penpot and .sketch imports return `warnings`; a file opened anew returns `summary` {name, pages, layers, images} (one that was already open returns its `index`, with `stale: true` when the file changed on disk since the tab read or saved it, or `reloaded: true` after `reload`)",
+            "{path | data (base64) + name (tells the format; opens as a new unsaved document), reload? (a file already open: read it again into its tab, which must have no unsaved changes)} (.figcraft, .json (FigCraft's own JSON), .svg, .png, .jpg …); an SVG returns `warnings`; a file opened anew returns `summary` {name, pages, layers, images} (one that was already open returns its `index`, with `stale: true` when the file changed on disk since the tab read or saved it, or `reloaded: true` after `reload`)",
             false,
             open
         ),
@@ -99,14 +94,14 @@ pub fn specs() -> Vec<CommandSpec> {
         spec!(
             "file.save",
             "Save",
-            "{path?, overwrite? (replace what another app wrote to the file since it was opened or saved: without it that save is refused)} (programmatic saves need a path the first time); a .fig path writes an experimental export copy of the shown document with `warnings`, keeping the native path, unsaved changes and version preview",
+            "{path?, overwrite? (replace what another app wrote to the file since it was opened or saved: without it that save is refused)} (programmatic saves need a path the first time); a .fig path is refused",
             false,
             save
         ),
         spec!(
             "file.saveAs",
             "Save as",
-            "{path | data: true (no path: returns the file as base64 `data` with its `name`, for a download)} (no extension adds .figcraft); a .fig path writes an experimental export copy of the shown document with `warnings`, keeping the native path, unsaved changes and version preview",
+            "{path | data: true (no path: returns the file as base64 `data` with its `name`, for a download)} (no extension adds .figcraft); a .fig path is refused",
             false,
             save_as
         ),
@@ -120,7 +115,7 @@ pub fn specs() -> Vec<CommandSpec> {
         spec!(
             "file.export",
             "Export",
-            "{ids? (default selection, else the page), format? (png|jpg|svg|pdf|webp|xml (an Android Vector Drawable, with `warnings` for what it changed or left out), or fig: the whole file as .fig, experimental, with `warnings` for what was left out; other apps may not open every file; or penpot: the whole file as a Penpot 2.x archive, with warnings for unsupported content), scale? (default 1) | size? (2x|512w|512h or {by: scale|width|height, value}: a scale, or a width or height in pixels), path? (else returns base64 `data`), bleed? (PDF: points, or with a unit: \"3mm\", \"0.125in\", \"9pt\"), cropMarks?, bleedMarks?, cmyk? (PDF print options), contentsOnly? (default true; false also draws the layers that show in their area), includeBoundingBox? (true: only the layers' own boxes, cutting off shadows and outside strokes), svgOutlineText? (default true), svgSimplifyStroke? (default true), svgIdAttribute? (SVG ids, XML android:name), vdCompat? (XML: bestEffort (default: approximate with a warning)|exact (leave out what can't be exact, with a warning)|ignore (no warnings)), colorProfile? (PNG, JPG and WebP: sameAsFile (default: the document's profile)|srgb|displayP3; colors convert, out-of-gamut ones clip; SVG, XML and RGB PDF output are always sRGB; PDF with cmyk is DeviceCMYK), quality? (JPG: 1-100, default 90)}",
+            "{ids? (default selection, else the page), format? (png|jpg|svg|pdf|webp|xml (an Android Vector Drawable, with `warnings` for what it changed or left out)), scale? (default 1) | size? (2x|512w|512h or {by: scale|width|height, value}: a scale, or a width or height in pixels), path? (else returns base64 `data`), bleed? (PDF: points, or with a unit: \"3mm\", \"0.125in\", \"9pt\"), cropMarks?, bleedMarks?, cmyk? (PDF print options), contentsOnly? (default true; false also draws the layers that show in their area), includeBoundingBox? (true: only the layers' own boxes, cutting off shadows and outside strokes), svgOutlineText? (default true), svgSimplifyStroke? (default true), svgIdAttribute? (SVG ids, XML android:name), vdCompat? (XML: bestEffort (default: approximate with a warning)|exact (leave out what can't be exact, with a warning)|ignore (no warnings)), colorProfile? (PNG, JPG and WebP: sameAsFile (default: the document's profile)|srgb|displayP3; colors convert, out-of-gamut ones clip; SVG, XML and RGB PDF output are always sRGB; PDF with cmyk is DeviceCMYK), quality? (JPG: 1-100, default 90)}",
             false,
             export
         ),
@@ -154,7 +149,7 @@ pub fn specs() -> Vec<CommandSpec> {
         spec!(
             "file.import",
             "Import",
-            "{path | data (base64) + name, x?, y?, center? (SVG: centre it on x, y), variables? (REST: the local variables JSON as an object, JSON text or a path)}  SVG becomes an editable frame (shapes, text, gradients, masks, effects; with `warnings` for what it left out), images become image layers, .figcraft, .penpot, REST API file JSON, .fig and .sketch pages are appended with their variables and flows (REST, .fig, .penpot and .sketch: with `warnings`; those return `summary` {name, pages, layers, images} of the file read)",
+            "{path | data (base64) + name, x?, y?, center? (SVG: centre it on x, y)}  SVG becomes an editable frame (shapes, text, gradients, masks, effects; with `warnings` for what it left out), images become image layers, .figcraft and FigCraft JSON pages are appended with their variables and flows (with `summary` {name, pages, layers, images} of the file read, and `warnings` when it had any)",
             true,
             import
         ),
@@ -481,9 +476,6 @@ fn cycle_doc(s: &mut Session, dir: i64) -> Result<Value> {
     s.active = (s.active as i64 + dir).rem_euclid(n) as usize;
     Ok(json!({"index": s.active}))
 }
-
-#[cfg(test)]
-mod rest_import_tests;
 
 #[cfg(test)]
 mod staging_write_tests;

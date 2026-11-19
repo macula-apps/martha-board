@@ -1,5 +1,4 @@
 use super::load::{ext, write};
-use super::save::thumbnail;
 use super::*;
 use crate::params::{f64_of, req_targets};
 
@@ -82,15 +81,6 @@ pub fn copy_png(doc: &Document, ids: &[NodeId]) -> Option<figcraft_render::Pixma
 
 pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "file.export";
-    let whole_file = match string(p, "format") {
-        Some(f) => f.to_ascii_lowercase(),
-        None => string(p, "path").map(|pp| ext(&pp)).unwrap_or_default(),
-    };
-    match whole_file.as_str() {
-        "fig" => return export_fig(s, p),
-        "penpot" => return export_penpot(s, p),
-        _ => {}
-    }
     let doc = s.doc()?;
     let mut ids = export_targets(cmd, s, p)?;
     if ids.is_empty() {
@@ -120,40 +110,6 @@ pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
         out["warnings"] = json!(warnings);
     }
     Ok(out)
-}
-
-/// The whole document as a `.fig` file (experimental: only round trips through our own importer
-/// are verified), with the warnings about what was left out.
-pub(super) fn export_fig(s: &mut Session, p: &Value) -> Result<Value> {
-    let doc = s.doc()?;
-    let (bytes, warnings) = fig_bytes(doc)?;
-    match string(p, "path") {
-        Some(path) => {
-            write(&path, &bytes)?;
-            Ok(json!({"path": path, "bytes": bytes.len(), "format": "fig", "warnings": warnings}))
-        }
-        None => Ok(json!({"format": "fig", "data": base64::engine::general_purpose::STANDARD.encode(&bytes), "warnings": warnings})),
-    }
-}
-
-fn export_penpot(s: &mut Session, p: &Value) -> Result<Value> {
-    let (bytes, warnings) = penpot_bytes(s.doc()?)?;
-    match string(p, "path") {
-        Some(path) => {
-            write(&path, &bytes)?;
-            Ok(json!({"path": path, "bytes": bytes.len(), "format": "penpot", "warnings": warnings}))
-        }
-        None => Ok(json!({"format": "penpot", "data": base64::engine::general_purpose::STANDARD.encode(&bytes), "warnings": warnings})),
-    }
-}
-
-pub fn penpot_bytes(doc: &Document) -> Result<(Vec<u8>, Vec<String>)> {
-    figcraft_format::penpot::export(doc).map_err(|e| EngineError::Other(e.to_string()))
-}
-
-/// `doc` as a `.fig` file (with a thumbnail) and the warnings about what was left out.
-pub fn fig_bytes(doc: &Document) -> Result<(Vec<u8>, Vec<String>)> {
-    figcraft_format::fig::export(doc, thumbnail(doc).as_deref()).map_err(|e| EngineError::Other(e.to_string()))
 }
 
 /// The scale that gives `ids` (their export area together) `setting`'s export size.

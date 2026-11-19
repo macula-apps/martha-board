@@ -22,7 +22,7 @@ fn examples() -> Vec<(String, Document, Vec<NodeId>)> {
     paths
         .into_iter()
         .map(|p| {
-            let (loaded, _) = load_path(&p.to_string_lossy(), None).unwrap();
+            let loaded = load_path(&p.to_string_lossy()).unwrap();
             let doc = loaded.doc;
             let frames: Vec<NodeId> = doc.pages.iter().flat_map(|pg| doc.top_frames(*pg)).collect();
             (p.file_stem().unwrap().to_string_lossy().into_owned(), doc, frames)

@@ -1,6 +1,6 @@
 use super::{
-    Affine, BTreeMap, BTreeSet, Document, EngineError, ImageData, Node, NodeId, NodeKind, Result, Session, Value, bad, delete, get, id, json, num,
-    ok, req_targets, roots, string, targets, vector_clipboard, z_sorted,
+    Affine, BTreeMap, Document, EngineError, ImageData, Node, NodeId, NodeKind, Result, Session, Value, bad, delete, get, id, json, num, ok,
+    req_targets, roots, targets, vector_clipboard, z_sorted,
 };
 
 /// The copied form of the selection.
@@ -73,115 +73,6 @@ pub(super) fn collect_images(doc: &Document, nodes: &[Node], images: &mut BTreeM
             }
         }
     }
-}
-
-/// The markers around the copied layers in the clipboard's HTML, spelt as that format spells them.
-pub const CLIP_OPEN: &str = "(figma)";
-
-pub const CLIP_CLOSE: &str = "(/figma)";
-
-/// Largest design data read from the clipboard: the `.fig` import's own canvas cap (256 MB). Its
-/// base64 is checked first, so neither the text nor the decoded bytes can pass it.
-const MAX_CLIP_DATA: usize = 256 * 1024 * 1024;
-
-const MAX_CLIP_BASE64: usize = MAX_CLIP_DATA.div_ceil(3) * 4;
-
-/// Base64 `text` (whitespace ignored, padding optional) when it fits [`MAX_CLIP_DATA`].
-fn clip_base64(text: &str) -> Option<Vec<u8>> {
-    use base64::Engine as _;
-    if text.bytes().filter(|b| !b.is_ascii_whitespace()).count() > MAX_CLIP_BASE64 {
-        return None;
-    }
-    let b64: String = text.chars().filter(|c| !c.is_ascii_whitespace()).collect();
-    base64::engine::general_purpose::STANDARD.decode(&b64).or_else(|_| base64::engine::general_purpose::STANDARD_NO_PAD.decode(&b64)).ok()
-}
-
-/// Layers copied from another design app travel in the clipboard's HTML as a `.fig` canvas in
-/// base64 between [`CLIP_OPEN`] and [`CLIP_CLOSE`]. This gives those bytes, or `None` when the HTML
-/// holds no readable design data (it may just mention the marker).
-pub fn design_clipboard_buffer(html: &str) -> Option<Vec<u8>> {
-    let start = html.find(CLIP_OPEN)? + CLIP_OPEN.len();
-    let len = html.get(start..)?.find(CLIP_CLOSE)?;
-    let bytes = clip_base64(html.get(start..start + len)?)?;
-    figcraft_format::fig::is_fig(&bytes).then_some(bytes)
-}
-
-/// Paste design layers from clipboard HTML or base64 `data`: decode and reject missing,
-/// invalid or oversized data, load a temporary `.fig`, take its top-level page layers,
-/// store them as a foreign-file clipboard source with a bumped layers generation, then
-/// delegate to `paste` and append import warnings.
-pub(super) fn paste_design_layers(s: &mut Session, p: &Value) -> Result<Value> {
-    const CMD: &str = "edit.pasteDesignLayers";
-    let bytes = match (string(p, "html"), string(p, "data")) {
-        (Some(html), _) => design_clipboard_buffer(&html).ok_or_else(|| bad(CMD, "the HTML holds no copied design layers"))?,
-        (None, Some(d)) => clip_base64(&d).ok_or_else(|| bad(CMD, "`data` is not base64 of at most 256 MB"))?,
-        (None, None) => return Err(bad(CMD, "pass `html` or `data`")),
-    };
-    let other = crate::cmd::file::load_fig(&bytes, "Pasted layers").ok_or_else(|| bad(CMD, "the data is not copied design layers"))??;
-    let doc = std::sync::Arc::new(other.doc);
-    let tops: Vec<NodeId> = doc.pages.iter().filter_map(|pg| doc.node(*pg)).flat_map(|pg| pg.children.iter().copied()).collect();
-    if tops.is_empty() {
-        return Err(EngineError::Disabled(CMD.into(), "the copied layers came in empty".into()));
-    }
-    let (nodes, images, bounds) = copied(&doc, &tops);
-    // A design-app paste replaces the copied layers, not the copied rows: a `fill.copy` before it
-    // still pastes afterwards.
-    let props = s.clipboard.props.take();
-    let paint = s.clipboard.paint.take();
-    let stroke = s.clipboard.stroke.take();
-    let paint_images = std::mem::take(&mut s.clipboard.paint_images);
-    let paint_source_doc = s.clipboard.paint_source_doc;
-    let effect = s.clipboard.effect.take();
-    // No open file has id 0. So paste treats this copy as a copy from a different file.
-    let layers_generation = s.clipboard.layers_generation.wrapping_add(1);
-    s.clipboard = crate::Clipboard {
-        nodes,
-        images,
-        props,
-        paint,
-        stroke,
-        paint_images,
-        paint_source_doc,
-        effect,
-        bounds,
-        source_doc: 0,
-        source: Some(doc),
-        source_path: None,
-        copied_components: BTreeSet::new(),
-        layers_generation,
-    };
-    let mut out = paste(s, p)?;
-    let pasted: Vec<NodeId> = out["ids"].as_array().map(|a| a.iter().filter_map(crate::params::id_of).collect()).unwrap_or_default();
-    let missing = layers_missing_images(s.doc()?, &pasted);
-    if !missing.is_empty() {
-        out["missingImages"] = json!(missing);
-    }
-    if !other.issues.is_empty() {
-        out["warnings"] = json!(other.issues);
-    }
-    Ok(out)
-}
-
-/// The most layers [`layers_missing_images`] names.
-const MAX_MISSING_NAMED: usize = 20;
-
-/// The names of the layers under `ids` with an image fill or stroke whose image the paste didn't
-/// carry (#1646): it shows the importer's missing-image placeholder, or nothing at all.
-fn layers_missing_images(doc: &figcraft_doc::Document, ids: &[NodeId]) -> Vec<String> {
-    let missing = |p: &figcraft_color::Paint| match &p.kind {
-        figcraft_color::PaintKind::Image(img) => doc.images.get(&img.image).is_none_or(figcraft_format::rest::is_missing_image),
-        _ => false,
-    };
-    let mut names: Vec<String> = Vec::new();
-    for n in ids.iter().flat_map(|i| doc.subtree(*i)).filter_map(|i| doc.node(i)) {
-        if n.fills.iter().chain(&n.strokes).any(missing) && !names.contains(&n.name) {
-            names.push(n.name.clone());
-            if names.len() == MAX_MISSING_NAMED {
-                break;
-            }
-        }
-    }
-    names
 }
 
 /// Whether the command names its layers (`ids` / `id`): it then acts on them even in vector edit mode.

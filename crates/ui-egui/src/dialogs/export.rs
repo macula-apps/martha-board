@@ -1,15 +1,11 @@
 use super::{
     Align2, Context, CornerRadius, ExportFormat, ExportSetting, ExportSize, FigApp, Path, RichText, Sense, Stroke, Tokens, Value, export_jobs,
-    export_layers, exportable_layers, json, regular, save_one, suggested_name, tr, trf, trn, vec2, window,
+    export_layers, exportable_layers, regular, save_one, suggested_name, tr, trf, trn, vec2, window,
 };
 
-/// A `.fig` Save as result is an export; only native saves report that the document was saved.
+/// A save reports the file it wrote.
 pub(crate) fn file_saved(app: &mut FigApp, result: &Value) {
-    if result["format"] == "fig" {
-        fig_exported(app, result);
-    } else {
-        app.toast(trf("Saved {name}", &[("name", &result_file_name(result))]));
-    }
+    app.toast(trf("Saved {name}", &[("name", &result_file_name(result))]));
 }
 
 fn result_file_name(result: &Value) -> String {
@@ -20,43 +16,12 @@ fn result_file_name(result: &Value) -> String {
     }
 }
 
-/// The `.fig` result stays an export: native save state is unchanged, and omissions are reported.
-pub(crate) fn fig_exported(app: &mut FigApp, result: &Value) {
-    let file = result_file_name(result);
-    let left_out = result["warnings"].as_array().map_or(0, Vec::len);
-    app.toast(match left_out {
-        0 => trf("Exported {name}", &[("name", &file)]),
-        n => trn("Exported {name}; {n} kinds of content were left out", n, &[("name", &file)]),
-    });
-}
-
-/// Save the whole file as `.fig`; the toast says how much was left out.
-fn save_fig(app: &mut FigApp, name: &str) {
-    let filename = format!("{name}.fig");
-    if app.services.downloads() {
-        if let Some(mut r) = app.run("file.export", json!({"format": "fig"}))
-            && app.download(&filename, &r)
-        {
-            r["name"] = json!(filename);
-            fig_exported(app, &r);
-        }
-        return;
-    }
-    app.pick_save(tr("Export"), &filename, &["fig"], |app, p| {
-        if let Some(r) = app.run("file.export", json!({"format": "fig", "path": p.to_string_lossy()})) {
-            fig_exported(app, &r);
-        }
-    });
-}
-
 /// What the Export dialog was asked to do.
 enum ExportChoice {
     /// Every layer with export settings, with those settings.
     Layers,
     /// The layers together as one file.
     Once(ExportSetting),
-    /// The whole file as `.fig` (experimental).
-    Fig,
 }
 
 /// The Export dialog: the layers' own export settings when they have some, and one-off presets for
@@ -109,7 +74,6 @@ pub(super) fn export_dialog(app: &mut FigApp, ctx: &Context) {
                 None => resp.clicked(),
             }
         };
-        let row = |ui: &mut egui::Ui, label: &str| row_tip(ui, label, None);
         if !jobs.is_empty() {
             caption(ui, tr("With the layers' export settings"));
             const SHOWN: usize = 6;
@@ -141,20 +105,12 @@ pub(super) fn export_dialog(app: &mut FigApp, ctx: &Context) {
         if let Some(next) = crate::export_panel::print_options(ui, egui::Id::unique("export_dialog_print"), &print) {
             app.ui.pdf_print = next;
         }
-        divider(ui);
-        caption(ui, tr("The whole file"));
-        ui.add_space(4.0);
-        if row(ui, tr(".fig (experimental)")) {
-            choice = Some(ExportChoice::Fig);
-        }
-        caption(ui, tr("Other apps may not open every .fig file exported here."));
     });
     let close = choice.is_some() || !open;
     match choice {
         Some(ExportChoice::Layers) => export_layers(app, &with_settings, false),
         Some(ExportChoice::Once(s)) if !ids.is_empty() => save_one(app, &ids, &s, &suggested_name(&doc, &ids, &s, "Export")),
         Some(ExportChoice::Once(_)) => app.toast(tr("Nothing to export")),
-        Some(ExportChoice::Fig) => save_fig(app, &doc.name),
         None => {}
     }
     if close {

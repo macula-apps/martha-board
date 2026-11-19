@@ -185,54 +185,6 @@ fn sources(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
     out
 }
 
-/// The importers' fixed notes: the string literals passed to `warn` in the `.fig` and REST import
-/// sources. The import report shows a note translated when the catalog has it, so each one is a key
-/// `en.toml` (and every complete language) must have, and an entry for a note the importers no
-/// longer give shows up as unused.
-fn importer_notes() -> BTreeSet<String> {
-    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../format/src");
-    let mut keys = BTreeSet::new();
-    for dir in ["fig", "rest"] {
-        // The module root sits beside its directory (`fig.rs` + `fig/`) or inside it (`fig/mod.rs`).
-        let root = src.join(format!("{dir}.rs"));
-        for path in sources(&src.join(dir)).into_iter().chain(root.exists().then_some(root)) {
-            let name = path.file_name().unwrap().to_string_lossy().into_owned();
-            // export.rs and export/ warn about what a `.fig` export leaves out, not about an import.
-            if name.contains("tests") || name == "export.rs" || path.starts_with(src.join("fig/export")) {
-                continue;
-            }
-            keys.extend(literals(&std::fs::read_to_string(&path).unwrap(), &["warn("]));
-        }
-    }
-    // The `.fig` mapping itself is craft-fig's (`craft_fig::rest`); its notes are ours to translate.
-    let rest = craft_fig_src().join("rest");
-    for path in sources(&rest).into_iter().chain([rest.with_extension("rs")]) {
-        if !path.file_name().unwrap().to_string_lossy().contains("tests") {
-            keys.extend(literals(&std::fs::read_to_string(&path).unwrap(), &["warn("]));
-        }
-    }
-    keys
-}
-
-/// The `src` directory of the craft-fig sources this build uses, as Cargo resolved them.
-fn craft_fig_src() -> std::path::PathBuf {
-    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
-    // Unfiltered, `cargo metadata` needs every target's packages (accesskit_ios, ...) in Cargo's
-    // cache, and `--offline` cannot fetch them; a build fetches only the host's. Filter to the host.
-    let version = std::process::Command::new(&cargo).arg("-vV").output().unwrap();
-    let version = String::from_utf8(version.stdout).unwrap();
-    let host = version.lines().find_map(|l| l.strip_prefix("host: ")).expect("cargo -vV names its host");
-    let out = std::process::Command::new(&cargo)
-        .args(["metadata", "--format-version", "1", "--offline", "--filter-platform", host])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .output()
-        .unwrap();
-    assert!(out.status.success(), "cargo metadata: {}", String::from_utf8_lossy(&out.stderr));
-    let meta: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
-    let package = meta["packages"].as_array().unwrap().iter().find(|p| p["name"] == "craft-fig").expect("craft-fig is a dependency");
-    std::path::Path::new(package["manifest_path"].as_str().unwrap()).parent().unwrap().join("src")
-}
-
 /// The lookup functions whose first argument is a catalog key.
 const LOOKUPS: &[&str] = &["tr(", "trf(", "trn(", "tr_noop("];
 
@@ -305,7 +257,7 @@ fn english() -> &'static Lang {
 
 #[test]
 fn every_key_in_the_code_is_in_the_english_catalog_and_no_other() {
-    let used: BTreeSet<String> = used_keys().into_iter().chain(dynamic_keys()).chain(importer_notes()).collect();
+    let used: BTreeSet<String> = used_keys().into_iter().chain(dynamic_keys()).collect();
     let en: BTreeSet<String> = english().ui.iter().map(|(k, _)| k.to_string()).collect();
     let missing: Vec<_> = used.difference(&en).collect();
     let unused: Vec<_> = en.difference(&used).collect();

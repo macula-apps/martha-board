@@ -199,7 +199,6 @@ fn files_dialogs_history_and_plugins_are_off_limits() {
         ("codeConnect.export", json!({"path": target})),
         ("codeConnect.import", json!({"path": "/etc/passwd"})),
         ("component.playground", json!({"id": a, "path": target})),
-        ("variable.import", json!({"variables": "/etc/passwd"})),
         ("collab.recoverFile", json!({"path": "copy.figcraft", "file": "x", "session": 1, "client": 1, "seq": 0})),
         ("window.new", json!({"path": "C:/Windows/win.ini"})),
         ("doc.switch", json!({"index": 0})),

@@ -53,7 +53,7 @@ fn moving_layers_of_the_examples_matches_a_full_normalise() {
     assert!(!paths.is_empty());
     for p in paths {
         let name = p.file_name().unwrap().to_string_lossy().into_owned();
-        let base = settled(load_path(&p.to_string_lossy(), None).unwrap().0.doc);
+        let base = settled(load_path(&p.to_string_lossy()).unwrap().doc);
         let layers: Vec<NodeId> = base.ids().filter(|i| !base.pages.contains(i)).collect();
         let top: Vec<NodeId> = base.pages.iter().flat_map(|pg| base.get(*pg).unwrap().children.clone()).collect();
         let every_third: Vec<NodeId> = layers.iter().copied().step_by(3).collect();

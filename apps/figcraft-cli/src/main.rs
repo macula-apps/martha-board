@@ -74,7 +74,7 @@ fn run(cli: Cli) -> CliResult<ExitCode> {
         // auto layout sizes match what users see.
         figcraft_text::scan_system_fonts_on_demand();
     } else {
-        // Nothing scans them then, not even a `.sketch` import matching its fonts.
+        // Nothing scans them then.
         figcraft_text::opt_out_of_system_fonts();
     }
     match cli.command {

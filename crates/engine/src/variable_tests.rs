@@ -61,10 +61,6 @@ fn initial_color_bindings_settle_in_constructor_and_loaders() {
     assert_eq!(loaded.node(id).unwrap().source, stale.first_page());
     assert!(loaded.node(id).unwrap().overrides.contains("sentinel"));
     assert!(loaded.dirty().is_empty());
-
-    let (fig, _) = figcraft_format::fig::export(&stale, None).unwrap();
-    let (loaded, _) = crate::cmd::file::load_bytes(&fig, "bindings.fig").unwrap();
-    assert_dark_bound_color(&loaded, name_transform);
 }
 
 #[test]

@@ -1,5 +1,5 @@
 //! Files dropped on the home screen or the canvas open a frame later, behind a card that says what
-//! is happening: opening a large `.fig` blocks the UI thread for a while, and the card is on screen
+//! is happening: opening a large file blocks the UI thread for a while, and the card is on screen
 //! before it does (rather than a window that freezes without a word). A file with no path to read
 //! (every drop in the browser) waits behind the card until its contents arrive.
 

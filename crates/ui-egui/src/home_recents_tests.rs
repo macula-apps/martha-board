@@ -142,7 +142,7 @@ fn png(w: u32, h: u32) -> Vec<u8> {
 }
 
 /// A folder of recent files: `pic.figcraft` (a picture on a dark page, edited 3 hours ago),
-/// `empty.figcraft` (nothing on a light grey page, edited 2 days ago), `art.fig` (a picture, edited
+/// `empty.figcraft` (nothing on a light grey page, edited 2 days ago), `art.figcraft` (a picture, edited
 /// just now), `icon.svg`, and `gone.figcraft` (missing).
 fn files(name: &str) -> (PathBuf, Vec<String>) {
     let dir = std::env::temp_dir().join(format!("figcraft-home-recents-{name}-{}", std::process::id()));
@@ -166,7 +166,7 @@ fn files(name: &str) -> (PathBuf, Vec<String>) {
     let paths = vec![
         write("pic.figcraft", figcraft_format::save_bytes(&doc(0.1), Some(&png(64, 32))).unwrap(), 3 * HOUR + 60),
         write("empty.figcraft", figcraft_format::save_bytes(&doc(0.9), None).unwrap(), 2 * DAY + 60),
-        write("art.fig", figcraft_format::fig::export(&doc(0.2), Some(&png(20, 40))).unwrap().0, 0),
+        write("art.figcraft", figcraft_format::save_bytes(&doc(0.2), Some(&png(20, 40))).unwrap(), 0),
         write("icon.svg", b"<svg xmlns='http://www.w3.org/2000/svg'/>".to_vec(), 5 * 60),
         dir.join("gone.figcraft").to_string_lossy().into_owned(),
     ];
@@ -313,7 +313,7 @@ fn only_cards_in_view_read_their_pictures() {
     let r = recents(&u);
     let pictures: Vec<&str> = r["files"].as_array().unwrap().iter().map(|f| f["picture"].as_str().unwrap()).collect();
     assert_eq!(pictures.len(), 12);
-    // A to Z: art.fig, empty.figcraft, gone.figcraft (missing: nothing to read) on the first row.
+    // A to Z: art.figcraft, empty.figcraft, gone.figcraft (missing: nothing to read) on the first row.
     assert_eq!(pictures.get(..3), Some(["picture", "page", "none"].as_slice()), "the first row is read: {pictures:?}");
     assert!(pictures.iter().skip(9).all(|p| *p == "none"), "the last row is not: {pictures:?}");
 }

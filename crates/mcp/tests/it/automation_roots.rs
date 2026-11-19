@@ -91,7 +91,6 @@ fn reads_go_only_into_the_read_and_write_roots() {
     for (tool, args) in [
         ("open_file", json!({"path": d.p("outside/c.figcraft")})),
         ("open_file", json!({"path": d.p("in/../outside/c.figcraft")})),
-        ("open_file", json!({"path": d.p("in/a.figcraft"), "variables": d.p("outside/c.svg")})),
         ("run_command", json!({"command": "file.import", "params": {"path": d.p("outside/c.svg")}})),
         ("run_command", json!({"command": "file.placeImage", "params": {"path": d.p("outside/c.svg")}})),
         ("run_command", json!({"command": "library.add", "params": {"path": d.p("outside/c.figcraft")}})),

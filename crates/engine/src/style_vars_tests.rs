@@ -224,29 +224,6 @@ fn style_fields_offer_their_properties_scopes() {
     assert!(s.doc().unwrap().style(&body).unwrap().bound.contains_key("fontSize"));
 }
 
-#[test]
-fn rest_and_fig_carry_style_bindings() {
-    let mut s = Session::new();
-    let (_, _, a, b, sid) = two_modes(&mut s);
-    run(&mut s, "style.bind", json!({"style": sid, "field": "fill", "variable": "bg"}));
-    let doc = s.doc().unwrap().clone();
-    let (bytes, _) = figcraft_format::fig::export(&doc, None).unwrap();
-    let (mut back, warnings) = figcraft_format::fig::import(&bytes, "x").unwrap();
-    assert!(warnings.is_empty(), "{warnings:?}");
-    // The file gives a styled layer its style's value; opening it resolves that per layer.
-    crate::style_vars::after_load(&mut back);
-    let st = back.styles.iter().find(|x| x.name == "Surface").unwrap();
-    assert_eq!(st.bound.len(), 1, "{st:?}");
-    assert!(st.bound.contains_key("fills/0/color"));
-    // The layers using it carry no binding of their own on what the style sets, and still show
-    // their modes' values.
-    let named = |n: NodeId| back.nodes().find(|x| x.name == doc.node(n).unwrap().name && x.fills == doc.node(n).unwrap().fills).unwrap();
-    for n in [a, b] {
-        let got = named(n);
-        assert!(got.bound.is_empty() && got.styles.fill.as_deref() == Some(st.id.as_str()), "{got:?}");
-    }
-}
-
 /// A text style "Body" (made from a layer, or from `value`) used by a layer in the Light frame
 /// and one in the Dark one; returns (light layer, dark layer, style id).
 fn body_style(s: &mut Session, value: Option<Value>) -> (NodeId, NodeId, String) {
@@ -340,24 +317,4 @@ fn a_number_bound_to_a_percent_line_height_applies_as_pixels() {
     assert_eq!(node(&s, t1).height, 150.0);
     run(&mut s, "variable.set", json!({"variable": "lh", "mode": "Light", "value": 36}));
     assert_eq!((lh(&s), node(&s, t1).height), (figcraft_doc::LineHeight::Pixels(36.0), 36.0));
-}
-
-#[test]
-fn a_text_style_binding_round_trips_through_fig() {
-    let mut s = Session::new();
-    let (_, _, body) = body_style(&mut s, None);
-    run(&mut s, "variable.create", json!({"collection": "Theme", "name": "weight", "type": "number", "values": {"Light": 700, "Dark": 400}}));
-    for (field, var) in [("fontSize", "size"), ("lineHeight", "size"), ("fontWeight", "weight")] {
-        run(&mut s, "style.bind", json!({"style": body, "field": field, "variable": var}));
-    }
-    let doc = s.doc().unwrap().clone();
-    let (bytes, warnings) = figcraft_format::fig::export(&doc, None).unwrap();
-    let (mut back, _) = figcraft_format::fig::import(&bytes, "x").unwrap();
-    crate::style_vars::after_load(&mut back);
-    let st = back.styles.iter().find(|x| x.name == "Body").unwrap();
-    assert!(st.bound.contains_key("fontSize") && st.bound.contains_key("lineHeight"), "{st:?}");
-    // The format has no weight field yet: the settled name comes back, not the binding (the file has no `wght` axis field yet).
-    assert!(warnings.iter().any(|w| w.contains("no field for")), "{warnings:?}");
-    let StyleKind::Text { style, .. } = &st.kind else { panic!("{st:?}") };
-    assert_eq!(style.font_style, "Bold");
 }

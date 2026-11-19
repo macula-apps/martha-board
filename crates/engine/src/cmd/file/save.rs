@@ -1,4 +1,3 @@
-use super::export::export_fig;
 use super::load::{ext, file_stem, write};
 use super::open::remember;
 use super::*;
@@ -158,8 +157,8 @@ pub(super) fn color_profile(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"profile": profile.id(), "changed": changed}))
 }
 
-/// Native saves act on the current document; a `.fig` copy exports the version shown, and a
-/// pending Save As choice must leave it shown until its destination is known.
+/// Native saves act on the current document; a `.fig` path is refused and leaves the version shown,
+/// and a pending Save As choice must leave it shown until its destination is known.
 pub(crate) fn save_ends_preview(s: &Session, cmd: &str, p: &Value) -> bool {
     let path =
         string(p, "path").or_else(|| if cmd == "file.save" { s.docs.get(crate::branches::file_tab(s)).and_then(|ds| ds.path.clone()) } else { None });
@@ -171,12 +170,12 @@ fn wants_data(p: &Value) -> bool {
     p.get("data").and_then(Value::as_bool) == Some(true)
 }
 
-/// Save the file of the active tab (the main file for a branch tab, with its branches), or export
-/// the active document as an experimental `.fig` copy without changing its native save state.
+/// Save the file of the active tab (the main file for a branch tab, with its branches). A `.fig`
+/// path is refused: MarthaBoard writes only its own format, and never native data under that name.
 /// Without a path the file comes back as base64 `data` for the caller to deliver (#969).
 fn save_to(s: &mut Session, path: Option<String>) -> Result<Value> {
-    if let Some(path) = path.as_deref().filter(|p| ext(p) == "fig") {
-        return export_fig(s, &json!({"path": path}));
+    if path.as_deref().is_some_and(|p| ext(p) == "fig") {
+        return Err(EngineError::Disabled("file.save".into(), "MarthaBoard saves .figcraft files only, not .fig".into()));
     }
     let i = crate::branches::file_tab(s);
     let ds = s.docs.get_mut(i).ok_or(EngineError::NoDocument)?;

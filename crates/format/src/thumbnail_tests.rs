@@ -48,17 +48,6 @@ fn a_figcraft_file_gives_its_thumbnail() {
 }
 
 #[test]
-fn a_fig_file_gives_its_thumbnail() {
-    let thumb = png(30, 60);
-    let (bytes, _) = crate::fig::export(&Document::new("File"), Some(&thumb)).unwrap();
-    assert_eq!(thumbnail_png(Cursor::new(&bytes)).as_deref(), Some(thumb.as_slice()));
-    let path = dir("fig").join("b.fig");
-    std::fs::write(&path, &bytes).unwrap();
-    let t = file_thumbnail(&path, 640).unwrap();
-    assert_eq!((t.width, t.height), (30, 60));
-}
-
-#[test]
 fn large_pictures_are_scaled_down_to_fit_never_up() {
     let t = decode_thumbnail(&png(800, 400), 200).unwrap();
     assert_eq!((t.width, t.height), (200, 100));
@@ -123,7 +112,7 @@ fn files_on_disk_by_kind() {
         .collect();
     assert_eq!(
         kinds,
-        [FileKind::FigCraft, FileKind::Fig, FileKind::Sketch, FileKind::Svg, FileKind::Image, FileKind::Image, FileKind::Other, FileKind::Other]
+        [FileKind::FigCraft, FileKind::Other, FileKind::Other, FileKind::Svg, FileKind::Image, FileKind::Image, FileKind::Other, FileKind::Other]
     );
 }
 
@@ -146,11 +135,6 @@ fn previews_carry_the_first_pages_colour() {
     let p = archive_preview(Cursor::new(&bytes), 640);
     assert_eq!(p.page, Some([0.1, 0.2, 0.3, 1.0]));
     assert_eq!(p.picture.map(|t| (t.width, t.height)), Some((8, 4)));
-    // `.fig`: the canvas colour from meta.json.
-    let (bytes, _) = crate::fig::export(&doc_on([0.5, 0.25, 0.75]), Some(&thumb)).unwrap();
-    let p = archive_preview(Cursor::new(&bytes), 640);
-    assert_eq!(p.page, Some([0.5, 0.25, 0.75, 1.0]));
-    assert!(p.picture.is_some());
     // A file with nothing on it: its colour, no picture.
     let bytes = crate::save_bytes(&doc_on([0.9, 0.9, 0.9]), None).unwrap();
     assert_eq!(archive_preview(Cursor::new(&bytes), 640), Preview { page: Some([0.9, 0.9, 0.9, 1.0]), picture: None, kind: Default::default() });
@@ -160,9 +144,6 @@ fn previews_carry_the_first_pages_colour() {
     let bytes = crate::save_bytes(&board, None).unwrap();
     assert_eq!(archive_preview(Cursor::new(&bytes), 640).kind, figcraft_doc::FileKind::Board);
     // Damaged or odd metadata: no colour, never a panic.
-    for meta in [&b"{"[..], b"{\"client_meta\":{\"background_color\":{\"r\":\"x\",\"g\":0,\"b\":0}}}", b"[]", b"{\"client_meta\":7}"] {
-        assert_eq!(archive_preview(Cursor::new(zip(&[("meta.json", meta)])), 640).page, None, "{}", String::from_utf8_lossy(meta));
-    }
     for doc in [
         &b"{\"pages\":[5],\"nodes\":{}}"[..],
         b"{\"pages\":[],\"nodes\":{}}",
@@ -185,22 +166,4 @@ fn previews_carry_the_first_pages_colour() {
     std::fs::write(&image, png(5, 5)).unwrap();
     let p = file_preview(&image, 640);
     assert!(p.page.is_none() && p.picture.is_some());
-}
-
-#[test]
-fn sketch_files_show_their_preview_png() {
-    use crate::thumbnail::{Preview, file_preview};
-    let d = dir("sketch");
-    let sketch = d.join("screens.sketch");
-    std::fs::write(&sketch, zip(&[("document.json", b"{}"), ("previews/preview.png", &png(8, 4))])).unwrap();
-    assert_eq!(file_thumbnail(&sketch, 640).map(|t| (t.width, t.height)), Some((8, 4)));
-    let p = file_preview(&sketch, 640);
-    assert_eq!((p.page, p.picture.map(|t| (t.width, t.height)), p.kind), (None, Some((8, 4)), figcraft_doc::FileKind::Design));
-    // Only `previews/preview.png` counts; a damaged file has no picture.
-    let other = d.join("other.sketch");
-    std::fs::write(&other, zip(&[("thumbnail.png", &png(8, 4))])).unwrap();
-    assert_eq!(file_thumbnail(&other, 640), None);
-    let junk = d.join("junk.sketch");
-    std::fs::write(&junk, [0xFFu8; 64]).unwrap();
-    assert_eq!(file_preview(&junk, 640), Preview::default());
 }

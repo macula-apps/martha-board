@@ -284,8 +284,6 @@ mod datafill_tests;
 #[cfg(test)]
 mod default_props_tests;
 #[cfg(test)]
-mod design_paste_tests;
-#[cfg(test)]
 mod dev_measurements_tests;
 #[cfg(test)]
 mod dev_resources_tests;
@@ -331,14 +329,6 @@ mod eyedropper_create_tests;
 mod eyedropper_image_tests;
 #[cfg(test)]
 mod facilitate_tests;
-#[cfg(test)]
-mod fig_export_assets_tests;
-#[cfg(test)]
-mod fig_export_tests;
-#[cfg(test)]
-mod fig_font_names_tests;
-#[cfg(test)]
-mod fig_import_tests;
 #[cfg(test)]
 mod fill_none_tests;
 #[cfg(test)]
@@ -395,8 +385,6 @@ mod instance_resizing_tests;
 mod interaction_rollback_tests;
 #[cfg(test)]
 mod invite_links_tests;
-#[cfg(test)]
-mod jam_open_tests;
 #[cfg(test)]
 mod jpg_export_tests;
 #[cfg(test)]
@@ -474,8 +462,6 @@ mod paint_tests;
 #[cfg(test)]
 mod panels_behaviour_tests;
 #[cfg(test)]
-mod paste_missing_image_tests;
-#[cfg(test)]
 mod paste_sibling_tests;
 #[cfg(test)]
 mod path_read_caps_tests;
@@ -489,8 +475,6 @@ mod pen_overlay_tests;
 mod pen_undo_tests;
 #[cfg(test)]
 mod pen_vector_edit_tests;
-#[cfg(test)]
-mod penpot_export_tests;
 #[cfg(test)]
 mod pixel_preview_tests;
 #[cfg(test)]
@@ -534,8 +518,6 @@ mod proto_run_tests;
 #[cfg(test)]
 mod proto_tail_tests;
 #[cfg(test)]
-mod rest_slot_tests;
-#[cfg(test)]
 mod retained_walk_tests;
 #[cfg(test)]
 mod rotated_guides_tests;
@@ -572,8 +554,6 @@ mod shapes_behaviour_tests;
 #[cfg(test)]
 mod shortcut_parity_tests;
 #[cfg(test)]
-mod sketch_import_tests;
-#[cfg(test)]
 mod slot_tests;
 #[cfg(test)]
 mod stored_ids_tests;
@@ -601,8 +581,6 @@ mod text_behaviour_tests;
 mod text_fill_tests;
 #[cfg(test)]
 mod text_link_tests;
-#[cfg(test)]
-mod text_metrics_local_tests;
 #[cfg(test)]
 mod text_motion_tests;
 #[cfg(test)]
@@ -633,8 +611,6 @@ mod variables_behaviour_tests;
 mod variables_colour_tests;
 #[cfg(test)]
 mod variables_editor_tests;
-#[cfg(test)]
-mod variables_import_shapes_tests;
 #[cfg(test)]
 mod variables_io_tests;
 #[cfg(test)]

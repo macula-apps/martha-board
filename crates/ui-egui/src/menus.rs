@@ -7,7 +7,7 @@ use serde_json::json;
 
 use crate::FigApp;
 use crate::a11y;
-use crate::i18n::{self, tr, tr_noop, trf, trn};
+use crate::i18n::{self, tr, tr_noop, trf};
 use crate::icons::{self, Icon};
 use crate::theme::{Tokens, regular};
 use crate::toolbar::pretty_shortcut;
