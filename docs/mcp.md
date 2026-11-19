@@ -616,7 +616,7 @@ design file they refuse.
 {"command": "board.voteResults", "params": {}}
 ```
 
-### Sections, handoff and arrow keys
+### Sections and arrow keys
 
 `run_command` with `object.wrapInSection {ids?, name?}` (Wrap in new section: layers on the page or
 in a section, with some room around them), `section.toggleContents {ids?, hidden?}` (a section

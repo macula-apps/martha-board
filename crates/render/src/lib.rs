@@ -76,7 +76,7 @@ pub struct Options {
     pub outlined: Vec<NodeId>,
     /// Nodes to leave out (an editor drawing them itself).
     pub skip: Vec<NodeId>,
-    /// Draw only this layer of the page, where it is (Dev Mode's focus view).
+    /// Draw only this layer of the page, where it is (a file's thumbnail of its chosen frame).
     pub solo: Option<NodeId>,
     /// A preview (the canvas): when zoomed out, approximate what's too small on screen to see in
     /// detail, see [`lod`]; at any zoom, draw a large image shown smaller than its pixels from a
