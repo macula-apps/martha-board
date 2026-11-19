@@ -182,3 +182,66 @@ fn a_colour_style_from_a_library_is_refused_by_name() {
     let e = s.execute("selection.applyColorStyle", &json!({"targets": [], "style": "Brand", "library": "kit"})).unwrap_err().to_string();
     assert!(e.contains("unknown parameter `library`"), "{e}");
 }
+
+/// The layers a paste answered with, with everything they hold.
+fn pasted(s: &Session, answer: &serde_json::Value) -> Vec<NodeId> {
+    let doc = s.doc().unwrap();
+    let roots: Vec<NodeId> = serde_json::from_value(answer["ids"].clone()).unwrap();
+    roots.into_iter().flat_map(|r| doc.subtree(r)).collect()
+}
+
+/// The main component and the main layer pasted layer `id` names.
+fn mains(s: &Session, id: NodeId) -> (Option<NodeId>, Option<NodeId>) {
+    let n = s.doc().unwrap().node(id).unwrap();
+    let component = match n.kind {
+        NodeKind::Instance { component, .. } => Some(component),
+        _ => None,
+    };
+    (component, n.source)
+}
+
+/// A paste from another file never leaves an instance or an instance's layer naming an unrelated
+/// layer of this file: a main left behind is named by an id no layer here has, and a main pasted
+/// with it is named by its pasted copy, even when the two were copied as separate layers.
+#[test]
+fn a_paste_from_another_file_names_a_pasted_main_or_none_of_this_files_layers() {
+    let mut s = Session::new();
+    let page = s.doc().unwrap().first_page().unwrap();
+    let doc = s.doc_mut().unwrap();
+    let main = doc.create(page, component(), "Card", 0.0, 0.0, 160.0, 80.0).unwrap();
+    doc.create(main, NodeKind::Rectangle, "Background", 0.0, 0.0, 160.0, 80.0).unwrap();
+    let instance = instance_of(doc, main, page, 200.0, 0.0);
+
+    // The instance alone: its main stays behind in the first file.
+    ex(&mut s, "edit.copy", json!({"ids": [instance]}));
+    ex(&mut s, "file.new", json!({}));
+    let answer = ex(&mut s, "edit.paste", json!({}));
+    let ids = pasted(&s, &answer);
+    assert_eq!(ids.len(), 2, "the instance and its layer");
+    for id in &ids {
+        let (component, source) = mains(&s, *id);
+        for named in component.into_iter().chain(source) {
+            assert!(s.doc().unwrap().node(named).is_none(), "pasted layer {id:?} names {named:?}, a layer of this file");
+        }
+    }
+
+    // The main and the instance, copied as two layers: the copy follows the pasted main.
+    ex(&mut s, "file.new", json!({}));
+    let first = s.docs.iter().position(|d| d.doc.node(main).is_some_and(|n| n.name == "Card")).unwrap();
+    s.active = first;
+    ex(&mut s, "edit.copy", json!({"ids": [main, instance]}));
+    s.active = s.docs.len() - 1;
+    let answer = ex(&mut s, "edit.paste", json!({}));
+    let ids = pasted(&s, &answer);
+    let doc = s.doc().unwrap();
+    let kind = |id: &NodeId| doc.node(*id).map(|n| n.kind.clone());
+    let new_main = *ids.iter().find(|id| matches!(kind(id), Some(NodeKind::Component { .. }))).unwrap();
+    let new_instance = *ids.iter().find(|id| matches!(kind(id), Some(NodeKind::Instance { .. }))).unwrap();
+    assert_eq!(mains(&s, new_instance).0, Some(new_main), "the pasted instance names the pasted main");
+    let main_layers = doc.node(new_main).unwrap().children.clone();
+    let instance_layers = doc.node(new_instance).unwrap().children.clone();
+    assert_eq!(main_layers.len(), instance_layers.len());
+    for (m, i) in main_layers.iter().zip(&instance_layers) {
+        assert_eq!(mains(&s, *i).1, Some(*m), "the pasted instance's layer names the pasted main's layer");
+    }
+}

@@ -139,34 +139,29 @@ pub fn paste_into(s: &mut Session, parent: NodeId, at: Option<(f64, f64)>) -> Re
         clip.nodes.iter().flat_map(|(_, nodes)| nodes).filter_map(|n| Some((*all.get(&n.id)?, n.board.clone()?))).collect();
     crate::board::rejoin(doc, &originals, &all, !copy_local);
     if !copy_local {
-        unlink_left_behind(doc, &all);
+        unlink_left_behind(doc, clip.nodes.iter().flat_map(|(_, nodes)| nodes), &all);
     }
     Ok(out)
 }
 
-/// Layers pasted from another file (`map`: their ids there → the pasted ids) that name a main
-/// component or a main layer left behind in that file name a fresh id instead: an id of the other
-/// file never points at an unrelated layer of this one. Their own layers draw as before.
-fn unlink_left_behind(doc: &mut Document, map: &BTreeMap<NodeId, NodeId>) {
-    for id in map.values().copied() {
-        let main = match doc.node(id).map(|n| (&n.kind, n.source)) {
-            Some((NodeKind::Instance { component, .. }, source)) => (Some(*component), source),
-            Some((_, source)) => (None, source),
-            None => continue,
+/// Layers pasted from another file (`copied`, as they are there; `map`: their ids there → the
+/// pasted ids) name the pasted copy of a main component or main layer that came along, and a fresh
+/// id for one left behind in that file: an id of the other file never points at an unrelated layer
+/// of this one. Their own layers draw as before.
+fn unlink_left_behind<'a>(doc: &mut Document, copied: impl Iterator<Item = &'a Node>, map: &BTreeMap<NodeId, NodeId>) {
+    for old in copied {
+        let Some(&id) = map.get(&old.id) else { continue };
+        let component = match old.kind {
+            NodeKind::Instance { component, .. } => Some(component),
+            _ => None,
         };
-        let pasted = |i: &NodeId| map.values().any(|m| m == i);
-        let main = (main.0.filter(|c| !pasted(c)), main.1.filter(|s| !pasted(s)));
-        if main == (None, None) {
-            continue;
-        }
-        let fresh = (main.0.map(|_| doc.alloc_id()), main.1.map(|_| doc.alloc_id()));
+        let mut follow = |there: NodeId| map.get(&there).copied().unwrap_or_else(|| doc.alloc_id());
+        let (component, source) = (component.map(&mut follow), old.source.map(&mut follow));
         let Some(n) = doc.node_mut(id) else { continue };
-        if let (NodeKind::Instance { component, .. }, Some(f)) = (&mut n.kind, fresh.0) {
-            *component = f;
+        if let (NodeKind::Instance { component: c, .. }, Some(f)) = (&mut n.kind, component) {
+            *c = f;
         }
-        if fresh.1.is_some() {
-            n.source = fresh.1;
-        }
+        n.source = source;
     }
 }
 
