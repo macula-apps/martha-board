@@ -1,5 +1,5 @@
-//! The eyedropper with Cmd/Ctrl+Shift held makes a colour style or variable of what it picks (as
-//! the reference app's eyedropper does): it asks the UI which (`dialog.createFromColor`) and leaves the
+//! The eyedropper with Cmd/Ctrl+Shift held makes a colour style of what it picks: it asks the UI
+//! for the style's name (`dialog.createFromColor`) and leaves the
 //! selection's fills alone; a plain pick still fills the selection.
 
 use figcraft_doc::NodeId;
