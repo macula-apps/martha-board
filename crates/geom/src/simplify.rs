@@ -46,10 +46,7 @@ pub fn simplify_path(path: &BezPath, accuracy: f64) -> BezPath {
                 continue;
             }
             PathEl::ClosePath => {
-                flush(&mut out, &mut run, accuracy, &mut fresh);
-                if !fresh {
-                    out.close_path();
-                }
+                flush_and_close(&mut out, &mut run, accuracy, &mut fresh);
                 // A segment after a close starts a new subpath at the closed one's start.
                 (at, last_tan, fresh) = (start, None, true);
                 run.move_to(start);
@@ -79,20 +76,27 @@ pub fn simplify_path(path: &BezPath, accuracy: f64) -> BezPath {
 /// run's move is kept only when it starts a subpath (`fresh`), else the run carries on from the
 /// last point drawn. `run` is left empty.
 fn flush(out: &mut BezPath, run: &mut BezPath, accuracy: f64, fresh: &mut bool) {
-    if run.elements().len() > 1 {
-        let fitted = kurbo::simplify::simplify_bezpath(run.iter(), accuracy, &Default::default());
-        let fitted = if keeps_to(&fitted, run, STRAY * accuracy) { fitted } else { std::mem::take(run) };
-        for el in fitted.elements() {
-            match el {
-                PathEl::MoveTo(_) if !*fresh => {}
-                _ => {
-                    out.push(*el);
-                    *fresh = false;
-                }
-            }
-        }
+    let run = std::mem::take(run);
+    if run.elements().len() <= 1 {
+        return;
     }
-    *run = BezPath::new();
+    let fitted = kurbo::simplify::simplify_bezpath(run.iter(), accuracy, &Default::default());
+    let fitted = if keeps_to(&fitted, &run, STRAY * accuracy) { fitted } else { run };
+    for el in fitted.elements() {
+        if matches!(el, PathEl::MoveTo(_)) && !*fresh {
+            continue;
+        }
+        out.push(*el);
+        *fresh = false;
+    }
+}
+
+/// [`flush`], then the close of the subpath when the subpath drew anything.
+fn flush_and_close(out: &mut BezPath, run: &mut BezPath, accuracy: f64, fresh: &mut bool) {
+    flush(out, run, accuracy, fresh);
+    if !*fresh {
+        out.close_path();
+    }
 }
 
 /// Whether every point of `fitted` lies within `tol` of `source`: one subpath each, from the same
@@ -114,11 +118,10 @@ fn keeps_to(fitted: &BezPath, source: &BezPath, tol: f64) -> bool {
             return false;
         };
         let near = src.get(cur..=last).unwrap_or_default();
-        for i in 1..SAMPLES {
-            let p = seg.eval(f64::from(i) / f64::from(SAMPLES));
-            if !near.iter().any(|s| s.nearest(p, 1e-6).distance_sq <= tol2) {
-                return false;
-            }
+        let strays =
+            (1..SAMPLES).map(|i| seg.eval(f64::from(i) / f64::from(SAMPLES))).any(|p| !near.iter().any(|s| s.nearest(p, 1e-6).distance_sq <= tol2));
+        if strays {
+            return false;
         }
         cur = last;
     }

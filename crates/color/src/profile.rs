@@ -141,17 +141,19 @@ impl ProfileConversion {
         let m = m.map(|row| row.map(|v| v as f32));
         let lin = |v: u8| to_linear.get(usize::from(v)).copied().unwrap_or(0.0);
         let enc = |l: f32| to_encoded.get((l.clamp(0.0, 1.0) * (ENCODE_STEPS - 1) as f32).round() as usize).copied().unwrap_or(0);
-        for [r, g, b, a] in rgba.as_chunks_mut::<4>().0.iter_mut() {
-            if *a == 0 {
-                continue;
-            }
+        // Fully transparent pixels stay as they are.
+        for [r, g, b, a] in rgba.as_chunks_mut::<4>().0.iter_mut().filter(|px| px[3] != 0) {
             let alpha = u32::from(*a);
             let v = [lin(straight(*r, *a)), lin(straight(*g, *a)), lin(straight(*b, *a))];
             let out = m.map(|row| enc(row[0] * v[0] + row[1] * v[1] + row[2] * v[2]));
-            let premul = |c: u8| if alpha == 255 { c } else { ((u32::from(c) * alpha + 127) / 255) as u8 };
-            (*r, *g, *b) = (premul(out[0]), premul(out[1]), premul(out[2]));
+            (*r, *g, *b) = (premultiply(out[0], alpha), premultiply(out[1], alpha), premultiply(out[2], alpha));
         }
     }
+}
+
+/// A straight colour channel `c` premultiplied by `alpha` (0..=255), rounded to nearest.
+fn premultiply(c: u8, alpha: u32) -> u8 {
+    if alpha == 255 { c } else { ((u32::from(c) * alpha + 127) / 255) as u8 }
 }
 
 /// A premultiplied 8-bit channel without its alpha (`a` > 0).

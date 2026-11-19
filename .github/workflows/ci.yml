@@ -80,10 +80,11 @@ jobs:
       - name: Formatting
         run: cargo fmt --all --check
 
-      # clippy reads only the nearest clippy.toml, and crates/engine has its own. Each structural
-      # cap must be set once in both, and the engine's may not be above the workspace's, or the
-      # engine would quietly run on clippy's defaults or on a looser limit.
-      - name: The engine's clippy.toml carries the workspace's structural caps, at most as high
+      # clippy reads only the nearest clippy.toml, and a crate may carry its own: the engine for its
+      # file rule, and each crate that already passes the house floor (martha-board#7) to hold it
+      # there. Each structural cap must be set once in every one of them, and none may be above the
+      # workspace's, or a crate would quietly run on clippy's defaults or on a looser limit.
+      - name: Every crate's clippy.toml carries the workspace's structural caps, at most as high
         run: |
           # One integer per file and key: prints it, or nothing when the key is missing, repeated
           # or not a plain number.
@@ -93,14 +94,47 @@ jobs:
             [ "$(grep -c "^$2[[:space:]]*=" "$1")" -eq 1 ] && [ -n "$values" ] && echo "$values"
           }
           failed=0
+          crates=$(find crates apps xtask -name clippy.toml -not -path '*/target/*' | sort)
+          [ -n "$crates" ] || { echo "::error::no crate carries a clippy.toml, so this step judged nothing"; exit 1; }
           for key in cognitive-complexity-threshold excessive-nesting-threshold too-many-lines-threshold; do
             workspace=$(cap_of clippy.toml "$key") \
               || { echo "::error::clippy.toml must set $key once, to a number"; failed=1; continue; }
-            engine=$(cap_of crates/engine/clippy.toml "$key") \
-              || { echo "::error::crates/engine/clippy.toml must set $key once, to a number"; failed=1; continue; }
-            [ "$engine" -le "$workspace" ] \
-              || { echo "::error::crates/engine/clippy.toml sets $key = $engine, above the workspace's $workspace"; failed=1; }
+            for crate in $crates; do
+              mine=$(cap_of "$crate" "$key") \
+                || { echo "::error::$crate must set $key once, to a number"; failed=1; continue; }
+              [ "$mine" -le "$workspace" ] \
+                || { echo "::error::$crate sets $key = $mine, above the workspace's $workspace"; failed=1; }
+            done
           done
+          exit "$failed"
+
+      # A structural cap is met by changing the code, never by switching the lint off where it bites
+      # (martha-board#7). The workspace Cargo.toml denies each of the three lints once; no other
+      # Cargo.toml sets one; every crate inherits the workspace's lints; and no #[allow] or #[expect],
+      # on one line or spread over several, names one of the three or a group that holds one.
+      - name: No code switches a structural cap off
+        run: |
+          failed=0
+          caps='excessive_nesting|cognitive_complexity|too_many_lines'
+          for lint in ${caps//|/ }; do
+            [ "$(grep -cx "$lint = \"deny\"" Cargo.toml)" -eq 1 ] \
+              || { echo "::error::Cargo.toml must set $lint = \"deny\" once"; failed=1; }
+          done
+          set_off=$(git grep -nE "^[[:space:]]*($caps)[[:space:]]*=" -- '*Cargo.toml' \
+            | grep -vE "^Cargo\.toml:[0-9]+:($caps) = \"deny\"$" || true)
+          [ -z "$set_off" ] \
+            || { echo "$set_off"; echo "::error::a Cargo.toml sets a structural cap's lint above; only the workspace's \"deny\" may"; failed=1; }
+          for manifest in $(git ls-files -- '*/Cargo.toml'); do
+            perl -0777 -ne 'exit(/^\[lints\][ \t]*\nworkspace[ \t]*=[ \t]*true[ \t]*$/m ? 0 : 1)' "$manifest" \
+              || { echo "::error::$manifest must inherit the workspace's lints ([lints] workspace = true)"; failed=1; }
+          done
+          switched=$(git ls-files -z -- '*.rs' | xargs -0 perl -0777 -ne '
+            while (/\b(?:allow|expect)\s*\([^)]*?\bclippy::(?:'"$caps"'|all|complexity|pedantic|nursery)\b/g) {
+              my $line = 1 + (substr($_, 0, $-[0]) =~ tr/\n//);
+              print "$ARGV:$line\n";
+            }')
+          [ -z "$switched" ] \
+            || { echo "$switched"; echo "::error::a structural cap is switched off at the lines above; change the code instead"; failed=1; }
           exit "$failed"
 
       - name: Clippy, with the structural caps

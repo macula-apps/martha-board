@@ -59,25 +59,26 @@ fn gradient_sampling() {
     assert_eq!(g.sample(0.5).to_hex(), "808080");
 }
 
+/// The scan `sample` used to make: the first stop at or past `t`, mixed with the one before.
+fn scan(stops: &[ColorStop], t: f32) -> Color {
+    let t = if t.is_nan() { 0.0 } else { t.clamp(0.0, 1.0) };
+    let mut prev = stops[0];
+    if t <= prev.position {
+        return prev.color;
+    }
+    for s in &stops[1..] {
+        let span = s.position - prev.position;
+        let f = if span > 1e-6 { (t - prev.position) / span } else { 1.0 };
+        if t <= s.position {
+            return prev.color.lerp(s.color, f);
+        }
+        prev = *s;
+    }
+    prev.color
+}
+
 #[test]
 fn sampling_sorted_stops_matches_a_scan() {
-    // The scan `sample` used to make: the first stop at or past `t`, mixed with the one before.
-    fn scan(stops: &[ColorStop], t: f32) -> Color {
-        let t = if t.is_nan() { 0.0 } else { t.clamp(0.0, 1.0) };
-        let mut prev = stops[0];
-        if t <= prev.position {
-            return prev.color;
-        }
-        for s in &stops[1..] {
-            if t <= s.position {
-                let span = s.position - prev.position;
-                let f = if span > 1e-6 { (t - prev.position) / span } else { 1.0 };
-                return prev.color.lerp(s.color, f);
-            }
-            prev = *s;
-        }
-        prev.color
-    }
     let grey = |v: f32| Color { r: v, g: v, b: v, a: 1.0 };
     let positions = [0.3, 0.0, 0.3, 1.0, 0.7, f32::NAN, 0.5, 0.5, 0.9];
     let g = Gradient {

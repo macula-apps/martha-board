@@ -161,13 +161,7 @@ impl Color {
             // A channel is a number of 255, a percentage or `none`; out-of-range values (a number
             // too big for f32 included) clamp in `Color::new`, as CSS Color 4 §5.1 asks.
             let num = |i: usize| css_fraction(parts.get(i)?, 255.0);
-            let alpha = match parts.get(3) {
-                Some(a) => parse_alpha(a)?,
-                None => 1.0,
-            };
-            if parts.len() > 4 {
-                return None;
-            }
+            let alpha = css_alpha(&parts)?;
             return Some(Self::new(num(0)?, num(1)?, num(2)?, alpha));
         }
         if let Some(inner) = t.strip_prefix("hsla(").or_else(|| t.strip_prefix("hsl(")).and_then(|r| r.strip_suffix(')')) {
@@ -177,16 +171,8 @@ impl Color {
             let h = css_hue(parts.first()?)?;
             let s = css_fraction(parts.get(1)?, 100.0)?;
             let l = css_fraction(parts.get(2)?, 100.0)?;
-            if !(s.is_finite() && l.is_finite()) {
-                return None;
-            }
-            let alpha = match parts.get(3) {
-                Some(a) => parse_alpha(a)?,
-                None => 1.0,
-            };
-            if parts.len() > 4 {
-                return None;
-            }
+            (s.is_finite() && l.is_finite()).then_some(())?;
+            let alpha = css_alpha(&parts)?;
             return Some(Hsl { h, s, l }.to_color().with_alpha(alpha));
         }
         // Percentages per CSS Color 4: OKLCH 100% is lightness 1, chroma 0.4; LCH 100% is 100 and 150.
@@ -329,6 +315,16 @@ fn css_hue(p: &str) -> Option<f32> {
 
 /// A CSS `<alpha-value>`: a number, a percentage or `none` (0: a missing alpha is transparent, CSS
 /// Color 4 §4.4); finite only. An *omitted* alpha is the caller's default of 1.
+/// The alpha of an `rgb()` or `hsl()` argument list: its fourth argument, 1 when there are three,
+/// and `None` for a bad alpha or more than four arguments.
+fn css_alpha(parts: &[String]) -> Option<f32> {
+    let alpha = match parts.get(3) {
+        Some(a) => parse_alpha(a)?,
+        None => 1.0,
+    };
+    (parts.len() <= 4).then_some(alpha)
+}
+
 fn parse_alpha(a: &str) -> Option<f32> {
     let v = css_fraction(a, 1.0)?;
     v.is_finite().then_some(v)
