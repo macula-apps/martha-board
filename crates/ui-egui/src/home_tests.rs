@@ -21,7 +21,8 @@ fn shapes(u: &mut Ui) -> Vec<Shape> {
     flat(&u.frame_output(vec![]).shapes)
 }
 
-/// Enough frames for what follows a click, then until every recent file has been looked at: the reader is a thread of its own, and until it
+/// Enough frames for what follows a click, then until every recent file has been looked at: the
+/// reader is a thread of its own, and until it
 /// answers a file's card is a skeleton without its name (on a loaded machine, 12 frames weren't
 /// always enough, #351).
 fn settle(u: &mut Ui) -> Vec<Shape> {
