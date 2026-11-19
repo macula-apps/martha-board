@@ -76,7 +76,8 @@ fn chip(nodes: &[Node], value: &str) -> Pos2 {
 fn a_value_too_long_for_its_field_ends_with_an_ellipsis() {
     let mut u = set_with(&["@2x", LONG]);
     let shown = texts(&u.frame_output(vec![]).shapes);
-    let cut: Vec<&String> = shown.iter().filter(|t| t.starts_with("-for-")).collect();
+    // Where the value is cut depends on the font's widths, so any painted start of it counts.
+    let cut: Vec<&String> = shown.iter().filter(|t| t.chars().count() > 2 && LONG.starts_with(t.trim_end_matches('…'))).collect();
     assert!(!cut.is_empty(), "the value is painted: {shown:?}");
     assert!(cut.iter().all(|t| t.ends_with('…')), "ends with an ellipsis: {cut:?}");
     assert!(!shown.iter().any(|t| t.len() > 5 && t.as_str() != LONG && LONG.starts_with(t.as_str())), "not cut mid-letter: {shown:?}");
