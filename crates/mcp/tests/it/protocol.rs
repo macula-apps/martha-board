@@ -133,6 +133,9 @@ fn tools_call_happy_and_error_paths() {
     assert!(c.err("batch", json!({"commands": []})).contains("empty"));
     assert!(c.err("batch", json!({"commands": [{"command": 3}]})).contains("step 0"));
     assert!(c.err("pointer", json!({"x": 1})).contains("`y`"));
+    // Pen pressure left with the Pencil (#32): `pointer` refuses it by name.
+    let e = c.err("pointer", json!({"kind": "hover", "x": 1, "y": 1, "pressure": 0.5}));
+    assert!(e.contains("unknown argument `pressure`"), "{e}");
     assert!(c.err("type_text", json!({"text": "hi"})).contains("not editing text"));
     assert!(c.err("open_file", json!({"path": "/definitely/not/here.figcraft"})).contains("here.figcraft"));
     // Names a tool or a command doesn't take are refused, not ignored (#1413).
