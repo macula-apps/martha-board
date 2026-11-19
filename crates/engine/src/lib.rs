@@ -291,8 +291,6 @@ mod events_tests;
 #[cfg(test)]
 mod export_behaviour_tests;
 #[cfg(test)]
-mod export_bench_tests;
-#[cfg(test)]
 mod export_depth_tests;
 #[cfg(test)]
 mod export_profile_tests;

@@ -1,8 +1,8 @@
 # Attribution
 
 Every asset bundled in this repository (images, icons, fonts, data files) is listed here with its
-author, source and licence. `cargo xtask assets` fails if a file under `assets/`, `docs/brand/` or
-`docs/images/` is missing from this list.
+author, source and licence. `cargo xtask assets` fails if a file under `assets/` is missing from this
+list.
 
 FigCraft's user-interface icons are drawn in code (`crates/ui-egui/src/icons.rs`): original work,
 MIT OR Apache-2.0. No third-party icon sets are used.
@@ -12,7 +12,6 @@ MIT OR Apache-2.0. No third-party icon sets are used.
 | Path | Author | Source | Licence | Notes |
 |---|---|---|---|---|
 | `assets/app-icon/` (all files: `figcraft.svg`, `figcraft-small.svg`, `figcraft-*.png`, `figcraft.ico`, `hicolor/`) | The project owner (engraving-style drawing, vectorised) | Original work, see [`assets/app-icon/README.md`](assets/app-icon/README.md); derived files rendered by `cargo xtask icon` | MIT OR Apache-2.0, [`assets/app-icon/LICENSE.txt`](assets/app-icon/LICENSE.txt) | FigCraft app icon (chameleon) |
-| `examples/*.figcraft` | FigCraft contributors | Synthetic demo documents built through FigCraft's command API; invented copy, shapes and vectors drawn from scratch, no images or embedded fonts | MIT OR Apache-2.0 | Text uses Inter (OFL, from craft-fonts or the system); no third-party artwork |
 
 ## Fonts (build input, not in this repository)
 

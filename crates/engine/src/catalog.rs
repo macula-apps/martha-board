@@ -1,5 +1,5 @@
-//! The incumbent's main-menu tree with stable FigCraft command ids. A command registered under a
-//! catalog id lights up its menu item, and `cargo xtask parity` measures coverage against it.
+//! The main-menu tree with stable FigCraft command ids. A command registered under a catalog id
+//! lights up its menu item.
 //!
 //! Entries: (menu path, label, command id). `/` separates submenus; a label of `-` is a
 //! separator. Shortcuts live in [`crate::keymap`].
@@ -22,8 +22,7 @@ pub static MENU: &[MenuItem] = &[
     // File
     m!("File", "New design file", "file.new"),
     m!("File", "New board", "file.newBoard"),
-    // FigCraft's own: boards and starter templates (not counted by `parity`, like the other items
-    // of its own listed in `OWN`).
+    // FigCraft's own: boards and starter templates.
     m!("File", "New from template…", "file.newFromTemplate"),
     m!("File", "New window", "window.new"),
     m!("File", "Open…", "file.open"),
@@ -37,7 +36,7 @@ pub static MENU: &[MenuItem] = &[
     // FigCraft's own: branches of the file.
     m!("File", "Create branch…", "branch.create"),
     m!("File", SEP, ""),
-    // FigCraft's own (live sessions): not in the reference menu, so not counted by `parity`.
+    // FigCraft's own (live sessions): not in the reference menu.
     m!("File", "Join live session…", "collab.join"),
     m!("File", "Publish to server…", "collab.publish"),
     m!("File", SEP, ""),
@@ -149,7 +148,7 @@ pub static MENU: &[MenuItem] = &[
     m!("Object", "Use as mask", "object.mask"),
     m!("Object", "Release mask", "object.releaseMask"),
     m!("Object", "Set as thumbnail", "object.setThumbnail"),
-    // FigCraft's own (in `OWN`): the way into crop mode that the Design panel also offers.
+    // FigCraft's own: the way into crop mode that the Design panel also offers.
     m!("Object", "Crop image", "image.crop"),
     m!("Object", SEP, ""),
     m!("Object", "Bring to front", "arrange.front"),
@@ -215,7 +214,7 @@ pub static MENU: &[MenuItem] = &[
     m!("Text/Case", "Lowercase", "text.caseLower"),
     m!("Text/Case", "Title case", "text.caseTitle"),
     // "Go to Text > Text direction. Select Left to right or Right to left." (Add right-to-left
-    // text); Auto, the way back to detection, is FigCraft's own (in `OWN`).
+    // text); Auto, the way back to detection, is FigCraft's own.
     m!("Text/Text direction", "Auto", "text.directionAuto"),
     m!("Text/Text direction", "Left to right", "text.directionLtr"),
     m!("Text/Text direction", "Right to left", "text.directionRtl"),
@@ -292,25 +291,6 @@ pub static MENU: &[MenuItem] = &[
 /// Items that are real commands (not separators).
 pub fn items() -> impl Iterator<Item = &'static MenuItem> {
     MENU.iter().filter(|m| m.label != SEP)
-}
-
-/// Items of FigCraft's own that the parity count leaves out (as it does the `collab.` ones).
-const OWN: [&str; 6] = ["file.newFromTemplate", "file.newBoard", "help.gettingStarted", "text.missingFonts", "image.crop", "text.directionAuto"];
-
-/// Coverage: (implemented, total, missing ids). `extra` lists ids implemented by the UI layer.
-pub fn parity(extra: &[&str]) -> (usize, usize, Vec<&'static str>) {
-    let mut done = 0;
-    let mut missing = Vec::new();
-    let mut total = 0;
-    for m in items().filter(|m| !m.id.starts_with("collab.") && !OWN.contains(&m.id)) {
-        total += 1;
-        if crate::find_command(m.id).is_some() || extra.contains(&m.id) {
-            done += 1;
-        } else {
-            missing.push(m.id);
-        }
-    }
-    (done, total, missing)
 }
 
 /// The default shortcut for a command id on this platform (notation of [`crate::keymap`]).

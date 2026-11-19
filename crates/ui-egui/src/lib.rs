@@ -49,6 +49,8 @@ mod theme_startup_tests;
 #[cfg(test)]
 mod a11y_tests;
 #[cfg(test)]
+mod about_tests;
+#[cfg(test)]
 mod async_dialog_tests;
 #[cfg(test)]
 mod blend_preview_tests;

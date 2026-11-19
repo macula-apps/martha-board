@@ -403,7 +403,7 @@ pub fn render_node(doc: &Document, id: NodeId, scale: f64) -> Option<Pixmap> {
     render_node_at(doc, id, scale, 0.0)
 }
 
-/// [`render_node`] `time` seconds into animated GIFs (the presenter plays them).
+/// [`render_node`] `time` seconds into animated GIFs (no caller outside this crate's tests).
 pub fn render_node_at(doc: &Document, id: NodeId, scale: f64, time: f64) -> Option<Pixmap> {
     area_at(doc, &[id], None, export_bounds(doc, id)?, scale, time)
 }
@@ -414,7 +414,7 @@ pub fn render_area(doc: &Document, ids: &[NodeId], b: Rect, scale: f64) -> Optio
     area_at(doc, ids, None, b, scale, 0.0)
 }
 
-/// [`render_area`] `time` seconds into animated GIFs (the presenter plays them).
+/// [`render_area`] `time` seconds into animated GIFs (no caller outside this crate's tests).
 pub fn render_area_at(doc: &Document, ids: &[NodeId], b: Rect, scale: f64, time: f64) -> Option<Pixmap> {
     area_at(doc, ids, None, b, scale, time)
 }

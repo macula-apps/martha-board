@@ -600,7 +600,6 @@ status = "draft — reviewed by a native speaker, awaiting a maintainer's approv
 "Instances" = "ინსტანსები"
 "Intensity" = "ძალა"
 "Interactions" = "ურთიერთქმედებები"
-"Interface design and prototyping. A free, open-source, clean-room design tool written from scratch in Rust, part of the ArtCraft Crafting Apps." = "ინტერფეისის დიზაინი და პროტოტიპირება. უფასო, ღია კოდის, დამოუკიდებლად (clean-room) შექმნილი დიზაინის ხელსაწყო, ნულიდან დაწერილი Rust-ზე, ArtCraft Crafting Apps-ის ნაწილი."
 "Interface size" = "ინტერფეისის ზომა"
 "Intersect" = "გადაკვეთა"
 "Intersects" = "გადაკვეთები"

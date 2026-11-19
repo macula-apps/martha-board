@@ -1,10 +1,25 @@
 # martha-board
-The Martha Method Tool
 
-MarthaBoard starts from FigCraft's history at commit d4b4387 (macula-apps/martha-board#1, Stage A).
-What was dropped, what stays and why are on that issue. Until Stage B renames it, the app and its
-crates are still called FigCraft: build `apps/figcraft` and `apps/figcraft-cli` with
-`cargo build --release -p figcraft -p figcraft-cli`.
+MarthaBoard: the board for the Martha methodology. It is an infinite-canvas board app, written in
+Rust.
 
-FigCraft's own README is in this file's history (`git log --follow README.md`); Stage B writes
-MarthaBoard's. Licences: LICENSE-MIT, LICENSE-APACHE, NOTICE and ATTRIBUTION.md.
+## Build and run
+
+    cargo build --release -p figcraft -p figcraft-cli
+
+This builds two binaries: `figcraft`, the desktop app, and `figcraft-cli`, the command line. Run
+the app with `cargo run --release -p figcraft`. The crates and apps still carry FigCraft's names;
+they change in the rename package.
+
+## The plan
+
+The plan is in the issues: [#1](https://github.com/macula-apps/martha-board/issues/1) (what was
+taken from FigCraft, what stays and why) and [#4](https://github.com/macula-apps/martha-board/issues/4).
+
+## History and licences
+
+MarthaBoard starts from FigCraft's history at commit d4b4387. FigCraft's own README is in this
+file's history (`git log --follow README.md`).
+
+Licences: [LICENSE-MIT](LICENSE-MIT), [LICENSE-APACHE](LICENSE-APACHE), [NOTICE](NOTICE) and
+[ATTRIBUTION.md](ATTRIBUTION.md).
