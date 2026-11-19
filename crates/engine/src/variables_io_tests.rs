@@ -525,3 +525,72 @@ fn css_export_gives_clashing_variable_names_their_own_property() {
     assert_ne!(blue, "brand-primary", "{css}");
     assert!(css.contains(&format!("--link: var(--{blue});")), "{css}");
 }
+
+// Moved from the Tailwind code tests when Dev Mode's code generators left (#11): the export's
+// own naming.
+
+fn brand(s: &mut Session) {
+    ex(s, "variable.createCollection", json!({"name": "Brand"}));
+    ex(s, "variable.create", json!({"collection": "Brand", "name": "Brand/Accent", "type": "color", "value": "#3DDC97"}));
+    ex(s, "variable.create", json!({"collection": "Brand", "name": "card", "type": "number", "value": 12}));
+    ex(s, "variable.create", json!({"collection": "Brand", "name": "fade", "type": "number", "value": 0.5}));
+}
+
+#[test]
+fn variables_export_with_units_and_as_a_tailwind_theme() {
+    let mut s = Session::new();
+    brand(&mut s);
+    let f = idv(&ex(&mut s, "frame.create", json!({"x": 0, "y": 0, "width": 100, "height": 100})));
+    ex(&mut s, "node.set", json!({"id": f, "props": {"cornerRadius": 12, "opacity": 0.5}}));
+    ex(&mut s, "variable.bind", json!({"ids": [f], "field": "cornerRadius", "variable": "card"}));
+    ex(&mut s, "variable.bind", json!({"ids": [f], "field": "opacity", "variable": "fade"}));
+    let css = ex(&mut s, "variable.export", json!({"format": "css"}))["text"].as_str().unwrap_or_default().to_string();
+    assert!(css.contains("--card: 12px;") && css.contains("--fade: 0.5;"), "{css}");
+    let tw = ex(&mut s, "variable.export", json!({"format": "tailwind"}))["text"].as_str().unwrap_or_default().to_string();
+    for want in ["@import \"tailwindcss\";", "@theme static {", "--color-accent: #3ddc97;", "--radius-card: 12px;", "--fade: 0.5;"] {
+        assert!(tw.to_lowercase().contains(&want.to_lowercase()), "{want} in {tw}");
+    }
+}
+
+#[test]
+fn a_variable_named_after_its_namespace_is_its_base() {
+    let mut s = Session::new();
+    ex(&mut s, "variable.createCollection", json!({"name": "Brand"}));
+    ex(&mut s, "variable.create", json!({"collection": "Brand", "name": "radius", "type": "number", "value": 12}));
+    let f = idv(&ex(&mut s, "frame.create", json!({"x": 0, "y": 0, "width": 100, "height": 100})));
+    ex(&mut s, "node.set", json!({"id": f, "props": {"cornerRadius": 12}}));
+    ex(&mut s, "variable.bind", json!({"ids": [f], "field": "cornerRadius", "variable": "radius"}));
+    let tw = ex(&mut s, "variable.export", json!({"format": "tailwind"}))["text"].as_str().unwrap_or_default().to_string();
+    assert!(tw.contains("--radius-base: 12px;") && !tw.contains("--radius-radius"), "{tw}");
+}
+
+#[test]
+fn review_same_named_variables_keep_distinct_theme_names() {
+    let mut s = Session::new();
+    ex(&mut s, "variable.createCollection", json!({"name": "Brand"}));
+    ex(&mut s, "variable.create", json!({"collection": "Brand", "name": "Palette/Accent", "type": "color", "value": "#3DDC97"}));
+    ex(&mut s, "variable.create", json!({"collection": "Brand", "name": "Semantic/Accent", "type": "color", "value": "#7C5CFF"}));
+    ex(&mut s, "variable.create", json!({"collection": "Brand", "name": "Muted", "type": "color", "value": "#9AA3AE"}));
+    let p = idv(&ex(&mut s, "frame.create", json!({"x": 0, "y": 0, "width": 400, "height": 200, "name": "Page"})));
+    ex(&mut s, "layout.add", json!({"ids": [p], "direction": "vertical"}));
+    let a = idv(&ex(&mut s, "frame.create", json!({"x": 0, "y": 0, "width": 100, "height": 50, "parent": p, "name": "A"})));
+    let b = idv(&ex(&mut s, "frame.create", json!({"x": 0, "y": 0, "width": 100, "height": 50, "parent": p, "name": "B"})));
+    ex(&mut s, "variable.bind", json!({"ids": [a], "field": "fill", "variable": "Palette/Accent"}));
+    ex(&mut s, "variable.bind", json!({"ids": [b], "field": "fill", "variable": "Semantic/Accent"}));
+    let tw = ex(&mut s, "variable.export", json!({"format": "tailwind"}))["text"].as_str().unwrap_or_default().to_lowercase();
+    assert!(tw.contains("--color-palette-accent: #3ddc97;") && tw.contains("--color-semantic-accent: #7c5cff;"), "{tw}");
+    assert!(tw.contains("--color-muted:"), "unique short names stay short: {tw}");
+}
+
+#[test]
+fn review_an_alias_target_takes_its_readers_role() {
+    let mut s = Session::new();
+    ex(&mut s, "variable.createCollection", json!({"name": "Brand"}));
+    ex(&mut s, "variable.create", json!({"collection": "Brand", "name": "half", "type": "number", "value": 0.5}));
+    ex(&mut s, "variable.create", json!({"collection": "Brand", "name": "fade", "type": "number", "value": 1}));
+    ex(&mut s, "variable.set", json!({"variable": "fade", "value": {"alias": "half"}}));
+    let f = idv(&ex(&mut s, "frame.create", json!({"x": 0, "y": 0, "width": 100, "height": 100})));
+    ex(&mut s, "variable.bind", json!({"ids": [f], "field": "opacity", "variable": "fade"}));
+    let css = ex(&mut s, "variable.export", json!({"format": "css"}))["text"].as_str().unwrap_or_default().to_string();
+    assert!(css.contains("--half: 0.5;") && !css.contains("0.5px"), "{css}");
+}

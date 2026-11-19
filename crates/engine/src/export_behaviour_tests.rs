@@ -372,7 +372,7 @@ fn svg_export_options() {
 }
 
 #[test]
-fn copy_as_png_svg_and_code() {
+fn copy_as_png_and_svg() {
     let mut s = Session::new();
     let a = rect(&mut s, 0.0, 0.0, 40.0, 20.0, "#FF0000", None);
     let b = rect(&mut s, 60.0, 0.0, 40.0, 20.0, "#0000FF", None);
@@ -381,8 +381,6 @@ fn copy_as_png_svg_and_code() {
     assert_eq!((png.width(), png.height()), (200, 40), "docs silent: Copy as PNG copies the selection at 2x, all of it in one image");
     let svg = crate::cmd::file::export_bytes(doc, &[a, b], figcraft_doc::ExportFormat::Svg, 1.0).unwrap();
     assert!(text(&svg).starts_with("<svg width=\"100\""), "Copy as SVG is the selection's SVG export");
-    let css = crate::codegen::code_for(doc, a, crate::codegen::CodeLang::Css);
-    assert!(css.contains("background: #FF0000;"), "Copy as CSS is the layer's CSS from Inspect");
 }
 
 /// A red square with a fill-less pane over its right part, holding `effect` (#2213).

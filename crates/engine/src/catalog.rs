@@ -18,10 +18,6 @@ macro_rules! m {
 
 pub const SEP: &str = "-";
 
-/// Extra search terms the Actions palette reads, by command id: a name a feature had before it was
-/// renamed, so people who know the old name still find the command. Never shown.
-pub static SEARCH_ALIASES: &[(&str, &str)] = &[("view.devMode", "Dev Mode")];
-
 pub static MENU: &[MenuItem] = &[
     // File
     m!("File", "New design file", "file.new"),
@@ -60,7 +56,6 @@ pub static MENU: &[MenuItem] = &[
     m!("Edit", "Redo", "edit.redo"),
     m!("Edit", SEP, ""),
     m!("Edit/Copy as", "Copy as text", "edit.copyAsText"),
-    m!("Edit/Copy as", "Copy as CSS", "edit.copyAsCss"),
     m!("Edit/Copy as", "Copy as SVG", "edit.copyAsSvg"),
     m!("Edit/Copy as", "Copy as PNG", "edit.copyAsPng"),
     m!("Edit/Copy as", "Copy link to selection", "edit.copyLink"),
@@ -291,7 +286,6 @@ pub static MENU: &[MenuItem] = &[
     m!("Tools", "Pencil", "tool.pencil"),
     m!("Tools", "Text", "tool.text"),
     m!("Tools", "Comment", "tool.comment"),
-    m!("Tools", "Annotation", "tool.annotation"),
     m!("Tools", "Shape builder", "tool.shapeBuilder"),
     m!("Tools", "Actions", "app.actions"),
 ];

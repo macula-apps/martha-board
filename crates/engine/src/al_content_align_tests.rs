@@ -44,23 +44,6 @@ fn content_align_spreads_the_rows_and_undoes() {
 }
 
 #[test]
-fn css_and_inspect_name_the_lines() {
-    let mut s = Session::new();
-    let (f, _) = wrapping(&mut s);
-    let css = |s: &mut Session| s.execute("inspect.code", &json!({"id": f})).unwrap().to_string();
-    assert!(css(&mut s).contains("align-content: flex-start;"), "{}", css(&mut s));
-    s.execute("node.set", &json!({"id": f, "props": {"crossAlign": "center"}})).unwrap();
-    assert!(css(&mut s).contains("align-content: center;"));
-    s.execute("node.set", &json!({"id": f, "props": {"contentAlign": "spaceBetween"}})).unwrap();
-    assert!(css(&mut s).contains("align-content: space-between;"));
-    let rows = s.execute("inspect.properties", &json!({"id": f})).unwrap().to_string();
-    assert!(rows.contains("Auto (space between)"), "{rows}");
-    // One line has no lines to align.
-    s.execute("node.set", &json!({"id": f, "props": {"wrap": false}})).unwrap();
-    assert!(!css(&mut s).contains("align-content"));
-}
-
-#[test]
 fn an_instance_keeps_its_own_line_alignment() {
     let mut s = Session::new();
     let (f, _) = wrapping(&mut s);

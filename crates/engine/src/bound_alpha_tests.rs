@@ -111,14 +111,6 @@ fn node_set_and_style_bindings_apply_the_alpha_once() {
 }
 
 #[test]
-fn code_gives_a_translucent_stroke_its_alpha_once() {
-    let (mut s, r) = setup("#0D6EFD80", "#0D6EFD40");
-    ex(&mut s, "stroke.add", json!({"ids": [r.0], "color": "#FF000080"}));
-    let code = s.execute("inspect.code", &json!({"id": r.0})).unwrap()["code"].as_str().unwrap_or_default().to_string();
-    assert!(code.contains("solid rgba(255, 0, 0, 0.50)"), "{code}");
-}
-
-#[test]
 fn binding_keeps_an_opacity_set_on_the_paint() {
     // A 15% tint whose colour comes from a variable (#923): the bind replaces the colour only.
     let mut s = Session::new();

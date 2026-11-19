@@ -125,6 +125,4 @@ fn a_selected_connector_shows_path_handles_to_drag() {
     let doc = u.app.session.doc().unwrap();
     let Some(figcraft_doc::BoardItem::Connector(k)) = &doc.node(c).unwrap().board else { panic!("no connector") };
     assert!(k.path.is_some(), "the drag reshaped it");
-    u.app.ui.right_tab = crate::RightTab::Inspect;
-    assert_eq!(path_dots(&mut u), 0);
 }

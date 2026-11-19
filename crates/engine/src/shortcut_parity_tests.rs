@@ -30,8 +30,7 @@ enum Ours {
     Gesture(&'static str),
     /// A tool key in vector edit mode.
     VectorTool(VTool),
-    /// No such behaviour yet (no row today; kept for the next documented shortcut).
-    #[allow(dead_code)]
+    /// No such behaviour here (Dev Mode's left, #11).
     Missing,
 }
 use Ours::*;
@@ -110,7 +109,7 @@ static ROWS: &[Row] = &[
     doc(Tools, "Pencil tool", &["Shift+P"], &[], Bound("tool.pencil"), ""),
     doc(Tools, "Text tool", &["T"], &[], Bound("tool.text"), ""),
     doc(Tools, "Comment mode", &["C"], &[], Bound("tool.comment"), ""),
-    doc(Tools, "Annotation tool", &["Shift+T"], &[], Bound("tool.annotation"), "Accessibility at Figma, Add an annotation; Developer Mode"),
+    doc(Tools, "Annotation tool", &["Shift+T"], &[], Missing, "Accessibility at Figma, Add an annotation; Developer Mode, which left (#11)"),
     doc(Tools, "Hand tool while held", &["Space"], &[], Gesture("Pan the canvas"), "held, not pressed"),
     doc(Tools, "Pan with the arrows when nothing is selected (Shift: farther)", &["ArrowRight"], &[], Gesture("Pan with nothing selected (Shift: farther)"),
         "view.pan; nudges move the selection when there is one"),
@@ -153,7 +152,7 @@ static ROWS: &[Row] = &[
     doc(View, "Interface scale: reset to default", &["Alt+Shift+Cmd+0"], &[], Bound("pref.uiScaleReset"), "Accessibility at Figma"),
     doc(View, "Assets panel", &["Alt+2"], &[], Bound("view.assets"), ""),
     doc(View, "Libraries", &["Alt+3"], &[], Bound("libraries.open"), ""),
-    doc(View, "Dev Mode on or off", &["Shift+D"], &[], Bound("view.devMode"), ""),
+    doc(View, "Dev Mode on or off", &["Shift+D"], &[], Missing, "Dev Mode left (#11)"),
     doc(View, "Move the keyboard to the toolbar (then the next region)", &["F6"], &["Ctrl+F6"], Bound("view.nextRegion"),
         "F6 works on Windows and Linux too; F6 and F8 need Fn on many Mac keyboards").reserved("browsers move to the address bar on F6 (web build)"),
     doc(View, "Move along the toolbar and the layer rows", &["ArrowRight"], &[], Gesture("Move along the toolbar or the layer rows"), ""),
@@ -417,7 +416,7 @@ fn counts_match_the_docs() {
     let reserved = documented.iter().filter(|r| !r.reserved.is_empty()).count();
     let pinned = ROWS.len() - documented.len();
     // docs/ui-parity.md quotes these.
-    assert_eq!((documented.len(), bound, moved, missing, reserved, pinned), (137, 136, 1, 0, 2, 57));
+    assert_eq!((documented.len(), bound, moved, missing, reserved, pinned), (137, 134, 1, 2, 2, 57));
 }
 
 #[test]

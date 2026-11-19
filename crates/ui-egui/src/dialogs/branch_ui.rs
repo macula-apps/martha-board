@@ -1,6 +1,6 @@
 //! Branches in the UI: the banner on a branch tab ("Branch of <file>", Review and merge) and the
 //! review dialog: the main file and the branch side by side (or one over the other) with
-//! Dev Mode's compare pieces, the conflicts with a branch / main choice each, what changed on each
+//! the compare pieces ([`crate::compare_view`]), the conflicts with a branch / main choice each, what changed on each
 //! side, and Update from main / Merge. The Branches list is in the version history panel.
 
 use std::collections::BTreeMap;
@@ -9,11 +9,11 @@ use std::sync::Arc;
 use egui::{Align2, CornerRadius, Id, Rect, Sense, Ui, pos2, vec2};
 use figcraft_doc::{Document, NodeId};
 use figcraft_engine::branches::{self, BranchState, Review, Side, SideChanges};
-use figcraft_engine::devcompare::ChangeKind;
+use figcraft_engine::compare::ChangeKind;
 use serde_json::json;
 
 use crate::FigApp;
-use crate::dev_compare::{self, BAR_H, LIST_W, Mode, Shot};
+use crate::compare_view::{self, BAR_H, LIST_W, Mode, Shot};
 use crate::i18n::{tr, trf, trn};
 use crate::theme::{Tokens, regular, semibold};
 use crate::widgets;
@@ -68,7 +68,7 @@ pub fn banner(app: &mut FigApp, ctx: &egui::Context, canvas: Rect) {
     let Ok(ds) = app.session.ds() else { return };
     let Some((main, id)) = ds.branch_of.clone() else { return };
     // A branch version being viewed shows its own banner in this place.
-    if ds.focus.is_some() || ds.preview.is_some() || app.ui.branch_review.is_some() {
+    if ds.preview.is_some() || app.ui.branch_review.is_some() {
         return;
     }
     let Some(m) = app.session.docs.iter().find(|d| d.uid == main) else { return };
@@ -159,17 +159,17 @@ pub fn show(app: &mut FigApp, ctx: &egui::Context) {
             ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
             let Some(cache) = view.cache.as_ref() else { return };
             let name = cache.review.as_ref().map(|r| r.name.clone()).unwrap_or_default();
-            dev_compare::header(ui, &t, tr("Review and merge"), &name, &mut view.mode, &mut open);
+            compare_view::header(ui, &t, tr("Review and merge"), &name, &mut view.mode, &mut open);
             let body_h = size.y - BAR_H * 2.0 - 2.0;
             ui.horizontal_top(|ui| {
                 let (r, _) = ui.allocate_exact_size(vec2(size.x - LIST_W - 1.0, body_h), Sense::hover());
                 match cache.shots.as_ref() {
                     Some((_, Some(m), Some(b))) => {
-                        dev_compare::images(ui, &t, r, [(m, tr("Main")), (b, tr("Branch"))], view.mode, &mut view.split, view.hovered)
+                        compare_view::images(ui, &t, r, [(m, tr("Main")), (b, tr("Branch"))], view.mode, &mut view.split, view.hovered)
                     }
-                    Some((_, None, Some(_))) => dev_compare::message(ui, &t, r, tr("This frame is new on the branch.")),
-                    Some((_, Some(_), None)) => dev_compare::message(ui, &t, r, tr("This frame isn't on the branch.")),
-                    _ => dev_compare::message(ui, &t, r, tr("No layer changes to show.")),
+                    Some((_, None, Some(_))) => compare_view::message(ui, &t, r, tr("This frame is new on the branch.")),
+                    Some((_, Some(_), None)) => compare_view::message(ui, &t, r, tr("This frame isn't on the branch.")),
+                    _ => compare_view::message(ui, &t, r, tr("No layer changes to show.")),
                 }
                 let (line, _) = ui.allocate_exact_size(vec2(1.0, body_h), Sense::hover());
                 ui.painter().rect_filled(line, CornerRadius::ZERO, t.border);
@@ -241,7 +241,7 @@ fn list(
                     Some(Side::Main) => trf("{name} · deleted on main", &[("name", &c.name)]),
                     None => format!("{} · {}", c.name, c.property),
                 };
-                let resp = dev_compare::change_row(
+                let resp = compare_view::change_row(
                     ui,
                     t,
                     ChangeKind::Changed,
@@ -277,7 +277,7 @@ fn list(
                 widgets::note(ui, tr("None."), t.text_secondary);
             }
             for c in &side.layers {
-                let resp = dev_compare::change_row(
+                let resp = compare_view::change_row(
                     ui,
                     t,
                     c.change,
@@ -293,10 +293,10 @@ fn list(
                 if resp.clicked() {
                     out = Some(Action::Show(c.id));
                 }
-                dev_compare::property_lines(ui, t, c.depth.saturating_sub(1), c.properties.iter().map(|pc| pc.text.as_str()));
+                compare_view::property_lines(ui, t, c.depth.saturating_sub(1), c.properties.iter().map(|pc| pc.text.as_str()));
             }
             for d in &side.document {
-                dev_compare::change_row(ui, t, d.change, &d.what, 0, 1, false, &d.what);
+                compare_view::change_row(ui, t, d.change, &d.what, 0, 1, false, &d.what);
             }
             if side.truncated {
                 widgets::note(ui, tr("Only the first changed layers are listed."), t.text_secondary);

@@ -174,17 +174,19 @@ fn bound_paint_keys_resolve_and_scope_by_index() {
 }
 
 #[test]
-fn inspect_names_the_variable_of_each_paint() {
+fn a_paint_binding_follows_the_moved_paint() {
     let mut s = Session::new();
     let r = rect(&mut s);
     vars(&mut s);
     ex(&mut s, "fill.add", json!({"ids": [r], "color": "#00FF00"}));
     ex(&mut s, "variable.bind", json!({"ids": [r], "field": "fill", "variable": "brand"}));
     ex(&mut s, "fill.move", json!({"ids": [r], "from": 0, "to": 1}));
-    let props = crate::devinspect::properties(s.doc().unwrap(), r);
-    let fills = props.iter().find(|p| p.title == "Fills").unwrap();
-    let tokens: Vec<Option<&str>> = fills.rows.iter().map(|p| p.token.as_deref()).collect();
-    assert_eq!(tokens, [None, Some("brand")], "the token follows the moved paint");
+    let doc = s.doc().unwrap();
+    let n = doc.node(r).unwrap();
+    let names: Vec<Option<&str>> = (0..n.fills.len())
+        .map(|i| crate::cmd::lists::paint_binding_key(n, true, i).and_then(|k| doc.variables.get_by_id(&n.bound[k])).map(|v| v.name.as_str()))
+        .collect();
+    assert_eq!(names, [None, Some("brand")], "the binding follows the moved paint");
 }
 
 #[test]

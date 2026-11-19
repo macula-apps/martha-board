@@ -83,7 +83,7 @@ fn every_doc_item_names_a_parameter() {
 #[test]
 fn batch_steps_refuse_unknown_keys_and_parameters() {
     let mut s = Session::new();
-    let e = err(&mut s, "command.batch", json!({"commands": [{"command": "select.all"}, {"command": "inspect.code", "args": {"id": 2}}]}));
+    let e = err(&mut s, "command.batch", json!({"commands": [{"command": "select.all"}, {"command": "node.get", "args": {"id": 2}}]}));
     assert!(e.contains("step 1: unknown key `args`"), "{e}");
     let e =
         err(&mut s, "command.batch", json!({"commands": [{"command": "select.all"}, {"command": "comment.list", "params": {"filterr": "open"}}]}));

@@ -1,7 +1,6 @@
 pub mod assets_panel;
+pub mod compare_view;
 pub mod component_panel;
-pub mod dev_compare;
-pub mod dev_mode;
 pub mod export_panel;
 pub mod frame_presets;
 pub mod layers;

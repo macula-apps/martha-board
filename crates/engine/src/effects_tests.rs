@@ -1,10 +1,9 @@
 //! Effects through the session: adding every kind by name, editing noise/texture/glass, scaling,
-//! inspecting and generated CSS.
+//! and what an older file's values draw as.
 
 use serde_json::json;
 
 use crate::Session;
-use crate::codegen::{CodeLang, code_for};
 use crate::params::id_of;
 use figcraft_doc::{Effect, EffectKind, Glass, NoiseMode};
 
@@ -108,34 +107,27 @@ fn scaling_a_frost_from_an_older_file_starts_from_what_it_draws() {
 }
 
 #[test]
-fn inspect_shows_a_frost_from_an_older_file_as_it_draws() {
-    // A frost of 150, saved before the 0–100 range, draws at 100: Dev Mode says 100 as CSS does.
+fn a_frost_from_an_older_file_draws_at_the_top_of_the_range() {
+    // A frost of 150, saved before the 0–100 range, draws at 100.
     let mut s = Session::new();
     let r = rect(&mut s);
     s.execute("effect.add", &json!({"ids": [r], "type": "glass"})).unwrap();
     s.execute("effect.set", &json!({"ids": [r], "index": 0, "effect": {"type": "glass", "frost": 150}})).unwrap();
-    let doc = s.doc().unwrap();
-    let sections = crate::devinspect::properties(doc, r);
-    let glass = &sections.iter().find(|s| s.title == "Effects").unwrap().rows[0];
-    assert!(glass.value.contains(" frost 100 "), "{}", glass.value);
-    assert!(code_for(doc, r, CodeLang::Css).contains("backdrop-filter: blur(50px);"));
+    let EffectKind::Glass(g) = &s.doc().unwrap().node(r).unwrap().effects[0].kind else { panic!("not glass") };
+    assert_eq!(g.sanitized().frost, 100.0);
 }
 
 #[test]
-fn inspect_and_css_show_the_new_effects() {
+fn the_new_effects_are_added_in_order_with_their_defaults() {
     let mut s = Session::new();
     let r = rect(&mut s);
     for ty in ["noise", "texture", "glass"] {
         s.execute("effect.add", &json!({"ids": [r], "type": ty})).unwrap();
     }
-    let doc = s.doc().unwrap();
-    let sections = crate::devinspect::properties(doc, r);
-    let fx = sections.iter().find(|s| s.title == "Effects").unwrap();
-    let labels: Vec<&str> = fx.rows.iter().map(|p| p.label.as_str()).collect();
-    assert_eq!(labels, vec!["Noise", "Texture", "Glass"]);
-    assert!(fx.rows[2].value.contains("refraction 80%"), "{}", fx.rows[2].value);
-    let css = code_for(doc, r, CodeLang::Css);
-    assert!(css.contains("backdrop-filter: blur(2px);"), "{css}");
+    let fx = &s.doc().unwrap().node(r).unwrap().effects;
+    assert!(matches!(fx.iter().map(|e| &e.kind).collect::<Vec<_>>()[..], [EffectKind::Noise(_), EffectKind::Texture(_), EffectKind::Glass(_)]));
+    let EffectKind::Glass(g) = &fx[2].kind else { panic!("not glass") };
+    assert_eq!((g.refraction * 100.0).round(), 80.0);
 }
 
 #[test]

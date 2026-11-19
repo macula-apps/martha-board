@@ -57,26 +57,6 @@ fn a_long_name_stays_on_one_line_inside_the_export_button() {
     }
 }
 
-/// Dev Mode's header names the layer on one line inside the panel too.
-#[test]
-fn dev_modes_header_shortens_a_long_name() {
-    let long = "FRAME_NAME_OVERFLOW_".repeat(200);
-    let mut s = Session::new();
-    let f = crate::present_tests::id(&s.execute("frame.create", &json!({"x": 0, "y": 0, "width": 856, "height": 1089})).unwrap());
-    s.execute("node.set", &json!({"id": f, "props": {"name": long}})).unwrap();
-    s.execute("select.set", &json!({"ids": [f]})).unwrap();
-    let mut u = Ui::new(s);
-    u.app.ui.right_tab = crate::RightTab::Inspect;
-    let texts = painted(&mut u);
-    let panel = u.app.ui.right_panel_rect.expect("the right panel shows");
-    let names: Vec<(String, Rect)> = texts.into_iter().filter(|(t, r)| t.starts_with("FRAME_NAME") && r.min.x >= panel.min.x).collect();
-    assert!(!names.is_empty(), "the header names the layer");
-    for (text, rect) in names {
-        assert!(text.ends_with('…'), "shortened: {} characters", text.chars().count());
-        assert!(rect.max.x <= panel.max.x, "{rect:?} inside {panel:?}");
-    }
-}
-
 /// Eliding as it was done before: every candidate from the longest down, the first that fits.
 fn elide_by_trying_all(ui: &egui::Ui, s: &str, max_w: f32, font: egui::FontId, from_start: bool) -> String {
     let fits = |s: &str| ui.painter().layout_no_wrap(s.to_string(), font.clone(), egui::Color32::WHITE).size().x <= max_w;

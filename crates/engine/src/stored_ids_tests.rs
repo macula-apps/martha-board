@@ -33,14 +33,15 @@ fn exported_aliases_point_at_the_stored_id() {
 }
 
 #[test]
-fn dev_inspect_names_the_bound_variable() {
+fn a_fill_binding_names_the_stored_variable() {
     let (mut s, _, surface, _) = renamed_like_an_id();
     let r = ex(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10}));
     let r = crate::params::id_of(&r["id"]).unwrap();
     ex(&mut s, "variable.bind", json!({"ids": [r.0], "field": "fill", "variable": surface}));
     let doc = s.doc().unwrap();
-    let found = crate::devinspect::bound_variable(doc, doc.node(r).unwrap(), "fill").unwrap();
-    assert_eq!(found.name, "surface");
+    let n = doc.node(r).unwrap();
+    let key = crate::cmd::lists::paint_binding_key(n, true, 0).unwrap();
+    assert_eq!(doc.variables.get_by_id(&n.bound[key]).unwrap().name, "surface");
 }
 
 #[test]

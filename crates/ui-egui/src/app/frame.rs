@@ -72,9 +72,9 @@ impl FigApp {
         }
     }
 
-    /// Leaving Design ends a pen path as Escape does and goes back to Move: Prototype and Inspect
-    /// don't draw (#307). Checked as the frame starts (the control channel) and after the panels
-    /// and shortcuts (the mode switcher, the tabs, Shift+E/Shift+D), before the canvas sees more.
+    /// Leaving Design ends a pen path as Escape does and goes back to Move: Prototype doesn't draw
+    /// (#307). Checked as the frame starts (the control channel) and after the panels and
+    /// shortcuts (the mode switcher, the tabs, Shift+E), before the canvas sees more.
     pub(super) fn end_pen_outside_design(&mut self) {
         if self.ui.right_tab == self.ui.last_right_tab {
             return;
@@ -212,7 +212,7 @@ impl FigApp {
     }
 
     /// Whether the right panel shows: never with the UI `hidden`; always on a design file; on a
-    /// board, which has no prototypes or Dev Mode (its tab stays Design), only when asked for.
+    /// board, which has no prototypes (its tab stays Design), only when asked for.
     pub(super) fn right_panel_shown(&mut self, hidden: bool) -> bool {
         let board = self.session.doc().is_ok_and(figcraft_engine::board::is_board);
         if board {

@@ -11,7 +11,6 @@ pub(super) struct JobKey {
     outline_extras: figcraft_render::Outline,
     outlined: Vec<NodeId>,
     skip: Vec<NodeId>,
-    solo: Option<NodeId>,
     /// Text lays out anew when fonts arrive (system fonts load in the background).
     fonts: u64,
     proof: bool,
@@ -82,7 +81,6 @@ pub(super) fn request_render(app: &mut FigApp, worker: &mut Worker, ppp: f32, ma
         outline_extras,
         outlined: outlined.clone(),
         skip: vec![],
-        solo: ds.focused(),
         fonts: figcraft_text::layout_generation(),
         proof,
         dots,
@@ -106,7 +104,6 @@ pub(super) fn request_render(app: &mut FigApp, worker: &mut Worker, ppp: f32, ma
         outline_extras,
         outlined,
         skip: vec![],
-        solo: key.solo,
         proof,
         dots,
         uid: ds.uid,

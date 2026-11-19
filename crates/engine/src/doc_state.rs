@@ -101,8 +101,6 @@ pub struct DocState {
     /// The document as of the last version saved or restored (none yet): autosaves, restores and
     /// merges only add a checkpoint for changes since.
     checkpoint: Option<Arc<Document>>,
-    /// Dev Mode focus view: the frame or section shown alone on the canvas (see [`Self::focused`]).
-    pub focus: Option<NodeId>,
     /// The ruler guide clicked last: its page or frame and index (see [`Self::selected_guide`]).
     pub guide: Option<(NodeId, usize)>,
     /// The selection's rotation origin, when moved or shown (see [`rotation_origin`]; not saved).
@@ -176,7 +174,6 @@ impl DocState {
             versions_changed: false,
             preview: None,
             text_preview: None,
-            focus: None,
             guide: None,
             rotation_origin: None,
             view_from_prefs: false,
@@ -341,11 +338,6 @@ impl DocState {
                 self.view.cy = self.view.vh / 2.0 - 100.0;
             }
         }
-    }
-
-    /// The layer the focus view shows, while it exists on the current page.
-    pub fn focused(&self) -> Option<NodeId> {
-        self.focus.filter(|f| self.doc.page_of(*f) == Some(self.page))
     }
 
     /// Drop selected ids that no longer exist or aren't on the current page.

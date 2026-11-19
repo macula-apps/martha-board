@@ -22,12 +22,11 @@ impl Session {
         }
         // Handles first: a selected connector's ends, a selected ellipse's arc handles (drawn over
         // the box), then the box's.
-        let edits = !self.tool.dev_mode;
-        if edits && let Some((id, from)) = crate::board::end_handle_at(&doc, &sel, ev.p(), ev.zoom) {
+        if let Some((id, from)) = crate::board::end_handle_at(&doc, &sel, ev.p(), ev.zoom) {
             self.tool.gesture = Gesture::Reattach { id, from, start: ev.p() };
             return Ok(());
         }
-        if edits && let Some((id, portion)) = crate::board::path_handle_at(&doc, &sel, ev.p(), ev.zoom) {
+        if let Some((id, portion)) = crate::board::path_handle_at(&doc, &sel, ev.p(), ev.zoom) {
             return self.reshape_down(id, portion, ev.p());
         }
         if self.arc_handles_shown()
@@ -49,7 +48,7 @@ impl Session {
             self.tool.overlay.shape = shape_hint(&doc, id, handle, ev.zoom);
             return Ok(());
         }
-        if let Some(h) = handle_at(&doc, &sel, ev.p(), ev.zoom).filter(|_| edits) {
+        if let Some(h) = handle_at(&doc, &sel, ev.p(), ev.zoom) {
             let ids = roots(&doc, &sel);
             if let Handle::Rotate(_) = h {
                 let Some(b) = selection_box(&doc, &ids) else { return Ok(()) };
@@ -140,16 +139,6 @@ impl Session {
                     vec![target]
                 };
                 self.set_selection(new_sel.clone());
-                // Dev Mode only selects (Shift-click still deselects): nothing moves. No move
-                // gesture starts, so a click selects the layer it hit now instead of on release.
-                if !edits {
-                    if deselect.is_some() {
-                        self.set_selection(without_target());
-                    } else if let Some(k) = keep.filter(|k| sel.as_slice() != [*k]) {
-                        self.set_selection(vec![k]);
-                    }
-                    return Ok(());
-                }
                 // Locked layers selected in the layers panel stay put.
                 let ids: Vec<NodeId> = roots(&doc, &new_sel).into_iter().filter(|i| !locked_in(&doc, *i)).collect();
                 if new_sel.is_empty() || doc.node(target).is_some_and(|n| n.locked) || ids.is_empty() {

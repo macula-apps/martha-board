@@ -173,12 +173,7 @@ fn covers(doc: &Document, id: NodeId, n: &Node, pt: Point, depth: usize) -> bool
             || n.children.iter().any(|c| doc.node(*c).is_some_and(|k| k.visible && !k.is_mask && covers(doc, *c, k, pt, depth + 1))))
 }
 
-/// Like [`hit_leaf`], but only within layer `root` (it included).
-pub fn hit_in(doc: &Document, root: NodeId, pt: Point, tol: f64, result: BoolResult) -> Option<NodeId> {
-    hit_rec(doc, root, pt, tol, 0, result, None, HitOpts::default())
-}
-
-/// [`hit_leaf`] (or [`hit_in`] for a `root` that isn't a page) in outline mode: shapes are hit
+/// [`hit_leaf`] (or, for a `root` that isn't a page, within that layer) in outline mode: shapes are hit
 /// where their outlines are, so a click inside one reaches the layers drawn behind it.
 ///
 /// `also` is what outline mode draws besides the shapes: hidden layers are hit like the others
@@ -376,14 +371,6 @@ pub fn enter_target(doc: &Document, leaf: NodeId, selection: &[NodeId]) -> NodeI
     chain.push(leaf);
     let inner = chain.iter().rposition(|c| selection.contains(c)).and_then(|i| chain.get(i + 1)).copied();
     inner.unwrap_or_else(|| select_target(doc, leaf, selection, false))
-}
-
-/// Nodes a marquee over `rect` touches, one level only: the children of `within` (a focus view's
-/// frame), or the top-level layers of `page`. Frames are not opened or enclosed here; see
-/// [`marquee_select`] for a plain marquee.
-pub fn marquee(doc: &Document, page: NodeId, rect: Rect, within: Option<NodeId>) -> Vec<NodeId> {
-    let parent = within.unwrap_or(page);
-    doc.node(parent).map(|p| marquee_children(doc, p, rect)).unwrap_or_default()
 }
 
 /// Nodes on `page` a Cmd/Ctrl marquee selects: the innermost layers the marquee touches

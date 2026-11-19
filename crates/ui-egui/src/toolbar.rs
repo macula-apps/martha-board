@@ -33,6 +33,8 @@ const GAP: f32 = 8.0;
 const DIVIDER: f32 = 1.0;
 /// The mode switcher's marks: smaller than the tools' (13–14 pt).
 const MODE_GLYPH: f32 = 14.0;
+/// The mode switcher's buttons: Draw, Design and Prototype.
+const MODE_CELLS: f32 = 3.0;
 
 /// `GLYPH`'s box centred in `r`.
 fn glyph_rect(r: Rect) -> Rect {
@@ -148,12 +150,12 @@ fn main_width(groups: &[Group], board: bool) -> f32 {
     let tools: f32 = groups.iter().map(|g| TOOL_CELL + if g.has_flyout() { FLYOUT_GAP + FLYOUT_W } else { 0.0 }).sum();
     // The end, and the gaps that aren't a group's own: after Actions and after the divider (and
     // between a board's two buttons, which the end counts as one item).
-    let (end, gaps) = if board { (2.0 * TOOL_CELL, 3.0) } else { (4.0 * TOOL_CELL, 2.0) };
+    let (end, gaps) = if board { (2.0 * TOOL_CELL, 3.0) } else { (MODE_CELLS * TOOL_CELL, 2.0) };
     PAD * 2.0 + tools + (groups.len() as f32 + gaps) * GAP + TOOL_CELL + DIVIDER + end
 }
 
 /// The main toolbar pill: the tool groups with their flyouts, Actions, then the
-/// Draw · Design · Prototype · Inspect mode switcher (on a board, its two buttons).
+/// Draw · Design · Prototype mode switcher (on a board, its two buttons).
 fn main_toolbar(app: &mut FigApp, ui: &mut Ui, canvas: Rect, t: &Tokens, board: bool) {
     let groups = if board { BOARD_GROUPS } else { GROUPS };
     let width = main_width(groups, board);
@@ -170,7 +172,7 @@ fn main_toolbar(app: &mut FigApp, ui: &mut Ui, canvas: Rect, t: &Tokens, board: 
     divider(ui, t, x, cy);
     x += DIVIDER + GAP;
     if board {
-        // Boards have no prototypes or Dev Mode; the Design panel is hidden until asked for.
+        // Boards have no prototypes; the Design panel is hidden until asked for.
         x = crate::board_picker::button(app, ui, pos2(x, cy), rect.min.y, t) + GAP;
         let r = Rect::from_center_size(pos2(x + TOOL_CELL / 2.0, cy), vec2(TOOL_CELL, TOOL_CELL));
         let tip = crate::shortcuts::tip(tr("Design panel"), "view.design");
@@ -214,8 +216,7 @@ fn group_cell(app: &mut FigApp, ui: &mut Ui, g: &Group, at: egui::Pos2, top: f32
     if resp.clicked() {
         // Enter (a keyboard click) on the shape or frame tool already chosen places one; the
         // canvas takes the keyboard.
-        // In Dev Mode the tool goes through `choose`, which returns to the design first.
-        if in_group && shown.draws_shape() && app.ui.right_tab != crate::RightTab::Inspect && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+        if in_group && shown.draws_shape() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
             app.run("tool.place", json!({}));
             app.ui.nav.go(Region::Canvas);
         } else {
@@ -275,16 +276,15 @@ fn actions_button(app: &mut FigApp, ui: &mut Ui, x: f32, cy: f32, t: &Tokens) ->
     x + TOOL_CELL + GAP
 }
 
-/// The mode switcher from `x`: Draw · Design · Prototype · Inspect (code).
+/// The mode switcher from `x`: Draw · Design · Prototype.
 fn mode_switcher(app: &mut FigApp, ui: &mut Ui, x: f32, cy: f32, t: &Tokens) {
-    let modes = [(Icon::Pencil, tr("Draw")), (Icon::Frame, tr("Design")), (Icon::Prototype, tr("Prototype")), (Icon::Code, tr("Inspect"))];
+    let modes = [(Icon::Pencil, tr("Draw")), (Icon::Frame, tr("Design")), (Icon::Prototype, tr("Prototype"))];
     let active = match app.ui.right_tab {
         crate::RightTab::Design if app.session.tool.tool == ToolId::Pencil => 0,
         crate::RightTab::Design => 1,
         crate::RightTab::Prototype => 2,
-        crate::RightTab::Inspect => 3,
     };
-    let seg = Rect::from_min_size(pos2(x, cy - TOOL_CELL / 2.0), vec2(4.0 * TOOL_CELL, TOOL_CELL));
+    let seg = Rect::from_min_size(pos2(x, cy - TOOL_CELL / 2.0), vec2(MODE_CELLS * TOOL_CELL, TOOL_CELL));
     ui.painter().rect_filled(seg, CornerRadius::same(5), t.field);
     for (i, (icon, tip)) in modes.iter().enumerate() {
         let r = Rect::from_min_size(pos2(seg.min.x + i as f32 * TOOL_CELL, seg.min.y), vec2(TOOL_CELL, TOOL_CELL));
@@ -321,8 +321,7 @@ fn pick_mode(app: &mut FigApp, i: usize) {
                 app.run("tool.set", json!({"tool": "move"}));
             }
         }
-        2 => app.ui.right_tab = crate::RightTab::Prototype,
-        _ => app.ui.right_tab = crate::RightTab::Inspect,
+        _ => app.ui.right_tab = crate::RightTab::Prototype,
     }
 }
 
@@ -624,12 +623,8 @@ fn flyout(app: &mut FigApp, ui: &mut Ui, g: &Group, bottom_left: egui::Pos2) {
     }
 }
 
-/// Choose `tool` from the toolbar. Dev Mode only inspects: a tool that edits leaves it for the
-/// design.
+/// Choose `tool` from the toolbar.
 pub(crate) fn choose(app: &mut FigApp, tool: ToolId) {
-    if app.ui.right_tab == crate::RightTab::Inspect && !tool.works_in_dev_mode() {
-        app.ui.right_tab = crate::RightTab::Design;
-    }
     app.run("tool.set", json!({"tool": tool.id()}));
 }
 
@@ -676,7 +671,7 @@ mod tests {
             }
             x += TOOL_CELL + GAP; // Actions
             x += DIVIDER + GAP; // the divider
-            let end = if board { 2.0 * TOOL_CELL + GAP } else { 4.0 * TOOL_CELL };
+            let end = if board { 2.0 * TOOL_CELL + GAP } else { MODE_CELLS * TOOL_CELL };
             assert!((x + end - (pill.max.x - PAD)).abs() < 0.01, "board {board}: {} vs {}", x + end, pill.max.x - PAD);
         }
     }

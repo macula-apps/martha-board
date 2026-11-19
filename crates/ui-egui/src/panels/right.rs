@@ -1,13 +1,13 @@
-//! The right panel: Design, Prototype and Inspect tabs.
+//! The right panel: Design and Prototype tabs.
 
 use std::sync::Arc;
 
 use egui::{Align2, Color32, CornerRadius, Id, Pos2, Rect, Sense, Stroke, Ui, pos2, vec2};
 use figcraft_color::{BlendMode, Paint, PaintKind};
 use figcraft_doc::{
-    Blur, BlurType, BoolOp, Brush, Document, Effect, EffectKind, ExportFormat, ExportSetting, Glass, GridAlign, GridKind, LayoutGrid,
-    MAX_BLUR_RADIUS, MaskType, Node, NodeId, NodeKind, Noise, NoiseMode, Shadow, StrokeAlign, StrokeCap, StrokeJoin, StrokeProps, Texture,
-    VariableType, WidthPoint, WidthPreset, WidthProfile,
+    Blur, BlurType, BoolOp, Brush, Document, Effect, EffectKind, Glass, GridAlign, GridKind, LayoutGrid, MAX_BLUR_RADIUS, MaskType, Node, NodeId,
+    NodeKind, Noise, NoiseMode, Shadow, StrokeAlign, StrokeCap, StrokeJoin, StrokeProps, Texture, VariableType, WidthPoint, WidthPreset,
+    WidthProfile,
 };
 use figcraft_engine::cmd::lists::{moved_index, removed_index};
 use serde_json::{Value, json};
@@ -22,15 +22,12 @@ use crate::widgets::{self, Edit, FIELD_H, FieldEdit, Lead, PAD};
 use crate::{FigApp, RightTab};
 
 mod effects;
-mod inspect;
 mod menu;
 mod paints;
 mod stroke;
 
 pub(crate) use effects::effect_open;
 use effects::{effects, grids};
-use inspect::inspect;
-pub(crate) use inspect::{inspect_section, prop_row};
 #[cfg(test)]
 pub(crate) use menu::menu_row_width;
 #[cfg(test)]
@@ -117,7 +114,7 @@ impl FigApp {
 }
 
 /// Draw the right panel: people, present and share controls, Design/Prototype tabs and zoom
-/// menu, then route the scroll area to comments, frame presets, design, prototype or inspect.
+/// menu, then route the scroll area to comments, frame presets, design or prototype.
 pub fn right_panel(app: &mut FigApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     // The panel's edge, drawn here: the frame has no stroke (a stroke counts as margin and would
@@ -252,7 +249,6 @@ pub fn right_panel(app: &mut FigApp, ui: &mut Ui) {
             RightTab::Design if app.session.tool.tool == figcraft_engine::ToolId::Frame => crate::frame_presets::panel(app, ui),
             RightTab::Design => design(app, ui),
             RightTab::Prototype => crate::proto_panel::prototype(app, ui),
-            RightTab::Inspect => inspect(app, ui),
         }
         ui.add_space(80.0);
         a11y::scroll_focus(&mut app.ui.nav, ui);
@@ -437,7 +433,6 @@ fn header(app: &mut FigApp, ui: &mut Ui, doc: &Document, sel: &[NodeId]) {
     let (r, _) = ui.allocate_exact_size(vec2(w, 40.0), Sense::hover());
     // Keep the type menu and frame actions together. A short label must not leave
     // the orientation icon floating in the middle of the header.
-    // The handoff icon also fits beside the frame controls at the panel minimum.
     let max_label_width = if is_frame { (w - 202.0).clamp(40.0, 120.0) } else { 92.0 };
     let shown = if is_frame || is_group { widgets::elide_font(ui, &label, max_label_width, semibold(13.0)) } else { label.clone() };
     let label_width = if is_frame || is_group { ui.painter().layout_no_wrap(shown.clone(), semibold(13.0), t.text).size().x + 28.0 } else { 120.0 };
@@ -473,9 +468,6 @@ fn header(app: &mut FigApp, ui: &mut Ui, doc: &Document, sel: &[NodeId]) {
         let fit_tip = crate::shortcuts::tip(tr("Fit to contents"), "object.resizeToFit");
         if widgets::icon_button_at(ui, ui.scope_id().with("frame_fit_contents"), fit_r, Icon::FitContents, fit_tip) {
             app.run("object.resizeToFit", json!({"ids": sel}));
-        }
-        if figcraft_engine::devinspect::has_status(doc, sel[0]) {
-            crate::section_panel::status_icon(app, ui, doc, sel, fit_r.translate(vec2(26.0, 0.0)));
         }
         let ids: Vec<NodeId> = sel.to_vec();
         menu_popup(&resp).width(260.0).show(|ui| {

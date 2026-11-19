@@ -1,6 +1,6 @@
 use super::{
-    Done, FigApp, LeftTab, MobilePanel, NodeId, PANEL_DEFAULT, RightTab, Value, comments, dev_compare, dialogs, home, import_report, json, layers,
-    live, menus, missing_fonts, plugins_ui, present, tabs, updates_ui, versions,
+    Done, FigApp, LeftTab, MobilePanel, NodeId, PANEL_DEFAULT, RightTab, Value, comments, dialogs, home, import_report, layers, live, menus,
+    missing_fonts, plugins_ui, present, tabs, updates_ui, versions,
 };
 
 impl FigApp {
@@ -100,22 +100,6 @@ impl FigApp {
         }
     }
 
-    /// Dev Mode (the Inspect tab): the canvas measures on hover without Alt and edits nothing;
-    /// entering it ends editing text or vectors.
-    pub(super) fn sync_dev_mode(&mut self) {
-        let dev = self.ui.right_tab == RightTab::Inspect;
-        if dev && !self.session.tool.dev_mode {
-            let _ = self.session.drop_gesture();
-            let editing = self.session.ds().map(|d| (d.text_edit.is_some(), d.vector_edit.is_some())).unwrap_or_default();
-            for (on, cmd) in [(editing.0, "text.edit.end"), (editing.1, "vector.edit.end")] {
-                if on {
-                    self.run(cmd, json!({}));
-                }
-            }
-        }
-        self.session.tool.dev_mode = dev;
-    }
-
     /// Act on UI requests queued by commands (dialogs, panels).
     pub fn handle_ui_requests(&mut self) {
         let reqs = std::mem::take(&mut self.session.ui_requests);
@@ -143,9 +127,6 @@ impl FigApp {
                 "panel.designPrototype" => {
                     self.ui.right_tab = if self.ui.right_tab == RightTab::Prototype { RightTab::Design } else { RightTab::Prototype };
                 }
-                "panel.devMode" => {
-                    self.ui.right_tab = if self.ui.right_tab == RightTab::Inspect { RightTab::Design } else { RightTab::Inspect };
-                }
                 "panel.leftSidebar" => {
                     let shown = if self.ui.narrow { self.ui.mobile_panel == Some(MobilePanel::Left) } else { !self.ui.left_collapsed };
                     if shown {
@@ -172,9 +153,6 @@ impl FigApp {
                     self.ui.versions = Default::default();
                 }
                 "panel.versionHistory" => versions::open(self),
-                "view.devCompare" => {
-                    self.ui.dev.compare = dev_compare::CompareView::requested(&r.data);
-                }
                 "panel.libraries" => {
                     self.ui.left_tab = LeftTab::Assets;
                     self.ui.open_left_panel();
@@ -208,16 +186,12 @@ impl FigApp {
                     if let Some(h) = r.data.get("hotspotHints").and_then(|h| h.as_bool()) {
                         v.hotspot_hints = h;
                     }
-                    if let Some(i) = r.data.get("inspect").and_then(|i| i.as_bool()) {
-                        v.inspect = i;
-                    }
                     if let Some(h) = r.data.get("hideUi").and_then(|h| h.as_bool()) {
                         v.hide_ui = h;
                     }
                     if let Some(p) = self.ui.present.as_mut() {
                         p.view.device_frame = v.device_frame;
                         p.view.hotspot_hints = v.hotspot_hints;
-                        p.view.inspect = v.inspect;
                         p.view.hide_ui = v.hide_ui;
                         p.set_scale(v.scale);
                     }
@@ -264,18 +238,6 @@ impl FigApp {
                 "comment.open" => {
                     if let Some(id) = r.data.get("id").and_then(Value::as_u64) {
                         self.ui.comments.show(id);
-                    }
-                }
-                "annotation.new" => {
-                    // The Annotation tool: show the Inspect tab (never toggle it away) and put the
-                    // caret in the layer's new-note field.
-                    // Only a selected layer's field can show; a request for anything else would wait
-                    // and take the keyboard later.
-                    let shown =
-                        |id| self.session.selection().contains(&id) && self.session.doc().is_ok_and(|d| d.node(id).is_some_and(|n| !n.is_page()));
-                    if let Some(id) = r.data.get("id").and_then(figcraft_engine::params::id_of).filter(|id| shown(*id)) {
-                        self.ui.right_tab = RightTab::Inspect;
-                        self.ui.dev.focus_new_note = Some(id);
                     }
                 }
                 "comment.new" => {

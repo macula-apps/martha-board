@@ -214,8 +214,6 @@ pub struct PresentView {
     pub comments: bool,
     /// A click where nothing reacts flashes the hotspots (the layers with interactions).
     pub hotspot_hints: bool,
-    /// A panel beside the prototype shows the Inspect properties of the layer under the pointer.
-    pub inspect: bool,
     /// Hide UI: the bar above the prototype and the navigation bar under it are gone, so the
     /// prototype shows alone (Cmd/Ctrl+\, the editor's Show/Hide UI key, brings them back).
     pub hide_ui: bool,
@@ -223,7 +221,7 @@ pub struct PresentView {
 
 impl Default for PresentView {
     fn default() -> Self {
-        Self { scale: PresentScale::Fit, device_frame: true, comments: false, hotspot_hints: true, inspect: false, hide_ui: false }
+        Self { scale: PresentScale::Fit, device_frame: true, comments: false, hotspot_hints: true, hide_ui: false }
     }
 }
 
@@ -311,8 +309,6 @@ pub struct Presenter {
     hot: Vec<(NodeId, Rect)>,
     /// The time of the last frame played.
     clock: f64,
-    /// The layer the Inspect panel shows (the last one under the pointer).
-    inspected: Option<NodeId>,
     /// The links the last frame's actions opened, whether the viewer's own click, press, drag or
     /// key fired each, and whether it opens in a new tab; the frame-end queues them behind the
     /// notice, but for one the viewer fired while choosing to skip the notice (#1096).
@@ -390,7 +386,6 @@ impl Presenter {
             flash_until: 0.0,
             hot: Vec::new(),
             clock: 0.0,
-            inspected: None,
             urls: Vec::new(),
             link_notice: None,
             source: None,

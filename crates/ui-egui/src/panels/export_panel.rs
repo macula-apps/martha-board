@@ -394,11 +394,12 @@ pub(crate) fn wide_button(ui: &mut Ui, label: &str) -> bool {
     clicked
 }
 
-/// Export `ids` with their export settings (`assets`: the Inspect tab's assets in and under them):
+/// Export `ids` with their export settings (`assets`: the assets in and under them, see
+/// [`figcraft_engine::cmd::file::assets`]):
 /// one file through a save dialog, several into a folder.
 pub(crate) fn export_layers(app: &mut FigApp, ids: &[NodeId], assets: bool) {
     let jobs = match app.session.doc() {
-        Ok(doc) if assets => figcraft_engine::devinspect::asset_jobs(doc, ids),
+        Ok(doc) if assets => figcraft_engine::cmd::file::asset_jobs(doc, ids),
         Ok(doc) => export_jobs(doc, ids),
         Err(_) => return,
     };

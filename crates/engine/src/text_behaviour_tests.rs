@@ -223,9 +223,7 @@ fn vertical_trim_through_node_set() {
     let svg = figcraft_svg::export_svg(s.doc().unwrap(), &[t], &figcraft_svg::SvgOptions::default()).unwrap();
     assert!(!svg.contains("NaN"));
     assert!(figcraft_pdf::export_nodes_pdf(s.doc().unwrap(), &[t]).is_ok());
-    // Inspect and code say so; one undo step back; junk is refused.
-    let css = crate::codegen::css_decls(s.doc().unwrap(), s.doc().unwrap().node(t).unwrap(), &mut Default::default(), (true, true));
-    assert!(css.contains("text-box: trim-both cap alphabetic"), "{css}");
+    // One undo step back; junk is refused.
     s.undo().unwrap();
     assert_eq!(size(&s, t), (w, h));
     assert!(s.execute("node.set", &json!({"id": t, "props": {"leadingTrim": "sideways"}})).is_err());
@@ -387,28 +385,22 @@ fn text_direction_is_forced_per_paragraph() {
     assert_eq!(rtl(&s), [false, false, false], "Latin letters read left to right");
     assert!(inspect(&s).get("textDirection").is_none() && inspect(&s).get("lineDirections").is_none());
     // The layer's paragraphs at once, by the command or `node.set`; inspect reports the one
-    // direction they share, and Dev Mode's CSS has it.
+    // direction they share.
     s.execute("text.direction", &json!({"ids": [t], "direction": "rtl"})).unwrap();
     assert_eq!(rtl(&s), [true, true, true], "forced right to left whatever the letters");
     assert_eq!(inspect(&s)["textDirection"], json!("rtl"));
-    let css = |s: &mut Session| s.execute("inspect.code", &json!({"id": t})).unwrap()["code"].as_str().unwrap().to_string();
-    assert!(css(&mut s).contains("direction: rtl;"), "{}", css(&mut s));
-    assert!(css(&mut s).contains("text-align: left;"), "Left stays the left edge, which `start` would not be: {}", css(&mut s));
     s.execute("node.set", &json!({"id": t, "props": {"textDirection": "ltr"}})).unwrap();
     assert_eq!(rtl(&s), [false, false, false]);
     assert_eq!(inspect(&s)["textDirection"], json!("ltr"));
-    assert!(css(&mut s).contains("direction: ltr;"));
     s.execute("text.directionAuto", &json!({"ids": [t]})).unwrap();
     assert!(inspect(&s).get("textDirection").is_none(), "auto throughout says nothing");
-    assert!(!css(&mut s).contains("direction:"));
     // While editing, the caret's paragraph alone (the menu's Right to left); inspect lists each
-    // paragraph's direction when they differ, and the CSS stays quiet.
+    // paragraph's direction when they differ.
     s.execute("text.edit.begin", &json!({"id": t, "caret": 9})).unwrap();
     s.execute("text.directionRtl", &json!({})).unwrap();
     s.execute("text.edit.end", &json!({})).unwrap();
     assert_eq!(rtl(&s), [false, true, false], "the second paragraph only");
     assert_eq!(inspect(&s)["lineDirections"], json!(["auto", "rtl", "auto"]));
-    assert!(!css(&mut s).contains("direction:"));
     // Enter inside a forced paragraph keeps the direction for the new one, as list settings carry.
     s.execute("text.edit.begin", &json!({"id": t, "caret": 10})).unwrap();
     s.execute("text.edit.insert", &json!({"text": "\n"})).unwrap();
@@ -468,13 +460,9 @@ fn balance_and_pretty_wrap_styles_break_lines_as_documented() {
     assert_eq!(lines(&s), [(0, 9), (9, 18), (18, 23)]);
     s.execute("node.set", &json!({"id": t, "props": {"width": 400, "wrapStyle": "balance"}})).unwrap();
     assert_eq!(lines(&s), [(0, 23)]);
-    // Dev Mode's CSS says `text-wrap` for Balance and Pretty and nothing for Auto; junk is refused.
-    let css = |s: &mut Session| s.execute("inspect.code", &json!({"id": t})).unwrap()["code"].as_str().unwrap().to_string();
-    assert!(css(&mut s).contains("text-wrap: balance;"), "{}", css(&mut s));
+    // Pretty and Auto are taken too; junk is refused.
     s.execute("node.set", &json!({"id": t, "props": {"wrapStyle": "pretty"}})).unwrap();
-    assert!(css(&mut s).contains("text-wrap: pretty;"));
     s.execute("node.set", &json!({"id": t, "props": {"wrapStyle": "auto"}})).unwrap();
-    assert!(!css(&mut s).contains("text-wrap"));
     assert!(s.execute("node.set", &json!({"id": t, "props": {"wrapStyle": "zigzag"}})).is_err());
     assert!(s.execute("text.wrapStyle", &json!({"ids": [t], "style": "even"})).is_err());
     // A word as wide as the box is never broken in two by Balance or Pretty: 80 px holds the ten
@@ -509,7 +497,6 @@ fn wrap_style_per_paragraph_overrides_the_layers() {
         l.lines.iter().map(|l| (l.char_start, l.char_end)).collect()
     };
     let inspect = |s: &Session| crate::inspect::node_json(s.doc().unwrap(), t, 0);
-    let css = |s: &mut Session| s.execute("inspect.code", &json!({"id": t})).unwrap()["code"].as_str().unwrap().to_string();
     let paragraphs = |s: &Session| s.doc().unwrap().node(t).unwrap().kind.text().unwrap().paragraphs.clone();
     assert_eq!(lines(&s), [(0, 16), (16, 20), (20, 36), (36, 39)], "Auto: four words and one in each paragraph");
     // The second paragraph alone, by a range on node.set.
@@ -517,7 +504,6 @@ fn wrap_style_per_paragraph_overrides_the_layers() {
     assert_eq!(lines(&s), [(0, 16), (16, 20), (20, 32), (32, 39)]);
     assert_eq!(inspect(&s)["lineWrapStyles"], json!(["auto", "balance"]));
     assert!(inspect(&s).get("wrapStyle").is_none());
-    assert!(!css(&mut s).contains("text-wrap"), "{}", css(&mut s));
     // While editing, the caret's paragraph (the Wrap style control).
     s.execute("text.edit.begin", &json!({"id": t, "caret": 0})).unwrap();
     s.execute("text.wrapStyle", &json!({"style": "pretty"})).unwrap();
@@ -537,7 +523,6 @@ fn wrap_style_per_paragraph_overrides_the_layers() {
     s.execute("node.set", &json!({"id": t, "props": {"wrapStyle": "balance"}})).unwrap();
     assert!(paragraphs(&s).iter().all(|p| p.wrap.is_none()), "{:?}", paragraphs(&s));
     assert_eq!(inspect(&s)["wrapStyle"], json!("balance"));
-    assert!(css(&mut s).contains("text-wrap: balance;"), "{}", css(&mut s));
     assert!(s.execute("node.set", &json!({"id": t, "props": {"wrapStyle": "zigzag", "start": 0, "end": 0}})).is_err());
 }
 
@@ -812,21 +797,6 @@ fn auto_layout_places_right_aligned_auto_width_text() {
     s.execute("node.set", &json!({"id": t, "props": {"characters": "abcdefghijklmnop"}})).unwrap();
     let c = s.doc().unwrap().node(t).unwrap().transform.as_coeffs();
     assert_eq!((c[4], c[5]), (10.0, 10.0), "the auto layout keeps it at its padding");
-}
-
-#[test]
-fn css_font_family_escapes_backslash_and_newline() {
-    let mut s = Session::new();
-    let t = text(&mut s, "abc", json!({"fontFamily": "Foo\\"}));
-    let css = crate::codegen::css_decls(s.doc().unwrap(), s.doc().unwrap().node(t).unwrap(), &mut Default::default(), (true, true));
-    assert!(css.contains(r#"font-family: "Foo\\";"#), "{css}");
-    let t = text(&mut s, "abc", json!({"fontFamily": "Foo\nBar"}));
-    let css = crate::codegen::css_decls(s.doc().unwrap(), s.doc().unwrap().node(t).unwrap(), &mut Default::default(), (true, true));
-    assert!(css.contains(r#"font-family: "Foo\A Bar";"#), "{css}");
-    // A quote stays a quote, and a name can't close the page's <style> block.
-    let t = text(&mut s, "abc", json!({"fontFamily": "Foo\"</style>"}));
-    let css = crate::codegen::css_decls(s.doc().unwrap(), s.doc().unwrap().node(t).unwrap(), &mut Default::default(), (true, true));
-    assert!(css.contains(r#"font-family: "Foo\"\3C /style>";"#), "{css}");
 }
 
 /// "Text layers cannot have both a max height and a set number of max lines. Adding a max height

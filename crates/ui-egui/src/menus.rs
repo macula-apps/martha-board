@@ -41,22 +41,10 @@ pub const UI_COMMANDS: &[&str] = &[
     "file.export",
     "file.exportSvg",
     "edit.copyAsText",
-    "edit.copyAsCss",
     "edit.copyAsSvg",
     "edit.copyAsPng",
     "edit.copyLink",
 ];
-
-/// Dev Mode (the Inspect tab) refuses command `id` from the menus, shortcuts, clipboard, the
-/// Pages list, the layers panel, files dropped on the canvas and the Assets panel: it edits the
-/// design ([`figcraft_engine::devinspect::dev_mode_allows`]). Says so when it does.
-pub fn dev_mode_refuses(app: &mut FigApp, id: &str) -> bool {
-    let refused = app.ui.right_tab == crate::RightTab::Inspect && !figcraft_engine::devinspect::dev_mode_allows(id);
-    if refused {
-        app.toast(tr("Developer Mode only inspects: switch to Design (Shift+D) to edit"));
-    }
-    refused
-}
 
 /// Remember an action run from the palette for its Recents (newest first, capped).
 pub fn record_recent(app: &mut FigApp, key: &str) {
@@ -72,9 +60,6 @@ pub fn record_recent(app: &mut FigApp, key: &str) {
 /// Run a menu, shortcut or palette action by id: actions that need the UI (dialogs, panels, the
 /// clipboard) are handled here, the rest go to the engine.
 pub fn invoke(app: &mut FigApp, id: &str) {
-    if dev_mode_refuses(app, id) {
-        return;
-    }
     match id {
         // Edit ▸ Delete (and the Delete binding) with an interaction open in the Prototype tab
         // removes that interaction, not the layer (#767).
@@ -111,14 +96,6 @@ pub fn invoke(app: &mut FigApp, id: &str) {
         "branch.create" => crate::versions::start_branch(app),
         "file.export" | "file.exportSvg" => app.ui.export_preview = true,
         "file.exportFramesPdf" => export_frames_pdf(app),
-        "edit.copyAsCss" => {
-            let ids = app.session.selection();
-            if let (Some(first), Ok(doc)) = (ids.first(), app.session.doc()) {
-                let css = figcraft_engine::codegen::code_for(doc, *first, figcraft_engine::codegen::CodeLang::Css);
-                app.clipboard_set_text(&css);
-                app.toast(tr("Copied as CSS"));
-            }
-        }
         "edit.copyAsSvg" => {
             let ids = app.session.selection();
             if let Some(svg) = app.session.doc().ok().and_then(|d| figcraft_svg_export(d, &ids)) {
@@ -586,7 +563,6 @@ pub fn popups(app: &mut FigApp, ctx: &egui::Context) {
                     }
                     if *id == COPY_AS {
                         let copy_items = [
-                            (tr("Copy as CSS"), "edit.copyAsCss"),
                             (tr("Copy as SVG"), "edit.copyAsSvg"),
                             (tr("Copy as PNG"), "edit.copyAsPng"),
                             (&*copy_link, "edit.copyLink"),

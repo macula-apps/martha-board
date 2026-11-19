@@ -98,14 +98,7 @@ fn registry() -> &'static Registry {
         list.extend(comment::specs());
         list.extend(crate::vectoredit::specs());
         list.extend(crate::shapebuilder::specs());
-        list.extend(crate::codegen::specs());
-        list.extend(crate::devinspect::specs());
-        list.extend(crate::component_codegen::specs());
         list.extend(crate::playground::specs());
-        list.extend(crate::code_connect::specs());
-        list.extend(crate::annotations::specs());
-        list.extend(crate::dev_resources::specs());
-        list.extend(crate::dev_measurements::specs());
         list.extend(crate::distance::specs());
         list.extend(crate::collab::specs());
         list.extend(crate::branches::specs());

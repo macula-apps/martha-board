@@ -170,15 +170,8 @@ fn refusal(m: &Manifest, command: &str, params: &Value) -> Option<String> {
         return Some("plugins can't read files: pass the font as `data`".into());
     }
     // `path` here is a file on disk (elsewhere it is a vector path or an action's place).
-    if matches!(command, "variable.export" | "codeConnect.export" | "component.playground") && get(params, "path").is_some() {
+    if matches!(command, "variable.export" | "component.playground") && get(params, "path").is_some() {
         return Some("plugins can't write files: leave out `path` to get the result back".into());
-    }
-    if command == "codeConnect.import" && get(params, "path").is_some() {
-        return Some("plugins can't read files: pass the connections as `json`".into());
-    }
-    // A saved version is the file's history, which plugins can't read (`version.` is denied).
-    if command == "dev.compare" && get(params, "version").is_some_and(|v| !v.is_null()) {
-        return Some("plugins can't read saved versions: leave out `version`".into());
     }
     if !m.permissions.allows(command) {
         return Some(format!("`{command}` isn't in the commands {} asked permission for", m.name));
@@ -734,14 +727,6 @@ mod refusal_tests {
             assert!(refusal(&m, cmd, &json!({})).is_some(), "{cmd} changes persisted branch state");
         }
         assert!(refusal(&m, "branch.list", &json!({})).is_none());
-    }
-
-    #[test]
-    fn plugins_cannot_compare_against_a_saved_version() {
-        let m = Manifest::parse(r#"{"id":"x.y","name":"X","main":"plugin.wasm","permissions":{"access":"write"}}"#).unwrap();
-        assert!(refusal(&m, "dev.compare", &json!({"version": "v1"})).is_some());
-        assert!(refusal(&m, "dev.compare", &json!({"version": null})).is_none());
-        assert!(refusal(&m, "dev.compare", &json!({})).is_none());
     }
 }
 

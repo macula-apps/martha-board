@@ -206,8 +206,6 @@ fn tool_keys_come_from_the_keymap() {
     assert_eq!(ToolId::Eyedropper.shortcut(), "I");
     assert_eq!(ToolId::Polygon.shortcut(), "");
     assert_eq!(crate::catalog::shortcut("tool.text"), Some("T"));
-    assert_eq!(ToolId::Annotation.shortcut(), "Shift+T");
-    assert_eq!(crate::catalog::shortcut("tool.annotation"), Some("Shift+T"));
 }
 
 #[test]
@@ -271,9 +269,7 @@ fn zoom_tool_steps_about_a_point_and_fits_an_area() {
 #[test]
 fn panel_toggles_request_the_ui() {
     let mut s = Session::new();
-    for (cmd, kind) in
-        [("view.designPrototype", "panel.designPrototype"), ("view.devMode", "panel.devMode"), ("view.leftSidebar", "panel.leftSidebar")]
-    {
+    for (cmd, kind) in [("view.designPrototype", "panel.designPrototype"), ("view.leftSidebar", "panel.leftSidebar")] {
         s.ui_requests.clear();
         ex(&mut s, cmd, json!({}));
         assert!(s.ui_requests.iter().any(|r| r.kind == kind), "{cmd}");

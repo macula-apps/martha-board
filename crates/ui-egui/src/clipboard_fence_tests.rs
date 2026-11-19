@@ -122,12 +122,12 @@ fn a_copy_command_invoked_for_a_synthetic_click_still_keeps_the_clipboard() {
     let mut w = Win::new();
     // What a synthetic pointer click on Copy runs, fenced as `control::drain`/`background` fence it.
     w.app.control_synthetic = true;
-    crate::menus::invoke(&mut w.app, "edit.copyAsCss");
+    crate::menus::invoke(&mut w.app, "edit.copyAsSvg");
     crate::menus::invoke(&mut w.app, "edit.copyAsText");
     assert_eq!(w.writes(), (0, 0));
     w.app.control_synthetic = false;
     // A user's own copy still writes.
-    crate::menus::invoke(&mut w.app, "edit.copyAsCss");
+    crate::menus::invoke(&mut w.app, "edit.copyAsSvg");
     assert_eq!(w.writes(), (1, 0));
 }
 

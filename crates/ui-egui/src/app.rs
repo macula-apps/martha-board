@@ -4,9 +4,9 @@ use super::services::{DialogFuture, PickFuture, Picked, RepaintWaker, Services};
 use super::state::{LEFT_PANEL, LeftTab, MOBILE_STRIP, MobilePanel, NARROW_WIDTH, PANEL_DEFAULT, RIGHT_PANEL, RightTab, TitleBar, fit_panels};
 use super::{
     Arc, Done, FigApp, NodeId, OsStr, Path, PathBuf, PendingAck, PendingDialog, Poll, Session, TaskContext, UiState, Value, Waker, a11y, branch_ui,
-    canvas, cjk, comments, cursors, dev_compare, dialogs, frame_stats, home, home_recents, i18n, icons, import_report, json, layers, live, menus,
-    missing_fonts, online, plugins_ui, present, render_worker, right, selection_spacing, shortcuts, style_picker, tabs, theme, toolbar, ui_scale,
-    updates_ui, variable_ui, versions, widgets, windows,
+    canvas, cjk, comments, cursors, dialogs, frame_stats, home, home_recents, i18n, icons, import_report, json, layers, live, menus, missing_fonts,
+    online, plugins_ui, present, render_worker, right, selection_spacing, shortcuts, style_picker, tabs, theme, toolbar, ui_scale, updates_ui,
+    variable_ui, versions, widgets, windows,
 };
 
 mod clipboard;
@@ -250,7 +250,6 @@ impl FigApp {
         }
         theme::set_doc_profile(&ctx, self.session.doc().map_or(figcraft_color::ColorProfile::Srgb, |d| d.color_profile));
         widgets::set_nudge(&ctx, self.session.prefs.nudge_small, self.session.prefs.nudge_big);
-        self.sync_dev_mode();
         self.end_pen_outside_design();
         tabs::relink_presents(self);
         tabs::tab_bar(self, ui);
@@ -420,7 +419,6 @@ impl FigApp {
         // the arrows step through comment threads with the Comment tool.
         present::show_pane(self, &ctx);
         comments::keys(self, &ctx);
-        dev_compare::keys(self, &ctx);
         branch_ui::keys(self, &ctx);
         live::dialog_keys(self, &ctx);
         dialogs::keys(self, &ctx);
@@ -463,6 +461,5 @@ pub(crate) fn right_tab_label(tab: RightTab) -> &'static str {
     match tab {
         RightTab::Design => i18n::tr("Design"),
         RightTab::Prototype => i18n::tr("Prototype"),
-        RightTab::Inspect => i18n::tr("Developer Mode"),
     }
 }

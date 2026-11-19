@@ -126,10 +126,6 @@ fn panel_keys_and_cmd_k() {
     assert_eq!(u.app.ui.right_tab, RightTab::Prototype, "Shift+E: Prototype");
     press(&mut u, Key::E, Modifiers::SHIFT);
     assert_eq!(u.app.ui.right_tab, RightTab::Design, "and back to Design");
-    press(&mut u, Key::D, Modifiers::SHIFT);
-    assert_eq!(u.app.ui.right_tab, RightTab::Inspect, "Shift+D: Dev Mode");
-    press(&mut u, Key::D, Modifiers::SHIFT);
-    assert_eq!(u.app.ui.right_tab, RightTab::Design);
     let collapsed = u.app.ui.left_collapsed;
     let minimized = |u: &Ui| u.app.session.ds().unwrap().view.ui_minimized;
     press(&mut u, Key::Backslash, Modifiers::SHIFT | Modifiers::COMMAND);

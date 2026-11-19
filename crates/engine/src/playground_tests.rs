@@ -1,6 +1,6 @@
 //! The component playground: a component tried with other variant, boolean and text property
-//! values on a copy. The code and the preview follow the values; the document, the selection and
-//! the undo history don't change.
+//! values on a copy. The reported values and the preview follow them; the document, the selection
+//! and the undo history don't change.
 
 use std::sync::Arc;
 
@@ -59,13 +59,10 @@ fn the_playground_tries_values_without_touching_the_document() {
     // As the instance is: the default variant, its label, its icon.
     let out = run(&mut s, "component.playground", json!({"id": inst}));
     assert_eq!((value(&out, "State"), value(&out, "Label"), value(&out, "Icon")), (&json!("Rest"), &json!("Buy"), &json!(true)));
-    let rest = out["code"].as_str().unwrap().to_string();
-    // Other values: the reported values and the code follow.
+    // Other values: the reported values follow.
     let props = json!({"State": "Hover", "Label": "Pay now", "Icon": false});
     let out = run(&mut s, "component.playground", json!({"id": inst, "properties": props}));
     assert_eq!((value(&out, "State"), value(&out, "Label"), value(&out, "Icon")), (&json!("Hover"), &json!("Pay now"), &json!(false)));
-    let code = out["code"].as_str().unwrap();
-    assert!(code != rest && code.contains("Pay now"), "{code}");
     // From the set or one of its variants: the same playground, starting from the defaults.
     for target in [set, s.doc().unwrap().node(set).unwrap().children[1]] {
         let out = run(&mut s, "component.playground", json!({"id": target, "properties": {"Label": "Hi"}}));
@@ -118,14 +115,13 @@ fn what_is_no_component_or_no_value_is_refused() {
     let r = id(run(&mut s, "shape.rectangle", json!({"x": 500, "y": 500, "width": 10, "height": 10})));
     assert!(s.execute("component.playground", &json!({"id": r})).unwrap_err().to_string().contains("select an instance"));
     assert!(s.execute("component.playground", &json!({"id": inst, "properties": {"State": "Nope"}})).is_err());
-    assert!(s.execute("component.playground", &json!({"id": inst, "language": "cobol"})).is_err());
     let before = s.ds().unwrap().doc.clone();
     for j in [json!(null), json!(true), json!(-1), json!("x"), json!([1, [2]]), json!({"a": {"b": 1}}), json!("y".repeat(5000))] {
         for p in [
             json!({"id": j}),
             json!({"id": inst, "properties": j}),
             json!({"id": inst, "properties": {"Label": j, "Icon": j, "State": j}}),
-            json!({"id": inst, "language": j, "scale": j}),
+            json!({"id": inst, "scale": j}),
         ] {
             let r = s.execute("component.playground", &p);
             assert!(!matches!(r, Err(EngineError::Internal { .. })), "{p}: {r:?}");

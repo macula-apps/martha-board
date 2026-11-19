@@ -76,7 +76,11 @@ fn bad_arguments_exit_2_without_panicking() {
 fn post_parse_errors_escape_terminal_controls() {
     let missing = format!("__figcraft_missing_diagnostic_{}_\u{1b}[31m\n.figcraft", std::process::id());
     let failed = ["info", missing.as_str()];
-    let usage = ["connect", "publish", "invalid-\u{1b}[31m\n.txt"];
+    let dir = tmp("post-parse-usage");
+    let doc = dir.join("doc.figcraft");
+    std::fs::write(&doc, figcraft_format::save_bytes(&figcraft_doc::Document::new("Doc"), None).unwrap()).unwrap();
+    let doc = doc.to_string_lossy().into_owned();
+    let usage = ["render", doc.as_str(), "-o", "invalid-\u{1b}[31m\n.txt"];
     for (args, expected) in [(&failed[..], 1), (&usage[..], 2)] {
         let out = bin().arg("--no-system-fonts").args(args).output().unwrap();
         let error = String::from_utf8_lossy(&out.stderr);
@@ -86,6 +90,7 @@ fn post_parse_errors_escape_terminal_controls() {
         assert!(error.contains(r"\u{1b}[31m\n"), "{args:?}: {error:?}");
         assert!(out.stdout.is_empty(), "{args:?}");
     }
+    std::fs::remove_dir_all(dir).unwrap();
 }
 
 /// `--help` / `-h` after a subcommand prints that subcommand's help on stdout and exits 0, as it

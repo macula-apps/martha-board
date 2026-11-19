@@ -2,9 +2,9 @@
 
 use figcraft_color::{Color, Paint};
 use figcraft_doc::{
-    AutoLayout, Brush, ChildLayout, DecorationStyle, DevStatus, Document, Effect, GridTrack, LayoutMode, LetterSpacing, LineHeight, ListStyle,
-    MAX_LIST_INDENT, MaskType, Node, NodeId, NodeKind, Sizing, StrokeCap, StrokeProps, TextAutoResize, TextCase, TextData, TextDecoration,
-    WidthPoint, WidthPreset, WidthProfile, style_weight, valid_axis_tag, valid_feature_tag,
+    AutoLayout, Brush, ChildLayout, DecorationStyle, Document, Effect, GridTrack, LayoutMode, LetterSpacing, LineHeight, ListStyle, MAX_LIST_INDENT,
+    MaskType, Node, NodeId, NodeKind, Sizing, StrokeCap, StrokeProps, TextAutoResize, TextCase, TextData, TextDecoration, WidthPoint, WidthPreset,
+    WidthProfile, style_weight, valid_axis_tag, valid_feature_tag,
 };
 use figcraft_geom::{Affine, Point};
 use serde_json::{Map, Value, json};
@@ -734,21 +734,6 @@ fn apply_corners(cmd: &str, doc: &mut Document, id: NodeId, k: &str, v: &Value) 
         "effects" => doc.get_mut(id)?.effects = effects_from(cmd, v)?,
         "clip" | "clipsContent" => doc.get_mut(id)?.clip = v.as_bool().ok_or_else(|| bad(cmd, "`clip` must be a boolean"))?,
         "isMask" => doc.get_mut(id)?.is_mask = v.as_bool().ok_or_else(|| bad(cmd, format!("`{k}` must be a boolean")))?,
-        "devStatus" => {
-            let st = if v.is_null() {
-                Some(DevStatus::None)
-            } else {
-                v.as_str().and_then(|s| DevStatus::ALL.into_iter().find(|d| d.id().eq_ignore_ascii_case(s)))
-            };
-            let st = st.ok_or_else(|| bad(cmd, "devStatus: none|readyForDev|completed"))?;
-            if !st.is_none() && !crate::devinspect::has_status(doc, id) {
-                return Err(bad(cmd, "devStatus: only sections and frames at the top of a page or section take one"));
-            }
-            let n = doc.get_mut(id)?;
-            n.dev_status = st;
-            // Marking a layer (again) starts from its current contents.
-            n.dev_changed = false;
-        }
         "maskType" => {
             let t = v.as_str().and_then(|s| MaskType::ALL.into_iter().find(|m| m.id().eq_ignore_ascii_case(s)));
             doc.get_mut(id)?.mask_type = t.ok_or_else(|| bad(cmd, "maskType: alpha|vector|luminance"))?;

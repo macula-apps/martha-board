@@ -16,7 +16,6 @@ mod canvas;
 pub mod catalog;
 pub mod cmd;
 mod content;
-mod dev;
 pub mod events;
 mod extensions;
 pub mod fonts;
@@ -33,6 +32,7 @@ pub use assets::library_swap;
 pub use assets::playground;
 pub use assets::style_vars;
 pub use assets::token_roles;
+pub use assets::variable_names;
 pub use automation::batch;
 pub use automation::doc_urls;
 pub use automation::file_access;
@@ -61,15 +61,6 @@ pub use content::synthetic;
 pub use content::synthetic_ds;
 pub use content::templates;
 pub use content::textfit;
-pub use dev::annotations;
-pub use dev::code_connect;
-pub use dev::codegen;
-pub use dev::component_codegen;
-pub use dev::dev_measurements;
-pub use dev::dev_resources;
-pub use dev::devcompare;
-pub use dev::devinspect;
-pub use dev::tailwind;
 pub use extensions::plugin_directory;
 pub use extensions::plugins;
 pub use extensions::widgets;
@@ -82,6 +73,7 @@ pub use sharing::agent;
 pub use sharing::background;
 pub use sharing::branches;
 pub use sharing::collab;
+pub use sharing::compare;
 pub use sharing::invite_links;
 pub use sharing::live;
 pub use sharing::online;
@@ -186,10 +178,6 @@ mod al_keys_tests;
 #[cfg(test)]
 mod al_nesting_tests;
 #[cfg(test)]
-mod annotation_categories_tests;
-#[cfg(test)]
-mod annotations_tests;
-#[cfg(test)]
 mod arc_fields_tests;
 #[cfg(test)]
 mod arc_handles_tests;
@@ -244,8 +232,6 @@ mod brush_tests;
 #[cfg(test)]
 mod canvas_fixes_tests;
 #[cfg(test)]
-mod code_connect_tests;
-#[cfg(test)]
 mod collab_ids_tests;
 #[cfg(test)]
 mod collab_live_tests;
@@ -262,7 +248,7 @@ mod comment_mentions_tests;
 #[cfg(test)]
 mod comments_polish_tests;
 #[cfg(test)]
-mod component_codegen_tests;
+mod compare_tests;
 #[cfg(test)]
 mod component_cycle_tests;
 #[cfg(test)]
@@ -284,19 +270,7 @@ mod datafill_tests;
 #[cfg(test)]
 mod default_props_tests;
 #[cfg(test)]
-mod dev_measurements_tests;
-#[cfg(test)]
-mod dev_resources_tests;
-#[cfg(test)]
-mod devcompare_tests;
-#[cfg(test)]
-mod devfocus_tests;
-#[cfg(test)]
-mod devinspect_tests;
-#[cfg(test)]
-mod devmode_behaviour_tests;
-#[cfg(test)]
-mod devmode_tail_tests;
+mod dev_fields_tests;
 #[cfg(test)]
 mod doc_list_paths_tests;
 #[cfg(test)]
@@ -355,8 +329,6 @@ mod guide_snap_tests;
 mod hide_publishing_tests;
 #[cfg(test)]
 mod history_behaviour_tests;
-#[cfg(test)]
-mod html_codegen_tests;
 #[cfg(test)]
 mod huge_stroke_tests;
 #[cfg(test)]
@@ -570,8 +542,6 @@ mod styles_behaviour_tests;
 #[cfg(test)]
 mod svg_import_tests;
 #[cfg(test)]
-mod tailwind_tests;
-#[cfg(test)]
 mod templates_tests;
 #[cfg(test)]
 mod tests;
@@ -637,8 +607,6 @@ mod version_tests;
 mod view_behaviour_tests;
 #[cfg(test)]
 mod vote_history_tests;
-#[cfg(test)]
-mod vue_codegen_tests;
 #[cfg(test)]
 mod widget_hover_tests;
 #[cfg(test)]

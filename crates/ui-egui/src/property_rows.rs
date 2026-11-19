@@ -242,9 +242,6 @@ pub(crate) fn paste(app: &mut FigApp) -> bool {
         return true;
     }
     let cmd = c.kind.paste_command();
-    if crate::menus::dev_mode_refuses(app, cmd) {
-        return true;
-    }
     let mut params = json!({"ids": ids});
     if let Some(h) = current(app).filter(|h| h.kind == c.kind) {
         params["index"] = json!(h.index);

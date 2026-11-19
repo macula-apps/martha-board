@@ -134,7 +134,7 @@ fn tools_call_happy_and_error_paths() {
     assert!(c.err("type_text", json!({"text": "hi"})).contains("not editing text"));
     assert!(c.err("open_file", json!({"path": "/definitely/not/here.figcraft"})).contains("here.figcraft"));
     // Names a tool or a command doesn't take are refused, not ignored (#1413).
-    let e = c.err("run_command", json!({"command": "inspect.code", "args": {"id": id, "language": "html"}}));
+    let e = c.err("run_command", json!({"command": "node.get", "args": {"id": id}}));
     assert!(e.contains("unknown argument `args` (it takes command, document, params)"), "{e}");
     let e = c.err("batch", json!({"commands": [{"command": "comment.list", "args": {"filter": "open"}}]}));
     assert!(e.contains("unknown argument `commands[0].args`"), "{e}");

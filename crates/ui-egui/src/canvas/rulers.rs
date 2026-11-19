@@ -1,6 +1,6 @@
 use super::outline::stroke;
 use super::overlays::accent;
-use super::{Align2, Color32, CornerRadius, Document, FigApp, NodeId, NodeKind, Pos2, Rect, Tokens, pos2, regular, semibold, tr, vec2};
+use super::{Align2, CornerRadius, Document, FigApp, NodeId, NodeKind, Rect, Tokens, pos2, regular, vec2};
 
 /// The layers that get canvas labels and layout grids, in z-order: the page's visible top-level
 /// layers and, inside sections whose contents show, their visible children (sections nest). A
@@ -23,27 +23,6 @@ pub(super) fn boards(doc: &Document, page: NodeId) -> Vec<NodeId> {
     let mut out = Vec::new();
     walk(doc, page, 0, &mut out);
     out
-}
-
-/// A frame's or section's handoff status as its badge says it, with the badge colour ("Changed"
-/// once a ready-for-dev layer was edited; `None` without a status).
-pub(crate) fn status_label(n: &figcraft_doc::Node) -> Option<(&'static str, Color32)> {
-    match n.dev_status {
-        figcraft_doc::DevStatus::None => None,
-        figcraft_doc::DevStatus::ReadyForDev if n.dev_changed => Some((tr("Changed"), crate::theme::DEV_CHANGED)),
-        figcraft_doc::DevStatus::ReadyForDev => Some((tr("Ready for dev"), crate::theme::DEV_READY)),
-        figcraft_doc::DevStatus::Completed => Some((tr("Completed"), crate::theme::DEV_COMPLETED)),
-    }
-}
-
-/// A frame's or section's handoff status as a small pill left-centred on `at`; the pill's area.
-pub(crate) fn status_badge(painter: &egui::Painter, n: &figcraft_doc::Node, at: Pos2) -> Option<Rect> {
-    let (label, fill) = status_label(n)?;
-    let galley = painter.layout_no_wrap(label.to_string(), semibold(10.0), Color32::WHITE);
-    let r = Rect::from_min_size(pos2(at.x, at.y - galley.size().y / 2.0 - 2.0), galley.size() + vec2(10.0, 4.0));
-    painter.rect_filled(r, CornerRadius::same(4), fill);
-    painter.galley(r.min + vec2(5.0, 2.0), galley, Color32::WHITE);
-    Some(r)
 }
 
 pub(super) fn rulers(app: &FigApp, painter: &egui::Painter, t: &Tokens, doc: &Document, sel: &[NodeId]) {

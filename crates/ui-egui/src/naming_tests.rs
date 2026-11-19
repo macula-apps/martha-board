@@ -1,10 +1,7 @@
-//! The handoff mode is named "Developer Mode" in every label a person reads. Figma holds a US
-//! registration for DEV MODE (US 7574348) and sent a cease-and-desist over it in 2025, so neither
-//! our labels nor a translation may call it that again.
-//!
-//! Identifiers keep their names (`view.devMode`, `devMode.*`, `dev_mode`, the module and file
-//! names), and the Actions palette keeps the old name as a search alias so people who know it still
-//! find the command (`palette_tests::the_old_name_still_finds_the_mode`).
+//! No label a person reads names "Dev Mode". Figma holds a US registration for DEV MODE (US
+//! 7574348) and sent a cease-and-desist over it in 2025, so neither our labels nor a translation
+//! may use it. The handoff mode itself left the app (#11); the guard stays for whatever comes
+//! next.
 //!
 //! The labels are read where they are published: the engine's command labels and parameter docs,
 //! the menu catalog, and the baked-in catalogs. A `tr("Dev Mode")` added to the code would need an
@@ -47,8 +44,8 @@ fn labels() -> Vec<(String, &'static str)> {
 fn command_labels_and_parameter_docs_read_developer_mode() {
     let bad: Vec<String> = labels().into_iter().filter(|(_, text)| retired(text)).map(|(what, text)| format!("{what}: {text:?}")).collect();
     assert!(bad.is_empty(), "a label still names the retired mode:\n{}", bad.join("\n"));
-    let id = figcraft_engine::find_command("view.devMode").expect("the mode's command exists");
-    assert_eq!(id.label, "Developer Mode", "the mode's command label");
+    let board = figcraft_engine::board::NOT_ON_BOARDS;
+    assert!(!retired(board), "{board:?}");
 }
 
 #[test]
@@ -75,19 +72,6 @@ fn the_catalogs_name_developer_mode() {
         }
     }
     assert!(bad.is_empty(), "a catalog still names the retired mode:\n{}", bad.join("\n"));
-}
-
-#[test]
-fn the_inspect_tab_and_its_refusal_read_developer_mode() {
-    assert_eq!(crate::app::right_tab_label(crate::RightTab::Inspect), "Developer Mode", "the panel's name");
-    // The engine's refusal on a board, and the toast the UI shows where the mode refuses an edit.
-    let board = figcraft_engine::board::NOT_ON_BOARDS;
-    assert!(!retired(board), "{board:?}");
-    assert_eq!(crate::i18n::LANGS.first().map(|l| l.code), Some("en"), "English is baked in first");
-    assert!(
-        LANGS.first().is_some_and(|l| l.ui.iter().any(|(k, _)| *k == "Developer Mode only inspects: switch to Design (Shift+D) to edit")),
-        "the refusal toast is in the catalog"
-    );
 }
 
 #[test]

@@ -13,6 +13,7 @@ use super::{CommandSpec, ok};
 use crate::params::{bool_of, boolean, get, id, num, num_or, req_index, req_string, string, targets};
 use crate::{DocState, EngineError, Result, Session, bad, spec};
 
+mod assets;
 mod export;
 mod import_ids;
 mod load;
@@ -20,6 +21,7 @@ mod open;
 mod save;
 mod version;
 
+pub use assets::{Asset, AssetKind, asset_jobs, assets};
 pub(crate) use export::FORBIDDEN_FILE_NAME_CHARS;
 #[cfg(test)]
 use export::add_member;
@@ -476,6 +478,9 @@ fn cycle_doc(s: &mut Session, dir: i64) -> Result<Value> {
     s.active = (s.active as i64 + dir).rem_euclid(n) as usize;
     Ok(json!({"index": s.active}))
 }
+
+#[cfg(test)]
+mod assets_tests;
 
 #[cfg(test)]
 mod staging_write_tests;

@@ -1,10 +1,9 @@
 //! Progressive blur through the session: adding and editing it, scaling, variable bindings on its
-//! radii, Inspect and generated CSS, and hostile values that still render.
+//! radii, the ramp's defaults, and hostile values that still render.
 
 use serde_json::json;
 
 use crate::Session;
-use crate::codegen::{CodeLang, code_for};
 use crate::params::id_of;
 use figcraft_doc::{Blur, BlurType, EffectKind, MAX_BLUR_RADIUS};
 
@@ -69,22 +68,19 @@ fn both_radii_bind_to_number_variables() {
 }
 
 #[test]
-fn inspect_shows_the_ramp_and_css_leaves_it_out() {
+fn a_progressive_blur_ramps_top_to_bottom_by_default() {
     let mut s = Session::new();
     let r = rect(&mut s);
     s.execute("effect.add", &json!({"ids": [r], "effect": {"type": "backgroundBlur", "radius": 16, "blurType": PROGRESSIVE, "startRadius": 2}}))
         .unwrap();
     s.execute("effect.add", &json!({"ids": [r], "effect": {"type": "layerBlur", "radius": 6}})).unwrap();
-    let doc = s.doc().unwrap();
-    let sections = crate::devinspect::properties(doc, r);
-    let fx = sections.iter().find(|s| s.title == "Effects").unwrap();
-    assert_eq!(fx.rows[0].label, "Background blur");
-    assert_eq!(fx.rows[0].value, "Progressive 2 → 16 from 50% 0% to 50% 100%");
-    assert_eq!(fx.rows[1].value, "6");
-    // CSS blurs are uniform: the progressive one has no CSS, the uniform one does.
-    let css = code_for(doc, r, CodeLang::Css);
-    assert!(!css.contains("backdrop-filter"), "{css}");
-    assert!(css.contains("filter: blur(3px);"), "{css}");
+    assert!(matches!(s.doc().unwrap().node(r).unwrap().effects[0].kind, EffectKind::BackgroundBlur(_)));
+    let b = blur(&s, r, 0);
+    assert!(b.is_progressive());
+    assert_eq!((b.start_radius, b.radius, b.start, b.end), (2.0, 16.0, (0.5, 0.0), (0.5, 1.0)));
+    let b = blur(&s, r, 1);
+    assert!(!b.is_progressive());
+    assert_eq!(b.radius, 6.0);
 }
 
 #[test]
@@ -104,6 +100,7 @@ fn hostile_progressive_values_are_capped_and_render() {
     let page = doc.first_page().unwrap();
     let view = figcraft_render::View { origin: (-20.0, -20.0), scale: 1.0, width: 160, height: 120 };
     assert!(figcraft_render::render_view(doc, page, &view, &figcraft_render::Options::default()).is_some());
-    let props = crate::devinspect::properties(doc, r);
+    // The branch compare formats them too.
+    let props = crate::compare::props::properties(doc, r);
     assert!(props.iter().any(|s| s.title == "Effects"));
 }

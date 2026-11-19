@@ -284,7 +284,7 @@ pub(crate) fn prepare_field_save(app: &FigApp, ctx: &Context) -> Option<AfterFie
             _ => None,
         })
     })?;
-    if !crate::menus::available(command) || (app.ui.right_tab == crate::RightTab::Inspect && !figcraft_engine::devinspect::dev_mode_allows(command)) {
+    if !crate::menus::available(command) {
         return None;
     }
     let document = app.session.ds().ok().filter(|d| app.shows(d.uid)).map(|d| d.uid)?;
@@ -395,8 +395,6 @@ pub fn paste_events(app: &mut FigApp, ctx: &Context) -> PasteEvents {
 /// Run the command a shortcut is bound to, with the keyboard's own twists (Escape steps out
 /// before it deselects, Delete ends a pen path, Enter edits the selected text or vector).
 pub fn run_binding(app: &mut FigApp, id: &str) {
-    // Dev Mode places and edits nothing: Enter selects children.
-    let dev = app.ui.right_tab == crate::RightTab::Inspect;
     match id {
         "select.none" => {
             if let Some(ctx) = &app.ui_context
@@ -413,10 +411,10 @@ pub fn run_binding(app: &mut FigApp, id: &str) {
             let _ = app.session.pen_finish();
         }
         // Enter with a shape or frame tool chosen places one in the middle of the view.
-        "select.children" if !dev && app.session.tool.tool.draws_shape() => {
+        "select.children" if app.session.tool.tool.draws_shape() => {
             app.run("tool.place", json!({}));
         }
-        "select.children" if !dev && enter_text(app) => {}
+        "select.children" if enter_text(app) => {}
         _ => crate::menus::invoke(app, id),
     }
 }
@@ -490,14 +488,12 @@ fn key_event(app: &mut FigApp, key: Key, physical: Option<Key>, m: Modifiers, re
         _ => (0.0, 0.0),
     };
     if (dx, dy) != (0.0, 0.0) {
-        if app.session.selection().is_empty() && app.session.tool.tool.draws_shape() && !app.session.tool.dev_mode && !m.command && !m.alt {
+        if app.session.selection().is_empty() && app.session.tool.tool.draws_shape() && !m.command && !m.alt {
             // A shape or frame tool chosen: the arrows show the placement crosshair in the middle
             // of the view and move it; Enter places there (Accessibility at Figma).
             app.run("tool.crosshair", json!({"dx": dx, "dy": dy, "big": m.shift}));
         } else if app.session.selection().is_empty() {
             app.run("view.pan", json!({"dx": dx, "dy": dy, "big": m.shift}));
-        } else if crate::menus::dev_mode_refuses(app, "transform.nudge") {
-            // Dev Mode: said so, nothing moves.
         } else if m.command && m.alt {
             // Cmd/Ctrl+Alt+arrows rotate a degree at a time, 15 with Shift (Accessibility at
             // Figma); down and right turn clockwise, up and left back (the documentation doesn't
@@ -683,9 +679,6 @@ pub fn opacity_digit(app: &mut FigApp, key: Key, now: f64) -> bool {
     let Some(d) = digit(key) else { return false };
     if !app.session.prefs.number_keys_opacity || app.session.selection().is_empty() {
         return false;
-    }
-    if crate::menus::dev_mode_refuses(app, "object.opacityKeys") {
-        return true;
     }
     let first = app.ui.opacity_digit.take().filter(|(_, t)| now - t <= OPACITY_CHAIN_SECS).map(|(d, _)| d);
     let digits = match first {

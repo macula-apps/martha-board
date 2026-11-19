@@ -38,15 +38,3 @@ fn resize_to_fit_keeps_contents_in_place() {
     assert_eq!(n.child_layout.sizing_h, figcraft_doc::Sizing::Hug);
     assert!(n.width < 600.0);
 }
-
-#[test]
-fn dev_status_prop() {
-    let mut s = Session::new();
-    let f = id(s.execute("frame.create", &json!({"x": 0, "y": 0, "width": 40, "height": 40})).unwrap());
-    s.execute("node.set", &json!({"id": f, "props": {"devStatus": "readyForDev"}})).unwrap();
-    assert_eq!(s.doc().unwrap().node(f).unwrap().dev_status, figcraft_doc::DevStatus::ReadyForDev);
-    assert_eq!(s.execute("node.get", &json!({"id": f})).unwrap()["devStatus"], json!("readyForDev"));
-    s.execute("node.set", &json!({"id": f, "props": {"devStatus": null}})).unwrap();
-    assert!(s.doc().unwrap().node(f).unwrap().dev_status.is_none());
-    assert!(s.execute("node.set", &json!({"id": f, "props": {"devStatus": "shipped"}})).is_err());
-}
