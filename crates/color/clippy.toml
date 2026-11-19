@@ -1,0 +1,15 @@
+# Tests may unwrap, expect and panic: a failing assertion is the point of a test. Shipped code may
+# not (workspace lints in Cargo.toml; AGENTS.md › Robustness).
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+too-many-arguments-threshold = 10
+disallowed-types = [
+    { path = "egui::ComboBox", reason = "use craft_ui::ComboBox: egui's combo box menu can't grow back while open (egui#5225)" },
+]
+# Structural caps: the house floor (macula-apps/martha-board#7). clippy reads only the nearest clippy.toml, so this file
+# restates the workspace's settings above and holds this crate to the floor ahead of the workspace. CI fails when a cap
+# here is missing or above the workspace's (ci.yml).
+cognitive-complexity-threshold = 15
+excessive-nesting-threshold = 3
+too-many-lines-threshold = 60

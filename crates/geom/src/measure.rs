@@ -78,18 +78,35 @@ impl Polyline {
         }
         let mut best: Option<(f64, f64)> = None;
         for (i, w) in self.points.windows(2).enumerate() {
-            let (a, b) = (w[0], w[1]);
-            let d = b - a;
-            let l2 = d.hypot2();
-            let u = if l2 > 1e-18 { ((p - a).dot(d) / l2).clamp(0.0, 1.0) } else { 0.0 };
-            let dist = (a.lerp(b, u) - p).hypot();
-            if best.is_none_or(|(_, bd)| dist < bd) {
-                let s = self.lengths.get(i).copied().unwrap_or(0.0) + u * l2.sqrt();
-                best = Some((s / len, dist));
-            }
+            let (u, dist, l2) = project_onto(w[0], w[1], p);
+            let s = self.lengths.get(i).copied().unwrap_or(0.0) + u * l2.sqrt();
+            best = nearer(best, (s / len, dist));
         }
         best
     }
+
+    /// Adds `p`, first starting the line at `start` when it has no point yet.
+    fn push_from(&mut self, start: Point, p: Point) {
+        if self.points.is_empty() {
+            self.push(start);
+        }
+        self.push(p);
+    }
+}
+
+/// Where `p` falls on the segment `a`-`b`: the fraction along it (clamped to the segment), the
+/// distance from `p` to that point, and the segment's squared length.
+fn project_onto(a: Point, b: Point, p: Point) -> (f64, f64, f64) {
+    let d = b - a;
+    let l2 = d.hypot2();
+    let u = if l2 > 1e-18 { ((p - a).dot(d) / l2).clamp(0.0, 1.0) } else { 0.0 };
+    (u, (a.lerp(b, u) - p).hypot(), l2)
+}
+
+/// `candidate` (t, distance) when it is strictly nearer than `best`, else `best`: the first of
+/// equally near points is kept.
+fn nearer(best: Option<(f64, f64)>, candidate: (f64, f64)) -> Option<(f64, f64)> {
+    if best.is_none_or(|(_, bd)| candidate.1 < bd) { Some(candidate) } else { best }
 }
 
 /// Every subpath of `path` flattened. `None` when the path has invalid coordinates or is too
@@ -98,25 +115,22 @@ pub fn polylines(path: &BezPath) -> Option<Vec<Polyline>> {
     polylines_with_limit(path, MAX_SAMPLES)
 }
 
-fn flatten_curve_segment(el: PathEl, seg_start: Point, limit: usize, count: &mut usize, cur: &mut Polyline) -> bool {
+/// Flattens one curve segment from `seg_start` onto `cur`, counting each sample; `None` as soon as
+/// the count passes `limit`.
+fn flatten_curve_segment(el: PathEl, seg_start: Point, limit: usize, count: &mut usize, cur: &mut Polyline) -> Option<()> {
     let mut over = false;
     kurbo::flatten([PathEl::MoveTo(seg_start), el], FLATTEN_TOL, |fel| {
+        let PathEl::LineTo(p) = fel else { return };
         if over {
             return;
         }
-        if let PathEl::LineTo(p) = fel {
-            *count += 1;
-            if *count > limit {
-                over = true;
-                return;
-            }
-            if cur.points.is_empty() {
-                cur.push(seg_start);
-            }
-            cur.push(p);
+        *count += 1;
+        over = *count > limit;
+        if !over {
+            cur.push_from(seg_start, p);
         }
     });
-    !over
+    (!over).then_some(())
 }
 
 /// [`polylines`] with an explicit sample budget, so tests can use a small one.
@@ -160,18 +174,13 @@ fn polylines_with_limit(path: &BezPath, limit: usize) -> Option<Vec<Polyline>> {
             }
             PathEl::LineTo(p) => {
                 count += 1;
-                if cur.points.is_empty() {
-                    cur.push(start);
-                }
-                cur.push(p);
+                cur.push_from(start, p);
                 pen = p;
             }
             PathEl::QuadTo(_, end) | PathEl::CurveTo(_, _, end) => {
                 // Flatten this one segment on its own, so an over-budget curve aborts
                 // here instead of after the whole path has been flattened.
-                if !flatten_curve_segment(*el, pen, limit, &mut count, &mut cur) {
-                    return None;
-                }
+                flatten_curve_segment(*el, pen, limit, &mut count, &mut cur)?;
                 pen = end;
             }
             PathEl::ClosePath => {

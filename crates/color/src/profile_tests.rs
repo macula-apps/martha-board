@@ -71,6 +71,15 @@ fn tag<'a>(icc: &'a [u8], sig: &[u8; 4]) -> &'a [u8] {
         .unwrap()
 }
 
+/// `icc`'s colorant tag `sig` is an XYZ tag holding `col`, to the precision of its s15Fixed16 numbers.
+fn assert_colorant(p: ColorProfile, icc: &[u8], sig: &[u8; 4], col: [f64; 3]) {
+    let t = tag(icc, sig);
+    assert_eq!(&t[..4], b"XYZ ");
+    for (k, v) in col.iter().enumerate() {
+        assert!((s15(t, 8 + k * 4) - v).abs() < 0.0006, "{p:?} {} {k}: {}", String::from_utf8_lossy(sig), s15(t, 8 + k * 4));
+    }
+}
+
 #[test]
 fn icc_profiles_are_well_formed() {
     // Published D50-adapted colorants of sRGB and Display P3.
@@ -86,11 +95,7 @@ fn icc_profiles_are_well_formed() {
         assert_eq!(&icc[12..24], b"mntrRGB XYZ ");
         assert_eq!(be_u32(&icc, 8), 0x0430_0000);
         for (sig, col) in [(b"rXYZ", cols[0]), (b"gXYZ", cols[1]), (b"bXYZ", cols[2])] {
-            let t = tag(&icc, sig);
-            assert_eq!(&t[..4], b"XYZ ");
-            for (k, v) in col.iter().enumerate() {
-                assert!((s15(t, 8 + k * 4) - v).abs() < 0.0006, "{p:?} {} {k}: {}", String::from_utf8_lossy(sig), s15(t, 8 + k * 4));
-            }
+            assert_colorant(p, &icc, sig, col);
         }
         // The colorants add up to the D50 white point.
         let sum: f64 = [b"rXYZ", b"gXYZ", b"bXYZ"].iter().map(|s| s15(tag(&icc, s), 8)).sum();

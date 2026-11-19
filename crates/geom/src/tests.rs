@@ -68,9 +68,15 @@ fn degenerate_inputs_dont_panic() {
     }
 }
 
+/// The direction a cubic leaves its start (`t` below a half) or reaches its end (otherwise).
+fn cubic_direction(c: &kurbo::CubicBez, t: f64) -> Vec2 {
+    use kurbo::ParamCurve;
+    let d = if t < 0.5 { c.eval(1e-6) - c.eval(0.0) } else { c.eval(1.0) - c.eval(1.0 - 1e-6) };
+    d.normalize()
+}
+
 #[test]
 fn smoothed_corner_draws_the_polygon_corner() {
-    use kurbo::ParamCurve;
     // The corner of a square drawn by itself follows the smoothed polygon's corner and joins its
     // edges and its own pieces without a kink.
     for s in [0.0, 0.6, 1.0] {
@@ -89,10 +95,7 @@ fn smoothed_corner_draws_the_polygon_corner() {
         assert!((curves[0].p0 - Point::new(0.0, 20.0 * (1.0 + s))).hypot() < 1e-9, "s={s}: it starts 1 + smoothing radii along the edge");
         let last = curves[curves.len() - 1];
         assert!((last.p3 - Point::new(20.0 * (1.0 + s), 0.0)).hypot() < 1e-9, "s={s}: and ends as far along the other");
-        let dir = |c: &kurbo::CubicBez, t: f64| {
-            let d = if t < 0.5 { c.eval(1e-6) - c.eval(0.0) } else { c.eval(1.0) - c.eval(1.0 - 1e-6) };
-            d.normalize()
-        };
+        let dir = cubic_direction;
         assert!(dir(&curves[0], 0.0).dot(Vec2::new(0.0, -1.0)) > 0.999, "s={s}: it leaves along the first edge");
         assert!(dir(&last, 1.0).dot(Vec2::new(1.0, 0.0)) > 0.999, "s={s}: it arrives along the second edge");
         for pair in curves.windows(2) {
@@ -224,8 +227,6 @@ fn smoothed_polygon_matches_the_rectangle_corner() {
 
 #[test]
 fn smoothed_polygon_smooths_every_corner() {
-    use kurbo::{ParamCurve, ParamCurveArclen, ParamCurveNearest};
-    let near = |p: &BezPath, at: Point| p.segments().map(|seg| seg.nearest(at, 1e-9).distance_sq).fold(f64::INFINITY, f64::min);
     // (points, convex: smoothing only cuts area away)
     let shapes = [(polygon_points(100.0, 100.0, 3), true), (polygon_points(120.0, 80.0, 6), true), (star_points(100.0, 100.0, 5, 0.38), false)];
     for (pts, convex) in shapes {
@@ -234,30 +235,38 @@ fn smoothed_polygon_smooths_every_corner() {
         let sharp = area(&rounded_polygon(&pts, 0.0));
         let mut last = area(&plain);
         for s in [0.3, 0.6, 1.0] {
-            let p = smoothed_polygon(&pts, 8.0, s);
-            let a = area(&p);
-            assert!(if convex { a < last } else { (a - last).abs() > 1e-3 }, "s={s}: more smoothing changes the area ({a} after {last})");
-            assert!((a - sharp).abs() < sharp * 0.2, "s={s}: the shape stays close to its points");
-            last = a;
-            // The outline has no kinks: each piece leaves in the direction the one before arrives.
-            let segs: Vec<kurbo::PathSeg> = p.segments().filter(|seg| seg.arclen(1e-6) > 1e-6).collect();
-            for (i, seg) in segs.iter().enumerate() {
-                let next = segs[(i + 1) % segs.len()];
-                let out = (seg.eval(1.0) - seg.eval(1.0 - 1e-6)).normalize();
-                let into = (next.eval(1e-6) - next.eval(0.0)).normalize();
-                assert!(out.dot(into) > 0.999, "s={s}: piece {i} joins the next smoothly ({out:?} then {into:?})");
-            }
-            let b = p.bounding_box();
-            assert!(b.x0 >= -1e-6 && b.y0 >= -1e-6 && b.x1 <= 120.0 + 1e-6 && b.y1 <= 100.0 + 1e-6, "s={s} {b:?}");
-            // Every vertex is cut off, and the middle of every edge is still on the outline.
-            for (i, v) in pts.iter().enumerate() {
-                let next = pts[(i + 1) % pts.len()];
-                let mid = v.midpoint(next);
-                assert!(near(&p, mid) < 1e-6, "s={s}: edge {i} keeps its middle");
-                assert!(near(&p, *v) > 0.25, "s={s}: vertex {i} is rounded");
-            }
+            last = assert_smoothed_polygon(&pts, convex, s, last, sharp);
         }
     }
+}
+
+/// [`smoothed_polygon_smooths_every_corner`] at one smoothing `s`, after the area `last` of the
+/// smoothing before it: returns this one's area.
+fn assert_smoothed_polygon(pts: &[Point], convex: bool, s: f64, last: f64, sharp: f64) -> f64 {
+    use kurbo::{ParamCurve, ParamCurveArclen, ParamCurveNearest};
+    let near = |p: &BezPath, at: Point| p.segments().map(|seg| seg.nearest(at, 1e-9).distance_sq).fold(f64::INFINITY, f64::min);
+    let p = smoothed_polygon(pts, 8.0, s);
+    let a = area(&p);
+    assert!(if convex { a < last } else { (a - last).abs() > 1e-3 }, "s={s}: more smoothing changes the area ({a} after {last})");
+    assert!((a - sharp).abs() < sharp * 0.2, "s={s}: the shape stays close to its points");
+    // The outline has no kinks: each piece leaves in the direction the one before arrives.
+    let segs: Vec<kurbo::PathSeg> = p.segments().filter(|seg| seg.arclen(1e-6) > 1e-6).collect();
+    for (i, seg) in segs.iter().enumerate() {
+        let next = segs[(i + 1) % segs.len()];
+        let out = (seg.eval(1.0) - seg.eval(1.0 - 1e-6)).normalize();
+        let into = (next.eval(1e-6) - next.eval(0.0)).normalize();
+        assert!(out.dot(into) > 0.999, "s={s}: piece {i} joins the next smoothly ({out:?} then {into:?})");
+    }
+    let b = p.bounding_box();
+    assert!(b.x0 >= -1e-6 && b.y0 >= -1e-6 && b.x1 <= 120.0 + 1e-6 && b.y1 <= 100.0 + 1e-6, "s={s} {b:?}");
+    // Every vertex is cut off, and the middle of every edge is still on the outline.
+    for (i, v) in pts.iter().enumerate() {
+        let next = pts[(i + 1) % pts.len()];
+        let mid = v.midpoint(next);
+        assert!(near(&p, mid) < 1e-6, "s={s}: edge {i} keeps its middle");
+        assert!(near(&p, *v) > 0.25, "s={s}: vertex {i} is rounded");
+    }
+    a
 }
 
 #[test]
@@ -347,7 +356,7 @@ fn a_whole_ellipse_is_four_cubics_through_the_extremes() {
             assert!((s.p3 - want[i]).hypot() < 1e-9, "{w}x{h}: anchor {i} is {:?}", s.p3);
             // Handle length is 0.5523 of the radius along the tangent.
             let k = 0.552_284_749_830_793_4;
-            let r_along = if i % 2 == 0 { ry } else { rx };
+            let r_along = [ry, rx][i % 2];
             assert!(((s.p1 - s.p0).hypot() - k * r_along).abs() < 1e-9, "{w}x{h}: handle {i}");
         }
     }

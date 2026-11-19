@@ -254,52 +254,11 @@ pub fn rounded_polygon(points: &[Point], radius: f64) -> BezPath {
     }
     let radius = bounded(radius).max(0.0);
     if radius <= 0.0 || n < 3 {
-        for (i, p) in points.iter().enumerate() {
-            if i == 0 {
-                path.move_to(*p);
-            } else {
-                path.line_to(*p);
-            }
-        }
-        path.close_path();
-        return path;
+        return closed_polygon(points);
     }
     // For each vertex: the tangent points on its two edges and the bezier between them.
-    let mut corners: Vec<(Point, Point, Point, Point)> = Vec::with_capacity(n);
-    for i in 0..n {
-        let (Some(prev), Some(cur), Some(next)) = (points.get((i + n - 1) % n), points.get(i), points.get((i + 1) % n)) else {
-            continue;
-        };
-        let v1 = *prev - *cur;
-        let v2 = *next - *cur;
-        let (l1, l2) = (v1.hypot(), v2.hypot());
-        if l1 < 1e-9 || l2 < 1e-9 {
-            corners.push((*cur, *cur, *cur, *cur));
-            continue;
-        }
-        let (u1, u2) = (v1 / l1, v2 / l2);
-        let cos = u1.dot(u2).clamp(-1.0, 1.0);
-        let angle = cos.acos();
-        if angle < 1e-6 || (PI - angle) < 1e-6 {
-            corners.push((*cur, *cur, *cur, *cur));
-            continue;
-        }
-        let mut t = radius / (angle / 2.0).tan();
-        let max_t = (l1.min(l2)) / 2.0;
-        let mut r = radius;
-        if t > max_t {
-            r = r * max_t / t;
-            t = max_t;
-        }
-        let a = *cur + u1 * t;
-        let b = *cur + u2 * t;
-        // Cubic arc approximation: handle length k*r with k = 4/3 tan(theta/4), theta = PI - angle.
-        let theta = PI - angle;
-        let k = 4.0 / 3.0 * (theta / 4.0).tan() * r;
-        let c1 = a - u1 * k;
-        let c2 = b - u2 * k;
-        corners.push((a, c1, c2, b));
-    }
+    let corners: Vec<(Point, Point, Point, Point)> =
+        (0..n).filter_map(|i| Some(rounded_corner(*points.get((i + n - 1) % n)?, *points.get(i)?, *points.get((i + 1) % n)?, radius))).collect();
     for (i, (a, c1, c2, b)) in corners.iter().enumerate() {
         if i == 0 {
             path.move_to(*a);
@@ -310,6 +269,53 @@ pub fn rounded_polygon(points: &[Point], radius: f64) -> BezPath {
     }
     path.close_path();
     path
+}
+
+/// The closed polygon through `points`, its corners left sharp.
+fn closed_polygon(points: &[Point]) -> BezPath {
+    let mut path = BezPath::new();
+    let mut rest = points.iter();
+    if let Some(first) = rest.next() {
+        path.move_to(*first);
+    }
+    for p in rest {
+        path.line_to(*p);
+    }
+    path.close_path();
+    path
+}
+
+/// The corner of [`rounded_polygon`] at `cur`, between the edges to `prev` and `next`: the tangent
+/// point on the edge to `prev`, the cubic's two handles and the tangent point on the edge to
+/// `next`. A corner with a zero-length edge, or no turn, is `cur` four times.
+fn rounded_corner(prev: Point, cur: Point, next: Point, radius: f64) -> (Point, Point, Point, Point) {
+    let v1 = prev - cur;
+    let v2 = next - cur;
+    let (l1, l2) = (v1.hypot(), v2.hypot());
+    if l1 < 1e-9 || l2 < 1e-9 {
+        return (cur, cur, cur, cur);
+    }
+    let (u1, u2) = (v1 / l1, v2 / l2);
+    let cos = u1.dot(u2).clamp(-1.0, 1.0);
+    let angle = cos.acos();
+    if angle < 1e-6 || (PI - angle) < 1e-6 {
+        return (cur, cur, cur, cur);
+    }
+    let mut t = radius / (angle / 2.0).tan();
+    let max_t = (l1.min(l2)) / 2.0;
+    let mut r = radius;
+    if t > max_t {
+        r = r * max_t / t;
+        t = max_t;
+    }
+    let a = cur + u1 * t;
+    let b = cur + u2 * t;
+    // Cubic arc approximation: handle length k*r with k = 4/3 tan(theta/4), theta = PI - angle.
+    let theta = PI - angle;
+    let k = 4.0 / 3.0 * (theta / 4.0).tan() * r;
+    let c1 = a - u1 * k;
+    let c2 = b - u2 * k;
+    (a, c1, c2, b)
 }
 
 /// [`rounded_polygon`] with corner smoothing (0..=1, as [`rounded_rect`] takes it): each rounded
@@ -535,21 +541,27 @@ impl ReverseSubpaths for BezPath {
     fn reverse_subpaths(&self) -> BezPath {
         let mut out = BezPath::new();
         for seg_path in split_subpaths(self) {
-            let segs: Vec<kurbo::PathSeg> = seg_path.segments().collect();
-            let Some(last) = segs.last() else { continue };
-            out.move_to(last.end());
-            for s in segs.iter().rev() {
-                match s.reverse() {
-                    kurbo::PathSeg::Line(l) => out.line_to(l.p1),
-                    kurbo::PathSeg::Quad(q) => out.quad_to(q.p1, q.p2),
-                    kurbo::PathSeg::Cubic(c) => out.curve_to(c.p1, c.p2, c.p3),
-                }
-            }
-            if matches!(seg_path.elements().last(), Some(kurbo::PathEl::ClosePath)) {
-                out.close_path();
-            }
+            push_reversed(&mut out, &seg_path);
         }
         out
+    }
+}
+
+/// Appends one subpath to `out`, run from its end back to its start; closed when it was. A subpath
+/// with no segments adds nothing.
+fn push_reversed(out: &mut BezPath, subpath: &BezPath) {
+    let segs: Vec<kurbo::PathSeg> = subpath.segments().collect();
+    let Some(last) = segs.last() else { return };
+    out.move_to(last.end());
+    for s in segs.iter().rev() {
+        match s.reverse() {
+            kurbo::PathSeg::Line(l) => out.line_to(l.p1),
+            kurbo::PathSeg::Quad(q) => out.quad_to(q.p1, q.p2),
+            kurbo::PathSeg::Cubic(c) => out.curve_to(c.p1, c.p2, c.p3),
+        }
+    }
+    if matches!(subpath.elements().last(), Some(kurbo::PathEl::ClosePath)) {
+        out.close_path();
     }
 }
 
