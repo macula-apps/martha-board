@@ -62,6 +62,17 @@ fn documented_alternatives_and_empty_params_are_taken() {
     }
 }
 
+/// A comma in a doc's prose splits it into another item, whose first word reads as a parameter:
+/// `pref.language`'s English-only note (martha-board#34) takes `language` alone, and refuses any
+/// other name.
+#[test]
+fn prose_in_a_doc_names_no_parameter() {
+    assert_eq!(param_names("pref.language"), Some(&["language"][..]));
+    let mut s = Session::new();
+    let e = err(&mut s, "pref.language", json!({"language": "en", "so": 1}));
+    assert!(e.contains("unknown parameter `so` (it takes language)"), "{e}");
+}
+
 /// Every top-level item of every `{…}` params doc gives a name, so no parameter a doc describes is
 /// refused.
 #[test]
