@@ -114,6 +114,20 @@ fn in_gamut(rgb: V3) -> bool {
     rgb.iter().all(|v| (-1e-6..=1.0 + 1e-6).contains(v))
 }
 
+/// The largest chroma up to `c` that `fits`, found by 24 halvings: `fits(0)` is taken for granted.
+fn chroma_in_gamut(c: f64, fits: impl Fn(f64) -> bool) -> f64 {
+    let (mut lo, mut hi) = (0.0, c);
+    for _ in 0..24 {
+        let mid = (lo + hi) / 2.0;
+        if fits(mid) {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    lo
+}
+
 /// The sRGB colour for a lightness, chroma and hue: out of gamut, the chroma comes down (a binary
 /// search) until it fits, so lightness and hue stay what was asked for, as CSS gamut mapping does.
 fn map_to_srgb(l: f64, c: f64, h: f64, to_linear_rgb: impl Fn(V3) -> V3) -> Color {
@@ -121,16 +135,7 @@ fn map_to_srgb(l: f64, c: f64, h: f64, to_linear_rgb: impl Fn(V3) -> V3) -> Colo
     let lab = |c: f64| [l, c * cos, c * sin];
     let mut rgb = to_linear_rgb(lab(c));
     if !in_gamut(rgb) {
-        let (mut lo, mut hi) = (0.0, c);
-        for _ in 0..24 {
-            let mid = (lo + hi) / 2.0;
-            if in_gamut(to_linear_rgb(lab(mid))) {
-                lo = mid;
-            } else {
-                hi = mid;
-            }
-        }
-        rgb = to_linear_rgb(lab(lo));
+        rgb = to_linear_rgb(lab(chroma_in_gamut(c, |chroma| in_gamut(to_linear_rgb(lab(chroma))))));
     }
     Color::new(encode(rgb[0]), encode(rgb[1]), encode(rgb[2]), 1.0)
 }

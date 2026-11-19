@@ -96,10 +96,9 @@ fn css_lch_and_oklch_junk_is_refused_or_in_range() {
         format!("lch(50 50 {long}turn)"),
     ];
     for j in &junk {
-        if let Some(c) = Color::parse_css(j) {
-            for v in [c.r, c.g, c.b, c.a] {
-                assert!(v.is_finite() && (0.0..=1.0).contains(&v), "{j:.40}: {c:?}");
-            }
+        let Some(c) = Color::parse_css(j) else { continue };
+        for v in [c.r, c.g, c.b, c.a] {
+            assert!(v.is_finite() && (0.0..=1.0).contains(&v), "{j:.40}: {c:?}");
         }
     }
     for j in ["oklch()", "lch(1 2 3 4 5)", "lch(inf 0 0)", "oklch(0.5 0.1 deg)", "oklch(🟥 0 0)", "oklch(0.5 0.1 1e40)"] {
