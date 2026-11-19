@@ -8,7 +8,7 @@ use std::ffi::OsString;
 use std::net::{Ipv4Addr, SocketAddr};
 
 use clap::{ArgAction, Args, CommandFactory, FromArgMatches, Parser, Subcommand};
-use figcraft_doc::{PrintSettings, VdCompat};
+use figcraft_doc::PrintSettings;
 
 /// FigCraft without a window
 ///
@@ -81,7 +81,7 @@ pub struct ExportArgs {
     /// The folder or file to write
     #[arg(short = 'o', long = "out", value_name = "OUT")]
     pub out: String,
-    /// png, jpg, svg, webp, pdf or xml (Android Vector Drawable)
+    /// png, jpg, svg, webp or pdf
     #[arg(long, value_name = "FORMAT", value_parser = format)]
     pub format: Option<String>,
     #[command(flatten)]
@@ -104,10 +104,6 @@ pub struct ExportArgs {
     /// PDF: write CMYK colour
     #[arg(long)]
     pub cmyk: bool,
-    /// Android Vector Drawable: what the format can't draw is approximated (bestEffort), left out
-    /// (exact) or dropped without notes (ignore)
-    #[arg(long, value_name = "bestEffort|exact|ignore", value_parser = vd_compat, default_value = "bestEffort")]
-    pub vd_compat: VdCompat,
     #[command(flatten)]
     pub roots: RootArgs,
 }
@@ -245,9 +241,7 @@ enum ValueError {
     Scale,
     #[error("expected points or a length like 3mm or 0.125in, up to 2in")]
     Bleed,
-    #[error("expected bestEffort, exact or ignore")]
-    VdCompat,
-    #[error("expected png, jpg, svg, webp, pdf or xml")]
+    #[error("expected png, jpg, svg, webp or pdf")]
     Format,
     #[error("expected whole numbers, like 1000,10_000")]
     WholeNumber,
@@ -263,15 +257,11 @@ fn bleed(s: &str) -> Result<f64, ValueError> {
     PrintSettings::parse_length(s).filter(|b| *b <= PrintSettings::MAX_BLEED).ok_or(ValueError::Bleed)
 }
 
-fn vd_compat(s: &str) -> Result<VdCompat, ValueError> {
-    VdCompat::from_key(s).ok_or(ValueError::VdCompat)
-}
-
 /// `--format`, any case; kept as text for the exporter, which also reads it from the extension.
 fn format(s: &str) -> Result<String, ValueError> {
     let f = s.to_ascii_lowercase();
     match f.as_str() {
-        "png" | "jpg" | "jpeg" | "svg" | "webp" | "pdf" | "xml" => Ok(f),
+        "png" | "jpg" | "jpeg" | "svg" | "webp" | "pdf" => Ok(f),
         _ => Err(ValueError::Format),
     }
 }
@@ -385,8 +375,6 @@ mod tests {
             "--crop-marks",
             "--bleed-marks",
             "--cmyk",
-            "--vd-compat",
-            "exact",
         ]) else {
             panic!("export")
         };
@@ -395,11 +383,9 @@ mod tests {
         let print = a.print();
         assert!((print.bleed - 3.0 * 72.0 / 25.4).abs() < 1e-9, "{}", print.bleed);
         assert!(print.crop_marks && print.bleed_marks && print.cmyk);
-        assert_eq!(a.vd_compat, figcraft_doc::VdCompat::Exact);
         // The defaults, and `--out` for `-o`.
         let Command::Export(a) = ok(&["export", "app.figcraft", "--out=exports/"]) else { panic!("export") };
         assert_eq!((a.out.as_str(), a.format.as_deref(), a.scale.scale, a.print().bleed), ("exports/", None, 1.0, 0.0));
-        assert_eq!(a.vd_compat, figcraft_doc::VdCompat::default());
     }
 
     #[test]
@@ -474,7 +460,7 @@ mod tests {
             (&["export", "a", "-o", "b", "--scale", "65"], ValueValidation),
             (&["export", "a", "-o", "b", "--bleed", "lots"], ValueValidation),
             (&["export", "a", "-o", "b", "--bleed", "3in"], ValueValidation),
-            (&["export", "a", "-o", "b", "--vd-compat", "sloppy"], ValueValidation),
+            (&["export", "a", "-o", "b", "--format", "xml"], ValueValidation),
             (&["export", "a", "-o", "b", "--format", "bmp"], ValueValidation),
             (&["export", "a", "-o", "b", "--page", "A", "--page", "B"], ArgumentConflict),
             (&["perf", "--shapes", "lots"], UnknownArgument),

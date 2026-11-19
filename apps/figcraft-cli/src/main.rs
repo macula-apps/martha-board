@@ -80,8 +80,7 @@ fn run(cli: Cli) -> CliResult<ExitCode> {
     match cli.command {
         Command::Info(a) => confined(&a.roots, || files::info(&a.file, a.json)),
         Command::Export(a) => {
-            let target =
-                files::Target { print: a.print(), vd_compat: a.vd_compat, scale: a.scale.scale, format: a.format, page: a.page, node: a.node };
+            let target = files::Target { print: a.print(), scale: a.scale.scale, format: a.format, page: a.page, node: a.node };
             confined(&a.roots, || files::export(&a.file, &a.out, &target))
         }
         Command::Convert(a) => confined(&a.roots, || files::convert(&a.input, &a.output)),

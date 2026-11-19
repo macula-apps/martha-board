@@ -1,6 +1,6 @@
 # FigCraft architecture
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-19 · **Change:** minor (dropped Developer Mode; earlier: the `.fig`, FigJam, Sketch, Penpot and REST API file JSON import and export dropped on 2026-11-19, the file I/O overview corrected on 2026-11-04, the `vectordrawable` crate, L4: Android Vector Drawable export; the shared hub in `collab-net` and the `figcraft-server` app) · **Target:** Figma Design
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-19 · **Change:** minor (dropped the Android Vector Drawable export and the `figcraft-vectordrawable` crate; earlier: Developer Mode dropped on 2026-11-19, the `.fig`, FigJam, Sketch, Penpot and REST API file JSON import and export dropped on 2026-11-19, the file I/O overview corrected on 2026-11-04, the `vectordrawable` crate, L4: Android Vector Drawable export; the shared hub in `collab-net` and the `figcraft-server` app) · **Target:** Figma Design
 
 How FigCraft is built today. Engine first, a thin swappable UI, everything a command; a Figma-shaped
 data model (a scene graph of frames with auto layout, components and variables). ~108,800 lines of
@@ -26,7 +26,6 @@ replaced.
 | L3 | `figcraft-format` | ~1.5k | Native `.figcraft` (zip of `document.json` + images; streamed JSON), local library files, versions |
 | L4 | `figcraft-svg` | ~3.7k | SVG export and import (usvg) |
 | L4 | `figcraft-pdf` | ~2.3k | PDF export (krilla) with print options |
-| L4 | `figcraft-vectordrawable` | ~1.2k | Android Vector Drawable (XML) export: baked path data, gradients through `aapt:attr`, clip groups, compatibility modes and warnings |
 | L5 | `figcraft-engine` | ~58.3k | Sessions, undo history (`Arc` snapshots), the command registry (`cmd/*`, `spec!`), pointer tools and vector edit mode, snapping and measuring, components sync, libraries, the branch compare, the menu catalog (`catalog.rs`) and the keymap (`keymap.rs`), a panic guard |
 | L6 | `figcraft-ui-egui` | ~55.4k | The UI3-style frontend: canvas (render worker), toolbar, layers, the Design panel, colour picker, menus, dialogs, comments, accessibility (AccessKit), the control channel server |
 | L6 | `figcraft-mcp` | ~2.4k | MCP server (JSON-RPC over stdio), headless or bridged to a running app |
@@ -83,6 +82,7 @@ input.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-19 | minor | Dropped the Android Vector Drawable (XML) export: the `figcraft-vectordrawable` crate (L4, ~1.2k lines) and the `xml` format in the export commands, the Export section, the CLI and MCP. `figcraft-doc` keeps the `vectorDrawable` format and `vdCompat` so a saved file that has one still opens; exporting it fails with a message that it was removed. |
 | 2026-11-19 | minor | Dropped Developer Mode (code generators, Code Connect, annotations, measurements, dev resources, ready for dev and the Inspect tab); the branch compare moved to `sharing/compare` and the asset export to `cmd/file/assets`: `figcraft-engine` ~65.2k → ~58.3k lines, `figcraft-ui-egui` ~57.4k → ~55.4k. The engine and UI rows had kept their 2026-10-10 counts until now. |
 | 2026-11-19 | minor | Dropped the importers and exporters of other design apps' files (`.fig`, FigJam `.jam`, `.sketch`, `.penpot`, REST API file JSON and its variables JSON): `figcraft-format` keeps the native format only (~5.2k → ~1.5k lines). |
 | 2026-11-04 | minor | Corrected the file I/O overview and format-crate row: best-effort `.fig` import and experimental export already exist in `figcraft-format`. No capability or readiness change. |

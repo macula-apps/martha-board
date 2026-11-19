@@ -1,5 +1,5 @@
 //! Export timings over the example files: every top-level frame of each `examples/*.figcraft`
-//! exported as PNG, JPG and WebP at 2x through [`export_file`], as Export and `figcraft-cli export`
+//! exported as PNG, JPG and WebP at 2x through [`export_bytes_with`], as Export and `figcraft-cli export`
 //! do. Run in release:
 //! `cargo test --release -p figcraft-engine --lib export_timings -- --ignored --nocapture`.
 //!
@@ -11,7 +11,7 @@ use std::time::Instant;
 
 use figcraft_doc::{Document, ExportFormat, ExportSetting, NodeId};
 
-use crate::cmd::file::{export_file, load_path};
+use crate::cmd::file::{export_bytes_with, load_path};
 
 /// The example documents and their top-level frames.
 fn examples() -> Vec<(String, Document, Vec<NodeId>)> {
@@ -48,7 +48,7 @@ fn run(docs: &[(String, Document, Vec<NodeId>)], format: ExportFormat) -> (f64, 
     let t = Instant::now();
     for (name, doc, frames) in docs {
         for f in frames {
-            let (bytes, _) = export_file(doc, &[*f], &setting, 2.0).unwrap();
+            let bytes = export_bytes_with(doc, &[*f], &setting, 2.0).unwrap();
             files.push((format!("{name}-{}.{}", f.0, format.ext()), bytes));
         }
     }

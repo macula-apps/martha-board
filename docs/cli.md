@@ -105,7 +105,7 @@ page 1 "Screens": 380 nodes, 4 top-level
   …
 ```
 
-### `export <file> -o <out> [--format png|jpg|svg|webp|pdf|xml] [--scale N] [--page NAME] [--node ID|NAME] [--bleed LENGTH] [--crop-marks] [--bleed-marks] [--cmyk] [--vd-compat bestEffort|exact|ignore]`
+### `export <file> -o <out> [--format png|jpg|svg|webp|pdf] [--scale N] [--page NAME] [--node ID|NAME] [--bleed LENGTH] [--crop-marks] [--bleed-marks] [--cmyk]`
 
 - `<out>` is a directory: one file per top-level frame of the page (default the first page), named
   after the frame (`Home.png`, `Settings.png`…); with no frames, one file per top-level layer.
@@ -116,15 +116,9 @@ page 1 "Screens": 380 nodes, 4 top-level
   `/` makes a folder). Two layers with the same name get `Name 2`, `Name 3`…
 - `<out>` has an image extension: one file with the given `--node`, or the whole page composited.
 - `--node` takes a layer id (`12` or `0:12`) or a layer name.
-- `--format xml` (or an `<out>` ending in `.xml`) writes an Android Vector Drawable, e.g.
-  `figcraft-cli export app.figcraft --node Icon -o ic_icon.xml`. What the format can't draw is
-  printed as `note:` lines; `--vd-compat` picks how it's handled: `bestEffort` (default:
-  approximated), `exact` (left out) or `ignore` (no notes: overlapping layer opacity is dropped,
-  even-odd fills keep `fillType="evenOdd"`, diamond gradients are left out). See
-  `docs/file-format-parity.md`.
 - The format comes from `--format`, else `<out>`'s extension, else png. `--scale` (default 1, max 64)
   applies to raster formats.
-- SVG/PDF/XML exports with visible descendants more than 256 levels below an exported root fail with
+- SVG/PDF exports with visible descendants more than 256 levels below an exported root fail with
   an error instead of writing an incomplete file. Select an inner layer with `--node` or reduce
   nesting. An existing destination file is kept on this failure.
 - A `.pdf` `<out>` without `--node` holds the page's top-level frames, one PDF page each in reading

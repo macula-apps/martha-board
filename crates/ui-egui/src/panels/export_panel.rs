@@ -8,12 +8,12 @@ use std::sync::Arc;
 
 use egui::{Align2, Color32, CornerRadius, Id, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use figcraft_doc::color::ColorProfile;
-use figcraft_doc::{Document, ExportColorProfile, ExportFormat, ExportSetting, ExportSize, NodeId, NodeKind, PrintSettings, VdCompat};
+use figcraft_doc::{Document, ExportColorProfile, ExportFormat, ExportSetting, ExportSize, NodeId, NodeKind, PrintSettings};
 use figcraft_engine::cmd::file::export_jobs;
 use serde_json::{Value, json};
 
 use crate::FigApp;
-use crate::i18n::{tr, tr_noop, trf, trn};
+use crate::i18n::{tr, trf, trn};
 use crate::icons::{self, Icon};
 use crate::right::{common, menu_popup, menu_row, row};
 use crate::theme::{Tokens, regular};
@@ -107,18 +107,10 @@ fn setting_row(app: &mut FigApp, ui: &mut Ui, ids: &[NodeId], i: usize, e: &Expo
         {
             app.run("export.update", json!({"ids": ids, "index": i, "suffix": sfx}));
         }
-        let mut resp = widgets::dropdown(ui, e.format.label(), format_w, None);
-        if let Some(tip) = format_tip(e.format) {
-            resp = resp.on_hover_text(tip);
-        }
+        let resp = widgets::dropdown(ui, e.format.label(), format_w, None);
         menu_popup(&resp).show(|ui| {
             for f in ExportFormat::ALL {
-                let item = menu_row(ui, f.label(), "", 0.0, |_, _, _| {});
-                let item = match format_tip(f) {
-                    Some(tip) => item.on_hover_text(tip),
-                    None => item,
-                };
-                if item.clicked() {
+                if menu_row(ui, f.label(), "", 0.0, |_, _, _| {}).clicked() {
                     app.run("export.update", json!({"ids": ids, "index": i, "format": f.ext()}));
                     ui.close();
                 }
@@ -145,24 +137,9 @@ fn setting_row(app: &mut FigApp, ui: &mut Ui, ids: &[NodeId], i: usize, e: &Expo
     }
 }
 
-/// What a format's short label doesn't say ("XML" is an Android Vector Drawable), for its tooltip.
-pub(crate) fn format_tip(f: ExportFormat) -> Option<&'static str> {
-    match f {
-        ExportFormat::VectorDrawable => Some(tr("Android Vector Drawable")),
-        _ => None,
-    }
-}
-
-/// The Android Vector Drawable compatibility modes, as the advanced options list them.
-/// Best effort approximates what the format can't draw (with a warning), exact only leaves it out
-/// (with a warning), ignore leaves it out silently.
-const VD_COMPAT: [(VdCompat, &str); 3] =
-    [(VdCompat::BestEffort, tr_noop("Best effort")), (VdCompat::Exact, tr_noop("Exact only")), (VdCompat::Ignore, tr_noop("Ignore unsupported"))];
-
 /// A setting's advanced options: ignore overlapping layers (`contentsOnly`), include bounding box
 /// for text layers (and for any setting that has it on, so it can be turned off); for SVG outline
-/// text, the id attribute and simplified strokes; for XML (Android Vector Drawable) the id attribute
-/// (as `android:name`) and the compatibility mode; for PNG, JPG and WebP the color profile (`file`
+/// text, the id attribute and simplified strokes; for PNG, JPG and WebP the color profile (`file`
 /// is the document's). Returns the changed option as command params.
 fn advanced_options(ui: &mut Ui, e: &ExportSetting, text: bool, file: ColorProfile) -> Option<Value> {
     let mut out = None;
@@ -179,17 +156,6 @@ fn advanced_options(ui: &mut Ui, e: &ExportSetting, text: bool, file: ColorProfi
         option(ui, "svgOutlineText", e.svg_outline_text, tr("Outline text"));
         option(ui, "svgIdAttribute", e.svg_id_attribute, tr("Include id attribute"));
         option(ui, "svgSimplifyStroke", e.svg_simplify_stroke, tr("Simplify stroke"));
-    }
-    if e.format == ExportFormat::VectorDrawable {
-        option(ui, "svgIdAttribute", e.svg_id_attribute, tr("Include id attribute"));
-        ui.add_space(4.0);
-        widgets::label(ui, tr("Compatibility"), Tokens::get(ui.ctx()).text_secondary);
-        for (mode, label) in VD_COMPAT {
-            let on = e.vd_compat == mode;
-            if widgets::radio(ui, on, tr(label)) && !on {
-                out = Some(json!({"vdCompat": mode.key()}));
-            }
-        }
     }
     if e.format.is_raster() {
         ui.add_space(4.0);
@@ -299,6 +265,9 @@ pub(crate) fn setting_params(setting: &ExportSetting) -> Value {
     if let Value::Object(m) = &mut params {
         m.remove("print");
         m.remove("suffix");
+        // Only an earlier build's file holds it (martha-board#20): file.export no longer takes it,
+        // and the format it went with is refused by name.
+        m.remove("vdCompat");
         if setting.format == ExportFormat::Pdf
             && let Value::Object(p) = print_params(&setting.print)
         {
@@ -416,14 +385,7 @@ pub(crate) fn export_layers(app: &mut FigApp, ids: &[NodeId]) {
             let ids = ids.to_vec();
             app.pick_folder(tr("Export"), move |app, dir| {
                 if let Some(r) = app.run("file.exportLayers", json!({"ids": ids, "dir": dir.to_string_lossy()})) {
-                    let files = r["files"].as_array().cloned().unwrap_or_default();
-                    // Android Vector Drawables say what they changed or left out.
-                    let changed = files.iter().any(|f| f["warnings"].as_array().is_some_and(|w| !w.is_empty()));
-                    app.toast(if changed {
-                        trn("Exported {n} files; some content was changed or left out", files.len(), &[])
-                    } else {
-                        trn("Exported {n} files", files.len(), &[])
-                    });
+                    app.toast(trn("Exported {n} files", r["files"].as_array().map_or(0, Vec::len), &[]));
                 }
             });
         }
@@ -445,13 +407,9 @@ pub(crate) fn save_one(app: &mut FigApp, ids: &[NodeId], setting: &ExportSetting
     }
     app.pick_save(tr("Export"), file, &[ext], move |app, p| {
         params["path"] = json!(p.to_string_lossy());
-        if let Some(r) = app.run("file.export", params) {
+        if app.run("file.export", params).is_some() {
             let name = p.file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default();
-            // Android Vector Drawables say what they changed or left out.
-            app.toast(match r["warnings"].as_array().map_or(0, Vec::len) {
-                0 => trf("Exported {name}", &[("name", &name)]),
-                n => trn("Exported {name}; {n} kinds of content were changed or left out", n, &[("name", &name)]),
-            });
+            app.toast(trf("Exported {name}", &[("name", &name)]));
         }
     });
 }

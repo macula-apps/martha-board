@@ -130,15 +130,13 @@ fn a_translucent_jpg_is_flattened_before_its_conversion() {
 }
 
 #[test]
-fn svg_pdf_and_xml_stay_srgb() {
+fn svg_and_pdf_stay_srgb() {
     let (mut s, r) = session();
     // A Display P3 file: its red converts back to sRGB #FF0000 whatever the setting says.
     s.execute("file.colorProfile", &json!({"profile": "displayP3"})).unwrap();
     for p in ["displayP3", "sameAsFile", "srgb"] {
         let svg = String::from_utf8(export(&mut s, json!({"ids": [r], "format": "svg", "colorProfile": p}))).unwrap().to_ascii_uppercase();
         assert!(svg.contains("#FF0000"), "{p}: {svg}");
-        let xml = String::from_utf8(export(&mut s, json!({"ids": [r], "format": "xml", "colorProfile": p}))).unwrap().to_ascii_uppercase();
-        assert!(xml.contains("#FF0000"), "{p}: {xml}");
         let pdf = export(&mut s, json!({"ids": [r], "format": "pdf", "colorProfile": p}));
         assert!(pdf.starts_with(b"%PDF") && !has_icc(&pdf), "{p}");
     }
