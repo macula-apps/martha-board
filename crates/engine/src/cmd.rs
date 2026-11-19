@@ -17,8 +17,6 @@ pub mod section;
 pub mod structure;
 pub mod styles;
 pub mod text;
-pub mod variables;
-pub mod variables_io;
 pub mod view;
 
 use std::collections::HashMap;
@@ -87,8 +85,6 @@ fn registry() -> &'static Registry {
         list.extend(crate::fonts::specs());
         list.extend(styles::specs());
         list.extend(image::specs());
-        list.extend(variables::specs());
-        list.extend(variables_io::specs());
         list.extend(component::specs());
         list.extend(library::specs());
         list.extend(comment::specs());

@@ -31,7 +31,7 @@ pub use assets::library_swap;
 pub use assets::playground;
 pub use assets::style_vars;
 pub use assets::token_roles;
-pub use assets::variable_names;
+pub use assets::variable_data;
 pub use automation::batch;
 pub use automation::doc_urls;
 pub use automation::file_access;
@@ -220,6 +220,8 @@ mod boolean_radius_tests;
 mod booleans_tests;
 #[cfg(test)]
 mod bound_alpha_tests;
+#[cfg(test)]
+mod bound_variables_tests;
 #[cfg(test)]
 mod branch_live_tests;
 #[cfg(test)]
@@ -523,6 +525,8 @@ mod svg_import_tests;
 #[cfg(test)]
 mod templates_tests;
 #[cfg(test)]
+mod test_variables;
+#[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod text_behaviour_tests;
@@ -551,17 +555,11 @@ mod transform_behaviour_tests;
 #[cfg(test)]
 mod unknown_params_tests;
 #[cfg(test)]
-mod variable_props_tests;
-#[cfg(test)]
 mod variable_tests;
 #[cfg(test)]
 mod variables_behaviour_tests;
 #[cfg(test)]
 mod variables_colour_tests;
-#[cfg(test)]
-mod variables_editor_tests;
-#[cfg(test)]
-mod variables_io_tests;
 #[cfg(test)]
 mod variant_shared_props_tests;
 #[cfg(test)]

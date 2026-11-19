@@ -5,6 +5,7 @@ use serde_json::{Value, json};
 
 use crate::Session;
 use crate::inspect::{InspectOptions, document, document_with_options, node_json, node_json_with_options};
+use crate::test_variables as tv;
 
 fn run(s: &mut Session, command: &str, params: Value) -> Value {
     s.execute(command, &params).unwrap_or_else(|e| panic!("{command}: {e}"))
@@ -543,9 +544,9 @@ fn stored_text_and_stroke_settings_are_read_back_as_set() {
 fn modes_property_bindings_and_exposed_instances_are_read() {
     let mut s = Session::new();
     s.execute("file.new", &json!({})).unwrap();
-    let c = s.execute("variable.createCollection", &json!({"name": "Theme", "modes": ["Light", "Dark"]})).unwrap();
+    let c = tv::collection(&mut s, "Theme", &["Light", "Dark"]);
     let frame = s.execute("node.create", &json!({"type": "frame", "width": 100, "height": 100})).unwrap()["id"].clone();
-    s.execute("variable.setMode", &json!({"ids": [frame.clone()], "collection": c["id"], "mode": "Dark"})).unwrap();
+    tv::mode(&mut s, crate::params::id_of(&frame).unwrap(), &c, "Dark");
     let modes = s.execute("node.get", &json!({"id": frame})).unwrap()["variableModes"].clone();
     assert_eq!(modes.as_object().map(|m| m.len()), Some(1), "{modes}");
     let card = s.execute("node.create", &json!({"type": "frame", "name": "Card", "width": 100, "height": 50})).unwrap()["id"].clone();

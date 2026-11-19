@@ -50,7 +50,6 @@ impl FigApp {
             "reduceMotion": self.reduce_motion(),
             "mainMenu": self.ui.main_menu,
             "palette": self.ui.palette.is_some(),
-            "variables": self.ui.variables.is_some(),
             "versionHistory": self.ui.versions.open,
             "branchReview": self.ui.branch_review.as_ref().map(|r| json!({"id": r.id, "picks": r.picks, "mode": if r.mode == crate::compare_view::Mode::Overlay { "overlay" } else { "sideBySide" }})),
             "colorProfileDialog": self.ui.color_profile.map(|p| p.id()),

@@ -537,15 +537,7 @@ pub fn end(app: &mut FigApp, ctx: &Context) {
 /// Dialogs, the palette and the home screen have no regions.
 fn blocked(app: &FigApp) -> bool {
     let u = &app.ui;
-    u.palette.is_some()
-        || u.about
-        || u.preferences
-        || u.variables.is_some()
-        || u.export_preview
-        || u.color_profile.is_some()
-        || u.home
-        || u.find.is_some()
-        || !app.has_files()
+    u.palette.is_some() || u.about || u.preferences || u.export_preview || u.color_profile.is_some() || u.home || u.find.is_some() || !app.has_files()
 }
 
 /// Menus the app draws itself (Escape closes them, and the keyboard stays put).

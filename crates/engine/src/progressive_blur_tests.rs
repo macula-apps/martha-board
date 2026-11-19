@@ -5,6 +5,7 @@ use serde_json::json;
 
 use crate::Session;
 use crate::params::id_of;
+use crate::test_variables as tv;
 use figcraft_doc::{Blur, BlurType, EffectKind, MAX_BLUR_RADIUS};
 
 fn rect(s: &mut Session) -> figcraft_doc::NodeId {
@@ -55,15 +56,15 @@ fn both_radii_bind_to_number_variables() {
     let mut s = Session::new();
     let r = rect(&mut s);
     s.execute("effect.add", &json!({"ids": [r], "effect": {"type": "layerBlur", "radius": 10, "blurType": PROGRESSIVE}})).unwrap();
-    s.execute("variable.createCollection", &json!({"name": "Tokens"})).unwrap();
+    tv::collection(&mut s, "Tokens", &["Mode 1"]);
     for (name, v) in [("soft", 4), ("strong", 24)] {
-        s.execute("variable.create", &json!({"collection": "Tokens", "name": name, "type": "number", "value": v})).unwrap();
+        tv::variable(&mut s, "Tokens", name, "number", &[json!(v)]);
     }
-    s.execute("variable.bind", &json!({"ids": [r], "field": "effects/0/startRadius", "variable": "soft"})).unwrap();
-    s.execute("variable.bind", &json!({"ids": [r], "field": "effects/0/radius", "variable": "strong"})).unwrap();
+    tv::bind(&mut s, &[r], "effects/0/startRadius", "soft");
+    tv::bind(&mut s, &[r], "effects/0/radius", "strong");
     let b = blur(&s, r, 0);
     assert_eq!((b.start_radius, b.radius), (4.0, 24.0));
-    s.execute("variable.set", &json!({"variable": "soft", "value": -3})).unwrap();
+    tv::set_default(&mut s, "soft", json!(-3));
     assert_eq!(blur(&s, r, 0).start_radius, 0.0, "clamped");
 }
 

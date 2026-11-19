@@ -6,6 +6,7 @@ use serde_json::{Value, json};
 
 use crate::Session;
 use crate::params::id_of;
+use crate::test_variables as tv;
 use figcraft_color::Color;
 use figcraft_doc::NodeId;
 
@@ -47,31 +48,27 @@ fn a_colour_style_on_strokes_links_follows_edits_and_detaches() {
 }
 
 #[test]
-fn stroke_weights_and_each_side_bind_to_number_variables() {
+fn stroke_weights_and_each_side_follow_number_variables() {
     let mut s = Session::new();
     let f = id_of(&ex(&mut s, "frame.create", json!({"x": 0, "y": 0, "width": 200, "height": 200}))["id"]).unwrap();
     let r = id_of(&ex(&mut s, "node.create", json!({"type": "rectangle", "parent": f, "x": 10, "y": 10, "width": 50, "height": 50}))["id"]).unwrap();
     ex(&mut s, "node.set", json!({"ids": [r], "props": {"strokes": ["#000000"], "strokeWeight": 2}}));
-    let c = ex(&mut s, "variable.createCollection", json!({"name": "Borders", "modes": ["Thin", "Thick"]}));
-    let c = c["id"].as_str().unwrap().to_string();
-    ex(&mut s, "variable.create", json!({"collection": c, "name": "border/top", "type": "number", "values": {"Thin": 1, "Thick": 6}}));
-    ex(&mut s, "variable.create", json!({"collection": c, "name": "border/all", "type": "number", "values": {"Thin": 3, "Thick": 5}}));
+    let c = tv::collection(&mut s, "Borders", &["Thin", "Thick"]);
+    tv::variable(&mut s, &c, "border/top", "number", &[json!(1), json!(6)]);
+    tv::variable(&mut s, &c, "border/all", "number", &[json!(3), json!(5)]);
     // One side: individual strokes turn on, the other sides keep the weight.
-    ex(&mut s, "variable.bind", json!({"ids": [r], "field": "strokeTopWeight", "variable": "border/top"}));
+    tv::bind(&mut s, &[r], "strokeTopWeight", "border/top");
     assert_eq!(node(&s, r).stroke.sides, Some([1.0, 2.0, 2.0, 2.0]));
-    ex(&mut s, "variable.setMode", json!({"ids": [f], "collection": c, "mode": "Thick"}));
+    tv::mode(&mut s, f, &c, "Thick");
     assert_eq!(node(&s, r).stroke.sides, Some([6.0, 2.0, 2.0, 2.0]), "the frame's mode picks the value");
     // The whole weight binds too; per-side keys set one side.
-    ex(&mut s, "variable.bind", json!({"ids": [r], "field": "strokeWeight", "variable": "border/all"}));
+    tv::bind(&mut s, &[r], "strokeWeight", "border/all");
     assert_eq!(node(&s, r).stroke.weight, 5.0);
     ex(&mut s, "node.set", json!({"ids": [r], "props": {"strokeLeftWeight": 4}}));
     assert_eq!(node(&s, r).stroke.sides.map(|x| x[3]), Some(4.0));
     assert!(s.execute("node.set", &json!({"ids": [r], "props": {"strokeRightWeight": "thick"}})).is_err());
-    // Only stroke-weight variables are offered for these fields, and instances count them as
-    // stroke overrides.
-    let doc = s.doc().unwrap();
+    // Instances count these fields as stroke overrides.
     for field in crate::cmd::props::STROKE_SIDES.into_iter().chain(["strokeWeight"]) {
-        assert_eq!(crate::cmd::variables::field_scope(doc, r, field), Some("STROKE_FLOAT"), "{field}");
         assert_eq!(crate::cmd::props::override_group(field), "strokes", "{field}");
     }
 }

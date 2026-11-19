@@ -7,6 +7,7 @@ use figcraft_doc::{GridKind, LayoutGrid, Node, NodeId, NodeKind};
 use serde_json::{Value, json};
 
 use crate::Session;
+use crate::test_variables as tv;
 
 fn id(v: Value) -> NodeId {
     NodeId(v["id"].as_u64().unwrap())
@@ -29,9 +30,9 @@ fn hexes(paints: &[Paint]) -> Vec<String> {
 }
 
 fn vars(s: &mut Session) {
-    ex(s, "variable.createCollection", json!({"name": "T", "modes": ["Light", "Dark"]}));
+    tv::collection(s, "T", &["Light", "Dark"]);
     for (name, kind, value) in [("brand", "color", json!("#FF0000")), ("gap", "number", json!(12)), ("cols", "number", json!(6))] {
-        ex(s, "variable.create", json!({"collection": "T", "name": name, "type": kind, "value": value}));
+        tv::variable(s, "T", name, kind, &[json!(value)]);
     }
 }
 
@@ -93,26 +94,23 @@ fn a_bound_paint_colour_follows_its_paint() {
     ex(&mut s, "fill.set", json!({"ids": [r], "index": 0, "color": "#0000FF"}));
     ex(&mut s, "fill.add", json!({"ids": [r], "color": "#00FF00"}));
     ex(&mut s, "fill.add", json!({"ids": [r], "color": "#FFFFFF"}));
-    ex(&mut s, "variable.bind", json!({"ids": [r], "field": "fill", "variable": "brand"}));
+    tv::bind(&mut s, &[r], "fill", "brand");
     assert_eq!(hexes(&node(&s, r).fills), ["FF0000", "00FF00", "FFFFFF"]);
     // The bound bottom paint goes to the top: the binding goes with it.
     ex(&mut s, "fill.move", json!({"ids": [r], "from": 0, "to": 2}));
     assert_eq!(node(&s, r).bound.keys().collect::<Vec<_>>(), ["fills/2/color"]);
-    ex(&mut s, "variable.set", json!({"variable": "brand", "value": "#123456"}));
+    tv::set_default(&mut s, "brand", json!("#123456"));
     assert_eq!(hexes(&node(&s, r).fills), ["00FF00", "FFFFFF", "123456"], "the neighbours aren't recoloured");
     // Modes recolour the moved paint too.
-    ex(&mut s, "variable.set", json!({"variable": "brand", "mode": "Dark", "value": "#ABCDEF"}));
-    ex(&mut s, "variable.setMode", json!({"collection": "T", "mode": "Dark", "ids": [r]}));
+    tv::set(&mut s, "brand", "Dark", json!("#ABCDEF"));
+    tv::mode(&mut s, r, "T", "Dark");
     assert_eq!(hexes(&node(&s, r).fills), ["00FF00", "FFFFFF", "ABCDEF"]);
     // Removing a paint below shifts the binding down with its paint.
     ex(&mut s, "fill.remove", json!({"ids": [r], "index": 0}));
     assert_eq!(node(&s, r).bound.keys().collect::<Vec<_>>(), ["fills/1/color"]);
-    ex(&mut s, "variable.set", json!({"variable": "brand", "mode": "Dark", "value": "#010203"}));
+    tv::set(&mut s, "brand", "Dark", json!("#010203"));
     assert_eq!(hexes(&node(&s, r).fills), ["FFFFFF", "010203"]);
-    // Undo brings back the binding where it was.
-    ex(&mut s, "edit.undo", json!({}));
-    ex(&mut s, "edit.undo", json!({}));
-    ex(&mut s, "edit.undo", json!({}));
+    // Undo (of the remove: the value and mode edits are no undo steps) brings back the binding.
     ex(&mut s, "edit.undo", json!({}));
     assert_eq!(node(&s, r).bound.keys().collect::<Vec<_>>(), ["fills/2/color"]);
     // Removing the bound paint drops its binding.
@@ -129,7 +127,7 @@ fn strokes_move_with_their_bindings_and_moves_unlink_styles() {
         ex(&mut s, "stroke.add", json!({"ids": [r], "color": "#000000"}));
         ex(&mut s, "stroke.add", json!({"ids": [r], "color": "#00FF00"}));
     }
-    ex(&mut s, "variable.bind", json!({"ids": [a, b], "field": "stroke", "variable": "brand"}));
+    tv::bind(&mut s, &[a, b], "stroke", "brand");
     // (Adding a fill to a styled layer would unlink its style: add it first.)
     ex(&mut s, "fill.add", json!({"ids": [a, b], "color": "#FFFFFF"}));
     ex(&mut s, "style.create", json!({"type": "paint", "name": "Two", "from": a}));
@@ -141,7 +139,7 @@ fn strokes_move_with_their_bindings_and_moves_unlink_styles() {
         assert_eq!(hexes(&node(&s, r).strokes), ["00FF00", "FF0000"]);
         assert_eq!(node(&s, r).bound.keys().collect::<Vec<_>>(), ["strokes/1/color"]);
     }
-    ex(&mut s, "variable.set", json!({"variable": "brand", "value": "#0000FF"}));
+    tv::set_default(&mut s, "brand", json!("#0000FF"));
     assert_eq!(hexes(&node(&s, b).strokes), ["00FF00", "0000FF"]);
     // A paint style defined the whole fill list: reordering it unlinks the style.
     let fills = node(&s, a).fills.len();
@@ -152,7 +150,7 @@ fn strokes_move_with_their_bindings_and_moves_unlink_styles() {
 }
 
 #[test]
-fn bound_paint_keys_resolve_and_scope_by_index() {
+fn bound_paint_keys_resolve_by_index() {
     use crate::cmd::lists::{BoundList, list_binding};
     assert_eq!(list_binding("fill"), Some((BoundList::Fills, 0, "color")));
     assert_eq!(list_binding("stroke"), Some((BoundList::Strokes, 0, "color")));
@@ -163,14 +161,6 @@ fn bound_paint_keys_resolve_and_scope_by_index() {
     {
         assert_eq!(list_binding(junk), None, "{junk}");
     }
-    let mut s = Session::new();
-    let r = rect(&mut s);
-    let doc = s.doc().unwrap();
-    use crate::cmd::variables::field_scope;
-    assert_eq!(field_scope(doc, r, "fills/2/color"), Some("SHAPE_FILL"));
-    assert_eq!(field_scope(doc, r, "strokes/1/color"), Some("STROKE_COLOR"));
-    assert_eq!(field_scope(doc, r, "effects/0/color"), Some("EFFECT_COLOR"));
-    assert_eq!(field_scope(doc, r, "layoutGrids/0/count"), None);
 }
 
 #[test]
@@ -179,7 +169,7 @@ fn a_paint_binding_follows_the_moved_paint() {
     let r = rect(&mut s);
     vars(&mut s);
     ex(&mut s, "fill.add", json!({"ids": [r], "color": "#00FF00"}));
-    ex(&mut s, "variable.bind", json!({"ids": [r], "field": "fill", "variable": "brand"}));
+    tv::bind(&mut s, &[r], "fill", "brand");
     ex(&mut s, "fill.move", json!({"ids": [r], "from": 0, "to": 1}));
     let doc = s.doc().unwrap();
     let n = doc.node(r).unwrap();
@@ -196,25 +186,25 @@ fn layout_grid_fields_bind_to_number_variables_and_follow_moves() {
     vars(&mut s);
     ex(&mut s, "grid.add", json!({"ids": [f], "grid": {"kind": "columns", "count": 4, "gutter": 20}}));
     ex(&mut s, "grid.add", json!({"ids": [f], "grid": {"kind": "rows", "count": 3}}));
-    ex(&mut s, "variable.bind", json!({"ids": [f], "field": "layoutGrids/0/gutter", "variable": "gap"}));
-    ex(&mut s, "variable.bind", json!({"ids": [f], "field": "layoutGrids/0/count", "variable": "cols"}));
+    tv::bind(&mut s, &[f], "layoutGrids/0/gutter", "gap");
+    tv::bind(&mut s, &[f], "layoutGrids/0/count", "cols");
     let g = node(&s, f).grids[0].clone();
     assert_eq!((g.kind, g.count, g.gutter), (GridKind::Columns, 6, 12.0));
     // Values and modes flow in.
-    ex(&mut s, "variable.set", json!({"variable": "gap", "mode": "Dark", "value": 32}));
-    ex(&mut s, "variable.setMode", json!({"collection": "T", "mode": "Dark", "ids": [f]}));
+    tv::set(&mut s, "gap", "Dark", json!(32));
+    tv::mode(&mut s, f, "T", "Dark");
     assert_eq!(node(&s, f).grids[0].gutter, 32.0);
     // Junk numbers are kept in range.
-    ex(&mut s, "variable.set", json!({"variable": "cols", "mode": "Dark", "value": -5}));
+    tv::set(&mut s, "cols", "Dark", json!(-5));
     assert_eq!(node(&s, f).grids[0].count, 1);
-    ex(&mut s, "variable.set", json!({"variable": "cols", "mode": "Dark", "value": 1e12}));
+    tv::set(&mut s, "cols", "Dark", json!(1e12));
     assert_eq!(node(&s, f).grids[0].count, 1000);
-    ex(&mut s, "variable.set", json!({"variable": "cols", "mode": "Dark", "value": 5}));
+    tv::set(&mut s, "cols", "Dark", json!(5));
     // Move the bound grid on top: its bindings go with it, the rows grid isn't touched.
     ex(&mut s, "grid.move", json!({"ids": [f], "from": 0, "to": 1}));
     let keys: Vec<String> = node(&s, f).bound.keys().cloned().collect();
     assert_eq!(keys, ["layoutGrids/1/count", "layoutGrids/1/gutter"]);
-    ex(&mut s, "variable.set", json!({"variable": "gap", "mode": "Dark", "value": 8}));
+    tv::set(&mut s, "gap", "Dark", json!(8));
     let gs = node(&s, f).grids;
     assert_eq!((gs[0].kind, gs[0].count), (GridKind::Rows, 3));
     assert_eq!((gs[1].kind, gs[1].count, gs[1].gutter), (GridKind::Columns, 5, 8.0));
@@ -242,51 +232,47 @@ fn instance_properties_bind_to_boolean_and_string_variables() {
         doc.subtree(i).into_iter().find(|x| doc.node(*x).and_then(|n| n.source) == Some(src)).unwrap()
     };
     let (ititle, idot) = (copy(&s, title), copy(&s, dot));
-    ex(&mut s, "variable.createCollection", json!({"name": "Flags", "modes": ["Short", "Long"]}));
-    ex(&mut s, "variable.create", json!({"collection": "Flags", "name": "badge", "type": "boolean", "value": false}));
-    ex(&mut s, "variable.create", json!({"collection": "Flags", "name": "label", "type": "string", "value": "Hi"}));
-    ex(&mut s, "variable.set", json!({"variable": "label", "mode": "Long", "value": "Hello there"}));
-    // Types must fit, and only instances take them.
-    assert!(s.execute("variable.bind", &json!({"ids": [i], "field": "componentProperties/Show dot", "variable": "label"})).is_err());
-    assert!(s.execute("variable.bind", &json!({"ids": [i], "field": "componentProperties/Title", "variable": "badge"})).is_err());
-    assert!(s.execute("variable.bind", &json!({"ids": [i], "field": "componentProperties/Nope", "variable": "badge"})).is_err());
-    assert!(s.execute("variable.bind", &json!({"ids": [c], "field": "componentProperties/Show dot", "variable": "badge"})).is_err());
-    ex(&mut s, "variable.bind", json!({"ids": [i], "field": "componentProperties/Show dot", "variable": "badge"}));
-    ex(&mut s, "variable.bind", json!({"ids": [i], "field": "componentProperties/Title", "variable": "label"}));
+    tv::collection(&mut s, "Flags", &["Short", "Long"]);
+    tv::variable(&mut s, "Flags", "badge", "boolean", &[json!(false)]);
+    tv::variable(&mut s, "Flags", "label", "string", &[json!("Hi")]);
+    tv::set(&mut s, "label", "Long", json!("Hello there"));
+    // Bound to an instance's boolean and text properties.
+    tv::bind(&mut s, &[i], "componentProperties/Show dot", "badge");
+    tv::bind(&mut s, &[i], "componentProperties/Title", "label");
     assert!(!node(&s, idot).visible, "the bound boolean hides the dot");
     assert_eq!(node(&s, ititle).kind.text().unwrap().characters, "Hi");
     // Values and modes flow in.
-    ex(&mut s, "variable.set", json!({"variable": "badge", "value": true}));
+    tv::set_default(&mut s, "badge", json!(true));
     assert!(node(&s, idot).visible);
-    ex(&mut s, "variable.setMode", json!({"collection": "Flags", "mode": "Long", "ids": [i]}));
+    tv::mode(&mut s, i, "Flags", "Long");
     assert_eq!(node(&s, ititle).kind.text().unwrap().characters, "Hello there");
     assert!(node(&s, ititle).overrides.is_empty(), "property values aren't overrides");
     // A main edit rebuilds the instance: its bindings stay.
     ex(&mut s, "node.set", json!({"id": dot, "props": {"fill": "#00FF00"}}));
     assert!(node(&s, i).bound.contains_key("componentProperties/Title"));
-    ex(&mut s, "variable.set", json!({"variable": "label", "mode": "Long", "value": "After edit"}));
+    tv::set(&mut s, "label", "Long", json!("After edit"));
     assert_eq!(node(&s, ititle).kind.text().unwrap().characters, "After edit");
     // Renaming the property keeps the binding; deleting it drops the binding.
     ex(&mut s, "component.editProperty", json!({"id": c, "name": "Title", "newName": "Heading"}));
     assert!(node(&s, i).bound.contains_key("componentProperties/Heading"));
-    ex(&mut s, "variable.set", json!({"variable": "label", "mode": "Long", "value": "Renamed"}));
+    tv::set(&mut s, "label", "Long", json!("Renamed"));
     assert_eq!(node(&s, ititle).kind.text().unwrap().characters, "Renamed");
     ex(&mut s, "component.deleteProperty", json!({"id": c, "name": "Heading"}));
     assert!(!node(&s, i).bound.keys().any(|k| k.contains("Heading")));
     assert!(matches!(node(&s, i).kind, NodeKind::Instance { .. }));
     // Unbinding keeps the value (the Long mode's `false`).
     assert!(!node(&s, idot).visible);
-    ex(&mut s, "variable.bind", json!({"ids": [i], "field": "componentProperties/Show dot", "variable": null}));
-    ex(&mut s, "variable.set", json!({"variable": "badge", "mode": "Long", "value": true}));
+    tv::unbind(&mut s, i, "componentProperties/Show dot");
+    tv::set(&mut s, "badge", "Long", json!(true));
     assert!(!node(&s, idot).visible);
-    ex(&mut s, "variable.set", json!({"variable": "badge", "mode": "Long", "value": false}));
+    tv::set(&mut s, "badge", "Long", json!(false));
     // Resetting the instance drops its property bindings with its values; detaching too.
-    ex(&mut s, "variable.bind", json!({"ids": [i], "field": "componentProperties/Show dot", "variable": "badge"}));
+    tv::bind(&mut s, &[i], "componentProperties/Show dot", "badge");
     assert!(!node(&s, idot).visible);
     ex(&mut s, "component.resetInstance", json!({"ids": [i]}));
     assert!(node(&s, i).bound.is_empty());
     assert!(node(&s, idot).visible, "back to the default");
-    ex(&mut s, "variable.bind", json!({"ids": [i], "field": "componentProperties/Show dot", "variable": "badge"}));
+    tv::bind(&mut s, &[i], "componentProperties/Show dot", "badge");
     ex(&mut s, "component.detach", json!({"ids": [i]}));
     assert!(node(&s, i).bound.is_empty());
 }

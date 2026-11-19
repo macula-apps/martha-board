@@ -41,7 +41,7 @@ pub fn normalize(doc: &mut Document, before: &Document) {
     let revalued = doc.variables != before.variables;
     // Extended collections follow edits of the collections they extend in this file.
     if revalued {
-        cmd::variables::sync_extensions(doc);
+        crate::variable_data::sync_extensions(doc);
     }
     let m = measure::TextMeasure;
     let restyled = revalued || doc.styles != before.styles;

@@ -5,6 +5,7 @@ use crate::Session;
 use crate::compare::props::{Prop, Section, properties};
 use crate::compare::{ChangeKind, Comparison, compare_docs};
 use crate::components::tests::{card, copy_of, ex, idv};
+use crate::test_variables as tv;
 use figcraft_doc::*;
 use serde_json::{Value, json};
 
@@ -155,9 +156,9 @@ fn properties_group_layout_auto_layout_paints_and_tokens() {
     let f = pid(s.execute("frame.create", &json!({"x": 100, "y": 50, "width": 300, "height": 200})).unwrap());
     let r = pid(s.execute("shape.rectangle", &json!({"x": 130, "y": 90, "width": 80, "height": 40, "parent": f})).unwrap());
     s.execute("node.set", &json!({"id": r, "props": {"fill": "#0D99FF80", "cornerRadius": 6, "opacity": 0.5}})).unwrap();
-    s.execute("variable.createCollection", &json!({"name": "T"})).unwrap();
-    s.execute("variable.create", &json!({"collection": "T", "name": "radius/sm", "type": "number", "value": 6})).unwrap();
-    s.execute("variable.bind", &json!({"ids": [r], "field": "cornerRadius", "variable": "radius/sm"})).unwrap();
+    tv::collection(&mut s, "T", &["Mode 1"]);
+    tv::variable(&mut s, "T", "radius/sm", "number", &[json!(6)]);
+    tv::bind(&mut s, &[r], "cornerRadius", "radius/sm");
     s.execute("select.set", &json!({"ids": [r]})).unwrap();
     s.execute("style.create", &json!({"type": "paint", "name": "Brand/Blue"})).unwrap();
     s.execute("style.apply", &json!({"ids": [r], "style": "Brand/Blue"})).unwrap();
@@ -189,12 +190,19 @@ fn properties_group_layout_auto_layout_paints_and_tokens() {
 #[test]
 fn stored_variable_ids_keep_their_property_token() {
     let mut s = Session::new();
-    s.execute("variable.createCollection", &json!({"name": "Theme"})).unwrap();
-    let shadow = s.execute("variable.create", &json!({"collection": "Theme", "name": "shadow", "type": "color", "value": "#FF0000"})).unwrap();
-    let surface = s.execute("variable.create", &json!({"collection": "Theme", "name": "surface", "type": "color", "value": "#0D99FF"})).unwrap();
-    let r = pid(s.execute("node.create", &json!({"type": "rectangle", "props": {"fill": {"$var": surface["id"]}}})).unwrap());
-    s.execute("variable.update", &json!({"variable": "surface", "codeSyntax": {"WEB": "--real-surface"}})).unwrap();
-    s.execute("variable.update", &json!({"variable": shadow["id"], "name": surface["id"], "codeSyntax": {"WEB": "--shadow"}})).unwrap();
+    tv::collection(&mut s, "Theme", &["Mode 1"]);
+    let shadow = tv::variable(&mut s, "Theme", "shadow", "color", &[json!("#FF0000")]);
+    let surface = tv::variable(&mut s, "Theme", "surface", "color", &[json!("#0D99FF")]);
+    let r = pid(s.execute("node.create", &json!({"type": "rectangle"})).unwrap());
+    tv::bind(&mut s, &[r], "fill", &surface);
+    tv::edit_variable(&mut s, "surface", |v| {
+        v.code_syntax.insert("WEB".into(), "--real-surface".into());
+    });
+    // A variable named like another's id: the token comes from the id the layer is bound to.
+    tv::edit_variable(&mut s, &shadow, |v| {
+        v.name.clone_from(&surface);
+        v.code_syntax.insert("WEB".into(), "--shadow".into());
+    });
 
     let p = properties(s.doc().unwrap(), r);
     let fill = row(&p, "Fills", "Solid");

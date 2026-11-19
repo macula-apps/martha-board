@@ -11,6 +11,7 @@ use crate::cmd::file::load_path;
 use crate::derived::{NO_MOVE_SHORTCUT, only_moved_layers};
 use crate::normalize;
 use crate::params::id_of;
+use crate::test_variables as tv;
 use crate::tools::{PointerEvent, PointerKind};
 
 /// Normalise `doc` against `before`, with the shortcut or without it.
@@ -97,11 +98,11 @@ fn drag_preview(shortcut: bool, to: &[(f64, f64)]) -> (Document, Document) {
     NO_MOVE_SHORTCUT.with(|c| c.set(!shortcut));
     let mut s = Session::new();
     let mut sel = vec![rect(&mut s, None, 0.0, 0.0), rect(&mut s, None, 100.0, 0.0)];
-    s.execute("variable.createCollection", &json!({"name": "T"})).unwrap();
-    s.execute("variable.create", &json!({"collection": "T", "name": "brand", "type": "color", "value": "#FF0000"})).unwrap();
-    s.execute("variable.create", &json!({"collection": "T", "name": "wide", "type": "number", "value": 64})).unwrap();
+    tv::collection(&mut s, "T", &["Mode 1"]);
+    tv::variable(&mut s, "T", "brand", "color", &[json!("#FF0000")]);
+    tv::variable(&mut s, "T", "wide", "number", &[json!(64)]);
     for (field, variable) in [("fill", "brand"), ("width", "wide")] {
-        s.execute("variable.bind", &json!({"ids": [sel[1]], "field": field, "variable": variable})).unwrap();
+        tv::bind(&mut s, &[sel[1]], field, variable);
     }
     assert_eq!(s.doc().unwrap().node(sel[1]).unwrap().bound.len(), 2);
     let g1 = rect(&mut s, None, 0.0, 200.0);

@@ -6,8 +6,7 @@ use egui::{Align2, Color32, CornerRadius, Id, Pos2, Rect, Sense, Stroke, Ui, pos
 use figcraft_color::{BlendMode, Paint, PaintKind};
 use figcraft_doc::{
     Blur, BlurType, BoolOp, Brush, Document, Effect, EffectKind, Glass, GridAlign, GridKind, LayoutGrid, MAX_BLUR_RADIUS, MaskType, Node, NodeId,
-    NodeKind, Noise, NoiseMode, Shadow, StrokeAlign, StrokeCap, StrokeJoin, StrokeProps, Texture, VariableType, WidthPoint, WidthPreset,
-    WidthProfile,
+    NodeKind, Noise, NoiseMode, Shadow, StrokeAlign, StrokeCap, StrokeJoin, StrokeProps, Texture, WidthPoint, WidthPreset, WidthProfile,
 };
 use figcraft_engine::cmd::lists::{moved_index, removed_index};
 use serde_json::{Value, json};
@@ -34,7 +33,7 @@ pub(crate) use menu::menu_row_width;
 pub(crate) use menu::preview_blend;
 pub use menu::{blend_menu, context_popup, menu_check, menu_icon_item, menu_item, menu_item_beside_checks, menu_item_with, menu_popup, menu_row};
 pub(crate) use menu::{block, menu_row_lit, menu_style, row, row_rect};
-use paints::{appearance, page_variable_modes, paints, variable_modes};
+use paints::{appearance, paints};
 pub(crate) use stroke::{CAP_ART_W, cap_art, join_label};
 
 /// Common value of `f` across `ids` (None when mixed or empty).
@@ -256,9 +255,6 @@ fn design(app: &mut FigApp, ui: &mut Ui) {
     }
     appearance(app, ui, &shown, &sel);
     widgets::separator(ui);
-    if variable_modes(app, ui, &shown, &sel) {
-        widgets::separator(ui);
-    }
     if crate::selection_cache::with_nodes(&shown, &sel, |it| it.flatten().any(|n| matches!(n.kind, NodeKind::Text(_)))) {
         crate::typography::typography(app, ui, &shown, &sel);
         widgets::separator(ui);
@@ -277,7 +273,7 @@ fn design(app: &mut FigApp, ui: &mut Ui) {
     crate::export_panel::section(app, ui, &shown, &sel);
 }
 
-/// Draw the page section: background and colour profile, local variables/styles, and the
+/// Draw the page section: background and colour profile, local styles, and the
 /// page export section.
 fn page_section(app: &mut FigApp, ui: &mut Ui, doc: &Document) {
     let Ok(page) = app.session.page() else { return };
@@ -327,9 +323,6 @@ fn page_section(app: &mut FigApp, ui: &mut Ui, doc: &Document) {
         }
     }
     widgets::separator(ui);
-    if page_variable_modes(app, ui, doc, page) {
-        widgets::separator(ui);
-    }
     widgets::section_header(ui, tr("Color profile"), &[], false);
     row(ui, 32.0, |ui| {
         let resp = widgets::dropdown(ui, doc.color_profile.label(), 140.0, None);
@@ -343,18 +336,6 @@ fn page_section(app: &mut FigApp, ui: &mut Ui, doc: &Document) {
                 }
             }
         });
-    });
-    widgets::separator(ui);
-    // Local variables & styles.
-    let vars = doc.variables.variables.iter().filter(|v| !figcraft_engine::library::is_remote_variable(doc, &v.id)).count();
-    widgets::section_header(ui, tr("Local variables"), &[], vars == 0);
-    row(ui, 32.0, |ui| {
-        let r = widgets::dropdown(ui, &trf("Open variables ({count})", &[("count", &vars)]), 200.0, Some(Icon::Styles));
-        if r.clicked() {
-            app.ui.preferences = false;
-            app.ui.palette = None;
-            app.ui.variables.get_or_insert_with(Default::default);
-        }
     });
     widgets::separator(ui);
     widgets::section_header(ui, tr("Local styles"), &[], figcraft_engine::library::local_styles(doc).next().is_none());
@@ -778,8 +759,7 @@ fn constraints_row(app: &mut FigApp, ui: &mut Ui, sel: &[NodeId], c: Option<figc
 
 /// The selected ellipses' arc: Start (degrees), Sweep (a share of a full turn, negative running
 /// the other way) and Ratio (the inner radius), the same values the canvas arc handles drag
-/// (`node.set`'s `arcStart` / `arcSweep` / `arcInner`; bindable to number variables, sweep and
-/// ratio ones holding percentages). Returns whether it showed.
+/// (`node.set`'s `arcStart` / `arcSweep` / `arcInner`). Returns whether it showed.
 fn arc_section(app: &mut FigApp, ui: &mut Ui, doc: &Document, sel: &[NodeId]) -> bool {
     let arcs: Vec<(f64, f64, f64)> = crate::selection_cache::with_nodes(doc, sel, |it| {
         it.flatten()
@@ -802,19 +782,19 @@ fn arc_section(app: &mut FigApp, ui: &mut Ui, doc: &Document, sel: &[NodeId]) ->
     let ratio = same(&|a| a.2 * 100.0);
     widgets::section_header(ui, tr("Arc"), &[], false);
     let col = widgets::col_width(ui.available_width());
-    let field = |app: &mut FigApp, ui: &mut Ui, key: &str, icon: Icon, name: &str, value: Option<f64>, suffix: &str| {
-        crate::variable_ui::number_field(app, ui, &ids, key, Id::unique(("arc", key)), Lead::Icon(icon, name), value, suffix, col)
+    let field = |ui: &mut Ui, key: &str, icon: Icon, name: &str, value: Option<f64>, suffix: &str| {
+        widgets::number_field(ui, Id::unique(("arc", key)), Lead::Icon(icon, name), value, suffix, col, 1.0)
     };
     widgets::sublabels(ui, tr("Start"), Some(tr("Sweep")));
     row(ui, 32.0, |ui| {
-        let e = field(app, ui, "arcStart", Icon::ArcStart, tr("Arc start"), start, "°");
+        let e = field(ui, "arcStart", Icon::ArcStart, tr("Arc start"), start, "°");
         app.field(&ids, "arcStart", e, |v| json!(v));
-        let e = field(app, ui, "arcSweep", Icon::ArcSweep, tr("Arc sweep"), sweep, "%");
+        let e = field(ui, "arcSweep", Icon::ArcSweep, tr("Arc sweep"), sweep, "%");
         app.field(&ids, "arcSweep", e, |v| json!(v.clamp(-100.0, 100.0) * 3.6));
     });
     widgets::sublabels(ui, tr("Ratio"), None);
     row(ui, 32.0, |ui| {
-        let e = field(app, ui, "arcInner", Icon::ArcRatio, tr("Arc ratio"), ratio, "%");
+        let e = field(ui, "arcInner", Icon::ArcRatio, tr("Arc ratio"), ratio, "%");
         app.field(&ids, "arcInner", e, |v| json!((v / 100.0).clamp(0.0, 0.99)));
     });
     ui.add_space(8.0);

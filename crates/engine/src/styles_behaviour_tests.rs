@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 
 use crate::Session;
 use crate::params::id_of;
+use crate::test_variables as tv;
 use figcraft_doc::{ListStyle, Node, NodeId, ParagraphStyle, StyleKind, TextData};
 
 fn id(v: Value) -> NodeId {
@@ -308,26 +309,26 @@ fn applying_a_style_replaces_variables_bound_to_that_property() {
     // variables; pinned: the style's paints replace the bound ones (else the variable would win on
     // the next edit), and binding a variable to a styled paint is an edit (the style detaches).
     let mut s = Session::new();
-    run(&mut s, "variable.createCollection", json!({"name": "C"}));
-    run(&mut s, "variable.create", json!({"collection": "C", "name": "brand", "type": "color", "value": "#0D99FF"}));
+    tv::collection(&mut s, "C", &["Mode 1"]);
+    tv::variable(&mut s, "C", "brand", "color", &[json!("#0D99FF")]);
     let r = rect(&mut s, 0.0);
     let st = sid(run(&mut s, "style.create", json!({"type": "paint", "name": "Red", "value": ["#FF0000"]})));
-    run(&mut s, "variable.bind", json!({"ids": [r], "field": "fill", "variable": "brand"}));
+    tv::bind(&mut s, &[r], "fill", "brand");
     assert_eq!(hex(&s, r), ["0D99FF"]);
     run(&mut s, "style.apply", json!({"ids": [r], "style": st}));
     assert_eq!(hex(&s, r), ["FF0000"], "the style's paint shows");
     assert!(node(&s, r).bound.is_empty(), "the fill binding went");
     assert_eq!(node(&s, r).styles.fill.as_deref(), Some(st.as_str()));
     // A later variable edit doesn't reach it.
-    run(&mut s, "variable.set", json!({"variable": "brand", "value": "#00FF00"}));
+    tv::set_default(&mut s, "brand", json!("#00FF00"));
     assert_eq!(hex(&s, r), ["FF0000"]);
     // Binding the variable to the styled fill: the variable's colour shows and the style detaches.
-    run(&mut s, "variable.bind", json!({"ids": [r], "field": "fill", "variable": "brand"}));
+    tv::bind(&mut s, &[r], "fill", "brand");
     assert_eq!(hex(&s, r), ["00FF00"]);
     assert_eq!(node(&s, r).styles.fill, None);
     // Bindings of other properties stay when a paint style is applied.
-    run(&mut s, "variable.create", json!({"collection": "C", "name": "w", "type": "number", "value": 64}));
-    run(&mut s, "variable.bind", json!({"ids": [r], "field": "width", "variable": "w"}));
+    tv::variable(&mut s, "C", "w", "number", &[json!(64)]);
+    tv::bind(&mut s, &[r], "width", "w");
     run(&mut s, "style.apply", json!({"ids": [r], "style": st}));
     assert!(node(&s, r).bound.contains_key("width"));
     assert_eq!(node(&s, r).width, 64.0);

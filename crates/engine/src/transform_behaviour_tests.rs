@@ -12,6 +12,7 @@ use serde_json::{Value, json};
 
 use crate::Session;
 use crate::params::id_of;
+use crate::test_variables as tv;
 use crate::tools::{Cursor, Handle, PointerEvent, PointerKind, handle_at, handle_cursor, resized_box, selection_box};
 use figcraft_doc::{NodeId, TextAutoResize};
 use figcraft_geom::{Point, Rect, is_flipped, rotation_degrees};
@@ -293,9 +294,9 @@ fn image_crop_detaches_a_bound_size_and_crops() {
         for mods in [CMD, NONE] {
             let mut s = session();
             let layer = image_layer(&mut s);
-            ex(&mut s, "variable.createCollection", json!({"name": "Tokens"}));
-            ex(&mut s, "variable.create", json!({"collection": "Tokens", "name": "bound", "type": "number", "value": value}));
-            ex(&mut s, "variable.bind", json!({"ids": [layer], "field": field, "variable": "bound"}));
+            tv::collection(&mut s, "Tokens", &["Mode 1"]);
+            tv::variable(&mut s, "Tokens", "bound", "number", &[json!(value)]);
+            tv::bind(&mut s, &[layer], field, "bound");
             let before = s.doc().unwrap().clone();
             let pixels = figcraft_render::render_node(&before, layer, 1.0).unwrap();
             drag(&mut s, from, to, mods);

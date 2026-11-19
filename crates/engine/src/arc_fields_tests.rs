@@ -8,6 +8,7 @@ use serde_json::{Value, json};
 
 use crate::Session;
 use crate::params::id_of;
+use crate::test_variables as tv;
 use figcraft_doc::{NodeId, NodeKind};
 
 fn ex(s: &mut Session, cmd: &str, p: Value) -> Value {
@@ -51,18 +52,18 @@ fn fields_write_degrees_and_percentages() {
 fn variables_bound_to_the_arc_hold_what_the_fields_show() {
     let mut s = Session::new();
     let e = ellipse(&mut s);
-    ex(&mut s, "variable.createCollection", json!({"name": "Shape", "modes": ["A", "B"]}));
-    ex(&mut s, "variable.create", json!({"collection": "Shape", "name": "start", "type": "number", "value": 45}));
-    ex(&mut s, "variable.create", json!({"collection": "Shape", "name": "sweep", "type": "number", "value": 50}));
-    ex(&mut s, "variable.create", json!({"collection": "Shape", "name": "ratio", "type": "number", "value": 25}));
+    tv::collection(&mut s, "Shape", &["A", "B"]);
+    tv::variable(&mut s, "Shape", "start", "number", &[json!(45)]);
+    tv::variable(&mut s, "Shape", "sweep", "number", &[json!(50)]);
+    tv::variable(&mut s, "Shape", "ratio", "number", &[json!(25)]);
     for (field, var) in [("arcStart", "start"), ("arcSweep", "sweep"), ("arcInner", "ratio")] {
-        ex(&mut s, "variable.bind", json!({"ids": [e], "field": field, "variable": var}));
+        tv::bind(&mut s, &[e], field, var);
     }
     let (start, sweep, inner) = arc(&s, e);
     assert!((start - PI / 4.0).abs() < 1e-9, "degrees: {start}");
     assert!((sweep - PI).abs() < 1e-9, "50% of a turn: {sweep}");
     assert!((inner - 0.25).abs() < 1e-9, "25%: {inner}");
     // A small ratio stays a percentage.
-    ex(&mut s, "variable.set", json!({"variable": "ratio", "value": 1}));
+    tv::set_default(&mut s, "ratio", json!(1));
     assert!((arc(&s, e).2 - 0.01).abs() < 1e-9, "{:?}", arc(&s, e));
 }

@@ -8,6 +8,7 @@ use serde_json::{Value, json};
 
 use crate::Session;
 use crate::collab::EngineRecompute;
+use crate::test_variables as tv;
 
 /// A starting file: a frame with a few layers and some text.
 pub(crate) fn base() -> Document {
@@ -18,15 +19,19 @@ pub(crate) fn base() -> Document {
     }
     s.execute("text.create", &json!({"text": "Hello", "x": 20, "y": 100, "parent": f})).unwrap();
     s.execute("shape.ellipse", &json!({"x": 500, "y": 0, "width": 80, "height": 80})).unwrap();
-    // A component with an instance (instances follow edits of their main) and variables to bind.
+    // A component with an instance (instances follow edits of their main) and variables.
     let card = s.execute("frame.create", &json!({"x": 0, "y": 400, "width": 120, "height": 80})).unwrap()["id"].clone();
     s.execute("shape.rectangle", &json!({"x": 10, "y": 410, "width": 30, "height": 30, "parent": card})).unwrap();
     let main = s.execute("component.create", &json!({"ids": [card]})).unwrap()["id"].clone();
     s.execute("instance.create", &json!({"component": main, "x": 200, "y": 400})).unwrap();
-    s.execute("variable.createCollection", &json!({"name": "Tokens"})).unwrap();
+    tv::collection(&mut s, "Tokens", &["Mode 1"]);
     for v in 0..4 {
-        s.execute("variable.create", &json!({"collection": "Tokens", "name": format!("v{v}"), "type": "color", "value": "#3366FF"})).unwrap();
+        tv::variable(&mut s, "Tokens", &format!("v{v}"), "color", &[json!("#3366FF")]);
     }
+    // Two rectangles bound to variables, as a file holds them.
+    let rects: Vec<NodeId> = s.doc().unwrap().nodes().filter(|n| matches!(n.kind, NodeKind::Rectangle)).map(|n| n.id).take(2).collect();
+    tv::bind(&mut s, &rects[..1], "fill", "v0");
+    tv::bind(&mut s, &rects[1..], "fill", "v1");
     s.doc().unwrap().clone()
 }
 
@@ -75,11 +80,8 @@ pub(crate) fn random_command(doc: &Document, rng: &mut Rng, with_undo: bool) -> 
         },
         23 => ("object.moveToPage", json!({"ids": [one(&layers, rng)], "page": one(&doc.pages, rng)})),
         24 => ("comment.add", json!({"x": x, "y": y, "text": "Looks good", "page": one(&doc.pages, rng)})),
-        25 => match rng.below(3) {
-            0 => ("variable.createCollection", json!({"name": "Tokens"})),
-            1 => ("variable.create", json!({"collection": "Tokens", "name": format!("v{}", rng.below(4)), "type": "color", "value": color(rng)})),
-            _ => ("variable.bind", json!({"ids": [one(&layers, rng)], "field": "fill", "variable": format!("v{}", rng.below(4))})),
-        },
+        // Variables and bindings change no more through commands (#16); a paint opacity edit keeps a binding.
+        25 => ("fill.set", json!({"ids": [one(&layers, rng)], "opacity": rng.below(11) as f64 / 10.0})),
         26 => ("effect.add", json!({"ids": [one(&layers, rng)], "type": "dropShadow"})),
         27 => (
             "node.set",

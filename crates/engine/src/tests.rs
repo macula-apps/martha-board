@@ -1,6 +1,7 @@
 use serde_json::json;
 
 use super::*;
+use crate::test_variables as tv;
 use figcraft_doc::NodeKind;
 
 fn sess() -> Session {
@@ -250,13 +251,12 @@ fn styles_and_variables() {
     s.execute("style.update", &json!({"style": sid, "value": ["#ff00ff"]})).unwrap();
     assert_eq!(s.doc().unwrap().node(r2).unwrap().fills[0].solid_color().unwrap().to_hex(), "FF00FF");
     // Variables with modes.
-    s.execute("variable.createCollection", &json!({"name": "Theme", "modes": ["Light", "Dark"]})).unwrap();
-    s.execute("variable.create", &json!({"collection": "Theme", "name": "bg", "type": "color", "values": {"Light": "#ffffff", "Dark": "#000000"}}))
-        .unwrap();
-    s.execute("variable.bind", &json!({"ids": [r], "field": "fill", "variable": "bg"})).unwrap();
+    tv::collection(&mut s, "Theme", &["Light", "Dark"]);
+    tv::variable(&mut s, "Theme", "bg", "color", &[json!("#ffffff"), json!("#000000")]);
+    tv::bind(&mut s, &[r], "fill", "bg");
     assert_eq!(s.doc().unwrap().node(r).unwrap().fills[0].solid_color().unwrap().to_hex(), "FFFFFF");
     let page = s.page().unwrap();
-    s.execute("variable.setMode", &json!({"ids": [page], "collection": "Theme", "mode": "Dark"})).unwrap();
+    tv::mode(&mut s, page, "Theme", "Dark");
     assert_eq!(s.doc().unwrap().node(r).unwrap().fills[0].solid_color().unwrap().to_hex(), "000000");
 }
 
@@ -422,7 +422,7 @@ fn every_command_survives_junk_params() {
         json!({"variations": {"wght": 1e308, "": "x", "slnt": null}, "props": {"fontVariations": [1], "variationSettings": {"wdth": "-1e9"}}, "text": 7, "cursor": -3}),
         json!({"style": 3, "props": {"listStyle": 5, "indentation": 1e308, "listSpacing": "NaN", "hangingList": "yes", "start": -5, "end": 1e12,
                "textDecorationThickness": {"unit": "pixels", "value": "x"}, "textDecorationOffset": -1e308, "textDecorationColor": [1]}}),
-        // Paint variable props: malformed wrappers, unsupported fields and mixed references.
+        // Paints shaped like the variable wrappers node.set took before #16: junk now too.
         json!({"id": 2, "type": "rectangle", "props": {"fill": {"$var": null}, "stroke": {"$var": 7}}}),
         json!({"id": 2, "type": "rectangle", "props": {"fill": {"$var": ""}, "stroke": {"$var": []}}}),
         json!({"id": 2, "type": "rectangle", "props": {"fill": {"$var": "x", "extra": true}, "width": {"$var": "x"}}}),

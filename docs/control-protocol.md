@@ -337,7 +337,7 @@ separate calls. Returns `{queued}`.
 
 Invoke a menu item exactly like clicking it (this may open a dialog). Returns `{ok, lastError}`.
 
-### `ui.set {leftTab?, theme?, home?, homeSection?, homeSearch?, homeRecentsView?, homeRecentsSort?, homeRecentsOrder?, palette?, mainMenu?, focusRegion?, colorPicker?, variables?, layerFilter?, collapseLayers?, exportPreview?, colorProfileDialog?, stylePicker?, stylePickerEdit?, stylePickerView?, iconGallery?, contextMenu?, contextSelectLayer?, commentOpen?, commentDraft?, commentFilter?, commentSort?, commentSearch?, commentReply?, commentEdit?, resetFrameStats?, pluginsWindow?, pluginsTab?, pluginConfirm?, pluginForm?}`
+### `ui.set {leftTab?, theme?, home?, homeSection?, homeSearch?, homeRecentsView?, homeRecentsSort?, homeRecentsOrder?, palette?, mainMenu?, focusRegion?, colorPicker?, layerFilter?, collapseLayers?, exportPreview?, colorProfileDialog?, stylePicker?, stylePickerEdit?, stylePickerView?, iconGallery?, contextMenu?, contextSelectLayer?, commentOpen?, commentDraft?, commentFilter?, commentSort?, commentSearch?, commentReply?, commentEdit?, resetFrameStats?, pluginsWindow?, pluginsTab?, pluginConfirm?, pluginForm?}`
 
 Switch panels and modes: `leftTab` `file|assets`, `theme`,
 `home` (bool), `homeSection` (`recents`, `online` or `templates`: which section the home screen shows, as `ui.inspect` reports it; opening
@@ -352,9 +352,7 @@ its parameters form when it has parameters; `null` closes the form), `focusRegio
 `iconGallery` (bool:
 every UI icon at 12, 16, 24 and 32 px over the window, for reviewing the icon set), `colorPicker`
 (`{fills?, index?}`: open the colour picker on the selection's paint, which notes a Display P3 colour
-outside sRGB; `null` closes it), `variables` (bool,
-or a collection id or name to show, or `{library, collection?}` for an enabled library's collection: the
-Variables editor), `layerFilter` (string:
+outside sRGB; `null` closes it), `layerFilter` (string:
 open the layers search with that filter; `null` closes it), `collapseLayers` (true: collapse the
 layers tree), `exportPreview` (bool: the Design panel Export section's preview), `colorProfileDialog` (`srgb|displayP3`: open File ▸ Color profile with that
 profile chosen; `null` closes it), `stylePicker` (`fill|stroke|effect|grid|text`: open the style

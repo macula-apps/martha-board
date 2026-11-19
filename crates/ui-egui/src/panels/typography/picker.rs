@@ -41,8 +41,8 @@ pub(crate) struct FontPick {
     pub hovered: Option<String>,
 }
 
-/// The most the font menu is tall (its search field and the "Apply variable" row above the list
-/// included); the list scrolls past that.
+/// The most the font menu is tall (its search field and a row above the list, such as the local
+/// fonts one, included); the list scrolls past that.
 const MENU_HEIGHT: f32 = LIST_HEIGHT + 40.0;
 
 /// What the menu's header worked out for its list.

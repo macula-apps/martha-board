@@ -5,9 +5,9 @@ use std::sync::Arc;
 
 use egui::{Id, Ui};
 use figcraft_color::{Color, Paint};
-use figcraft_doc::{Document, NodeId, PublishedLibrary, Style, StyleKind, VariableType};
+use figcraft_doc::{Document, NodeId, PublishedLibrary, Style, StyleKind};
 use figcraft_engine::library;
-use figcraft_engine::selection_colors::{PaintTarget, SelectionColor, bind_refusal, collect, create_refusal, in_scope};
+use figcraft_engine::selection_colors::{PaintTarget, SelectionColor, collect, create_refusal};
 use serde_json::json;
 
 use crate::a11y::Tip;
@@ -66,7 +66,7 @@ pub(crate) fn toggle(app: &mut FigApp, targets: Vec<PaintTarget>, response: Opti
 }
 
 /// Draw the selection-colour groups (two, or one when a selected layer has children): swatch opens the picker, hex and opacity
-/// edits, style/variable detach/apply/bind, a style from this file or an enabled library, Create
+/// edits, style/variable detach, a style from this file or an enabled library, Create
 /// style, and “select layers with this color”; disabled during an interaction.
 pub fn section(app: &mut FigApp, ui: &mut Ui, doc: &Arc<Document>, ids: &[NodeId]) {
     let Ok(ds) = app.session.ds() else { return };
@@ -177,27 +177,6 @@ pub fn section(app: &mut FigApp, ui: &mut Ui, doc: &Arc<Document>, ids: &[NodeId
                                         open_create_form(app, ui, doc, group);
                                         ui.close();
                                     }
-                                    let variables: Vec<_> = doc
-                                        .variables
-                                        .variables
-                                        .iter()
-                                        .filter(|v| {
-                                            v.kind == VariableType::Color
-                                                && bind_refusal(doc, &group.targets, &v.id).is_none()
-                                                && in_scope(doc, &group.targets, &v.id)
-                                        })
-                                        .collect();
-                                    if !variables.is_empty() {
-                                        ui.separator();
-                                        widgets::label(ui, tr("Color variables"), t.text_secondary);
-                                    }
-                                    for v in variables {
-                                        if crate::right::menu_item(ui, &v.name, "") {
-                                            app.run("selection.bindColorVariable", json!({"targets": group.targets, "variable": v.id}));
-                                            app.ui.picker = None;
-                                            ui.close();
-                                        }
-                                    }
                                 }
                             });
                             if linked_name.is_some() {
@@ -226,7 +205,7 @@ pub fn section(app: &mut FigApp, ui: &mut Ui, doc: &Arc<Document>, ids: &[NodeId
 fn style_items(app: &mut FigApp, ui: &mut Ui, doc: &Document, group: &SelectionColor, t: &Tokens) {
     let paint = |s: &&Style| matches!(s.kind, StyleKind::Paint { .. });
     let local: Vec<&Style> = library::local_styles(doc).filter(paint).collect();
-    let libs = crate::variable_ui::libraries(app, doc);
+    let libs = crate::style_picker::libraries(app, doc);
     let offered: Vec<(&PublishedLibrary, Vec<&Style>)> = libs
         .iter()
         .map(|l| (l.as_ref(), l.doc.styles.iter().filter(|s| l.manifest.style(&s.id).is_some_and(|x| x.published)).filter(paint).collect::<Vec<_>>()))
@@ -460,15 +439,16 @@ mod tests {
     #[test]
     fn linked_variable_name_uses_its_stored_id_when_another_name_matches() {
         let (mut p, a, _) = Panel::new();
-        p.app.run("variable.createCollection", json!({"name":"Theme"}));
-        let shadow = p.app.run("variable.create", json!({"collection":"Theme","name":"Shadow","type":"color","value":"#ff0000"})).unwrap();
-        let accent = p.app.run("variable.create", json!({"collection":"Theme","name":"Accent","type":"color","value":"#00ff00"})).unwrap();
-        p.app.run("variable.bind", json!({"id":a,"field":"fill","variable":accent["id"]}));
-        p.app.run("variable.update", json!({"variable":shadow["id"],"name":accent["id"]}));
+        let accent = crate::test_variables::bind_color(&mut p.app.session, &[a], "fill", "Accent", "#00ff00");
+        // Another variable named like Accent's id.
+        let doc = p.app.session.doc_mut().unwrap();
+        let mut shadow = doc.variables.get_by_id(&accent).unwrap().clone();
+        (shadow.id, shadow.name) = (doc.new_variable_id(), accent.clone());
+        doc.variables.variables.insert(0, shadow);
         assert!(p.app.ui.last_error.is_none());
         let texts = p.frame(vec![]);
         assert!(texts.iter().any(|(text, _)| text == "Accent"));
-        assert!(!texts.iter().any(|(text, _)| text == accent["id"].as_str().unwrap()));
+        assert!(!texts.iter().any(|(text, _)| *text == accent));
     }
 
     /// Shared swatches stay distinguishable by their paint values to assistive technology.
@@ -607,34 +587,11 @@ mod tests {
     }
 
     #[test]
-    fn styles_menu_applies_a_color_variable_to_the_row() {
-        let (mut p, a, b) = Panel::new();
-        p.app.run("variable.createCollection", json!({"name":"Theme"}));
-        p.app.run("variable.create", json!({"collection":"Theme","name":"Accent","type":"color","value":"#00ff00"}));
-        p.app.run("variable.create", json!({"collection":"Theme","name":"Gap","type":"number","value":8}));
-        let red = p.frame(vec![]).into_iter().find(|(s, _)| s == "FF0000").unwrap().1;
-        p.click(Pos2::new(228.0, red.y));
-        let texts = p.frame(vec![]);
-        assert!(texts.iter().any(|(s, _)| s == "Color variables"));
-        assert!(!texts.iter().any(|(s, _)| s == "Gap"));
-        let accent = texts.iter().find(|(s, _)| s == "Accent").unwrap().1;
-        p.click(accent);
-        let doc = p.app.session.doc().unwrap();
-        assert_eq!(doc.node(a).unwrap().fills[0].solid_color().unwrap().to_hex(), "00FF00");
-        assert!(!doc.node(a).unwrap().bound.is_empty());
-        assert!(doc.node(b).unwrap().bound.is_empty());
-        assert!(p.app.ui.last_error.is_none());
-        assert!(p.frame(vec![]).iter().any(|(s, _)| s == "Accent"));
-    }
-
-    #[test]
     fn a_linked_row_detaches_its_style_or_variable() {
         let (mut p, a, b) = Panel::new();
         p.app.run("style.create", json!({"type":"paint","name":"Brand","value":"#ff0000"}));
         p.app.run("style.apply", json!({"id":a,"style":"Brand","target":"fill"}));
-        p.app.run("variable.createCollection", json!({"name":"Theme"}));
-        p.app.run("variable.create", json!({"collection":"Theme","name":"Accent","type":"color","value":"#0000ff"}));
-        p.app.run("variable.bind", json!({"id":b,"field":"fill","variable":"Accent"}));
+        crate::test_variables::bind_color(&mut p.app.session, &[b], "fill", "Accent", "#0000ff");
         for name in ["Brand", "Accent"] {
             let row = p.frame(vec![]).into_iter().find(|(s, _)| s == name).unwrap().1;
             p.click(Pos2::new(228.0, row.y));

@@ -7,6 +7,7 @@ use serde_json::{Value, json};
 use crate::Session;
 use crate::library::{is_remote_style, library_of};
 use crate::params::id_of;
+use crate::test_variables as tv;
 
 fn ex(s: &mut Session, cmd: &str, p: Value) -> Value {
     match s.execute(cmd, &p) {
@@ -39,8 +40,8 @@ fn library(path: &str, color: &str, extra: &[&str]) -> String {
     let r = idv(&ex(&mut s, "shape.rectangle", json!({"x": 0, "y": 100, "width": 10, "height": 10})));
     ex(&mut s, "node.set", json!({"id": r, "props": {"fill": color}}));
     ex(&mut s, "style.create", json!({"type": "paint", "name": "Brand", "from": r}));
-    ex(&mut s, "variable.createCollection", json!({"name": "Theme", "modes": ["Light", "Dark"]}));
-    ex(&mut s, "variable.create", json!({"collection": "Theme", "name": "accent", "type": "color", "value": color}));
+    tv::collection(&mut s, "Theme", &["Light", "Dark"]);
+    tv::variable(&mut s, "Theme", "accent", "color", &[json!(color)]);
     for (i, name) in extra.iter().enumerate() {
         let e = idv(&ex(&mut s, "frame.create", json!({"x": 200 + 50 * i, "y": 0, "width": 20, "height": 20, "name": name})));
         ex(&mut s, "component.create", json!({"ids": [e]}));
@@ -81,8 +82,10 @@ fn swap_moves_instances_styles_and_variables_by_name() {
     let rect = idv(&ex(&mut s, "shape.rectangle", json!({"x": 0, "y": 200, "width": 10, "height": 10})));
     ex(&mut s, "library.applyStyle", json!({"library": a, "style": "Brand", "ids": [rect]}));
     let dot = idv(&ex(&mut s, "shape.rectangle", json!({"x": 50, "y": 200, "width": 10, "height": 10})));
-    ex(&mut s, "library.bindVariable", json!({"library": a, "variable": "accent", "field": "fill", "ids": [dot]}));
-    let extended = ex(&mut s, "library.extendCollection", json!({"library": a, "collection": "Theme"}))["id"].clone();
+    let accent = tv::import_variable(&mut s, &a, "accent");
+    tv::bind(&mut s, &[dot], "fill", &accent);
+    let theme = tv::import_collection(&mut s, &a, "Theme");
+    let extended = tv::extend(&mut s, &theme, "Theme (extended)");
     let before = s.doc().unwrap().clone();
 
     let r = ex(&mut s, "library.swap", json!({"from": a, "to": b}));
@@ -112,7 +115,12 @@ fn swap_moves_instances_styles_and_variables_by_name() {
 
     // Swapping what has a match for everything removes the old library.
     ex(&mut s, "edit.delete", json!({"ids": [only]}));
-    ex(&mut s, "variable.deleteCollection", json!({"collection": extended}));
+    crate::variable_data::edit(&mut s, |doc| {
+        doc.variables.collections.retain(|c| c.id != extended);
+        doc.variables.variables.retain(|v| v.collection != extended);
+        Ok(())
+    })
+    .unwrap();
     let r = ex(&mut s, "library.swap", json!({"from": a, "to": b}));
     assert_eq!((r["unmatched"].as_array().map(Vec::len), &r["removed"]), (Some(0), &json!(true)), "{r}");
     assert!(s.doc().unwrap().libraries.enabled.iter().all(|l| l.id != a));
@@ -129,18 +137,25 @@ fn stored_variable_ids_keep_library_swap_matches_on_the_real_copies() {
     let a = library(&pa, "#0000ff", &[]);
     let b = library(&pb, "#00ff00", &[]);
     let mut s = Session::new();
-    let shadow_collection = ex(&mut s, "variable.createCollection", json!({"name": "Shadow"}));
-    let shadow = ex(&mut s, "variable.create", json!({"collection": "Shadow", "name": "shadow", "type": "color", "value": "#ff0000"}));
+    let shadow_collection = tv::collection(&mut s, "Shadow", &["Mode 1"]);
+    let shadow = tv::variable(&mut s, "Shadow", "shadow", "color", &[json!("#ff0000")]);
     ex(&mut s, "library.add", json!({"path": pa}));
     ex(&mut s, "library.add", json!({"path": pb}));
     let dot = idv(&ex(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})));
-    ex(&mut s, "library.bindVariable", json!({"library": a, "variable": "accent", "field": "fill", "ids": [dot]}));
-    ex(&mut s, "library.setVariableMode", json!({"library": a, "collection": "Theme", "mode": "Dark", "ids": [dot]}));
+    let accent = tv::import_variable(&mut s, &a, "accent");
+    tv::bind(&mut s, &[dot], "fill", &accent);
+    let theme = tv::import_collection(&mut s, &a, "Theme");
+    tv::mode(&mut s, dot, &theme, "Dark");
     let doc = s.doc().unwrap();
     let target = doc.libraries.variables[0].local.clone();
     let collection = doc.libraries.collections[0].local.clone();
-    ex(&mut s, "variable.update", json!({"variable": shadow["id"], "name": target}));
-    ex(&mut s, "variable.renameCollection", json!({"collection": shadow_collection["id"], "name": collection}));
+    // This file's variable and collection named like the copies' ids: the swap goes by ids.
+    tv::edit_variable(&mut s, &shadow, |v| v.name = target);
+    crate::variable_data::edit(&mut s, |doc| {
+        doc.variables.collections.iter_mut().find(|c| c.id == shadow_collection).unwrap().name = collection;
+        Ok(())
+    })
+    .unwrap();
     let result = ex(&mut s, "library.swap", json!({"from": a, "to": b}));
     assert_eq!(result["variables"], 1);
     assert_eq!(result["unmatched"], json!([]));
@@ -158,15 +173,13 @@ fn stored_variable_ids_keep_library_swap_matches_on_the_real_copies() {
 #[test]
 fn swap_repoints_colour_calculations() {
     let (_dir, mut s, a, b) = two_libraries("calc", &[]);
-    let accent = ex(&mut s, "library.importVariable", json!({"library": a, "variable": "accent"}))["variable"].clone();
-    ex(&mut s, "variable.createCollection", json!({"name": "App"}));
-    ex(
-        &mut s,
-        "variable.create",
-        json!({"collection": "App", "name": "veil", "type": "color", "value": {"alpha": {"variable": accent, "opacity": 0.5}}}),
-    );
-    let wash = json!({"mix": {"from": {"variable": accent}, "to": {"literal": "#ffffff"}, "t": 0.5}});
-    ex(&mut s, "variable.create", json!({"collection": "App", "name": "wash", "type": "color", "value": wash}));
+    let accent = tv::import_variable(&mut s, &a, "accent");
+    tv::collection(&mut s, "App", &["Mode 1"]);
+    tv::variable(&mut s, "App", "veil", "color", &[json!("#000000")]);
+    tv::set_all(&mut s, "veil", VariableValue::ColorAlpha { variable: accent.clone(), opacity: 0.5 });
+    tv::variable(&mut s, "App", "wash", "color", &[json!("#000000")]);
+    let white = ColorOperand::Literal { literal: figcraft_color::Color::WHITE };
+    tv::set_all(&mut s, "wash", VariableValue::ColorMix { from: ColorOperand::Variable { variable: accent }, to: white, t: 0.5 });
 
     let r = ex(&mut s, "library.swap", json!({"from": a, "to": b}));
     assert_eq!(r["variables"].as_u64(), Some(1), "{r}");

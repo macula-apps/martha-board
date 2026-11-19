@@ -11,6 +11,7 @@ use serde_json::{Value, json};
 use crate::Session;
 use crate::components::tests::ex;
 use crate::params::id_of;
+use crate::test_variables as tv;
 
 fn idv(v: &Value) -> NodeId {
     id_of(&v["id"]).unwrap()
@@ -28,13 +29,13 @@ fn fill(s: &Session, id: NodeId) -> String {
 /// and a frame filled with `a1`.
 fn host() -> (Session, NodeId) {
     let mut s = Session::new();
-    ex(&mut s, "variable.createCollection", json!({"name": "A", "modes": ["Light", "Dark"]}));
+    tv::collection(&mut s, "A", &["Light", "Dark"]);
     for i in 1..=4 {
-        ex(&mut s, "variable.create", json!({"collection": "A", "name": format!("a{i}"), "type": "color", "value": format!("#A{i}0000")}));
+        tv::variable(&mut s, "A", &format!("a{i}"), "color", &[json!(format!("#A{i}0000"))]);
     }
     ex(&mut s, "style.create", json!({"type": "paint", "name": "Host", "value": "#FF0000"}));
     let f = idv(&ex(&mut s, "frame.create", json!({"x": 0, "y": 0, "width": 50, "height": 50, "name": "Host frame"})));
-    ex(&mut s, "variable.bind", json!({"ids": [f], "field": "fill", "variable": "a1"}));
+    tv::bind(&mut s, &[f], "fill", "a1");
     (s, f)
 }
 
@@ -44,17 +45,19 @@ fn host() -> (Session, NodeId) {
 /// `size` to `size + 1`, and `Styled` uses `Brand`.
 fn other() -> Session {
     let mut s = Session::new();
-    ex(&mut s, "variable.createCollection", json!({"name": "B", "modes": ["Light", "Dark"]}));
-    ex(&mut s, "variable.create", json!({"collection": "B", "name": "b1", "type": "color", "values": {"Light": "#00B000", "Dark": "#004000"}}));
-    ex(&mut s, "variable.create", json!({"collection": "B", "name": "b2", "type": "color", "value": {"alias": "b1"}}));
-    ex(&mut s, "variable.create", json!({"collection": "B", "name": "size", "type": "number", "value": 8}));
+    tv::collection(&mut s, "B", &["Light", "Dark"]);
+    tv::variable(&mut s, "B", "b1", "color", &[json!("#00B000"), json!("#004000")]);
+    let b1 = var_id(&s, "b1");
+    tv::variable(&mut s, "B", "b2", "color", &[json!("#000000")]);
+    tv::set_all(&mut s, "b2", figcraft_doc::VariableValue::Alias(b1));
+    tv::variable(&mut s, "B", "size", "number", &[json!(8)]);
     let brand = ex(&mut s, "style.create", json!({"type": "paint", "name": "Brand", "value": "#00B000"}))["id"].clone();
-    ex(&mut s, "style.bind", json!({"style": brand, "field": "fill", "variable": "b1"}));
+    tv::bind_style(&mut s, brand.as_str().unwrap(), "fill", "b1");
     let card = idv(&ex(&mut s, "frame.create", json!({"x": 0, "y": 0, "width": 200, "height": 100, "name": "Card"})));
-    ex(&mut s, "variable.setMode", json!({"ids": [card], "collection": "B", "mode": "Dark"}));
-    ex(&mut s, "variable.bind", json!({"ids": [card], "field": "cornerRadius", "variable": "size"}));
+    tv::mode(&mut s, card, "B", "Dark");
+    tv::bind(&mut s, &[card], "cornerRadius", "size");
     let swatch = idv(&ex(&mut s, "shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40, "parent": card, "name": "Swatch"})));
-    ex(&mut s, "variable.bind", json!({"ids": [swatch], "field": "fill", "variable": "b2"}));
+    tv::bind(&mut s, &[swatch], "fill", "b2");
     // Nothing sets interactions any more; a file can still carry them, so this one is written in.
     let doc = s.doc().unwrap();
     let b = doc.variables.collection("B").unwrap();
@@ -125,7 +128,7 @@ fn imported_layers_keep_their_own_variables_and_styles_when_the_ids_are_taken() 
     // Bindings applied again leave the imported layers alone.
     let swatch = layer(doc, before.pages.len(), "Swatch").id;
     let a2 = var_id(&s, "a2");
-    ex(&mut s, "variable.set", json!({"variable": a2, "value": "#123456"}));
+    tv::set_default(&mut s, &a2, json!("#123456"));
     assert_eq!(fill(&s, swatch), "004000");
     assert_eq!(fill(&s, frame), "A10000");
     assert!(s.doc().unwrap().validate().is_empty());

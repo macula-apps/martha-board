@@ -1,17 +1,14 @@
-//! Shared styles (paint, text, effect, grid) and variables (collections, modes, bindings).
+//! Shared styles (paint, text, effect, grid), and the variable bindings layers and styles carry.
 
 use std::collections::BTreeMap;
 
 use figcraft_color::{Color, Paint, PaintKind};
 use figcraft_doc::ParagraphStyle;
-use figcraft_doc::{
-    Collection, Document, Effect, EffectKind, Mode, Node, NodeId, NodeKind, Style, StyleId, StyleKind, TextData, TextStyle, Variable, VariableId,
-    VariableType, VariableValue, Variables, trim_num,
-};
+use figcraft_doc::{Document, Effect, EffectKind, Node, NodeId, NodeKind, Style, StyleId, StyleKind, TextData, TextStyle, VariableValue, trim_num};
 use serde_json::{Value, json};
 
 use super::{CommandSpec, ok};
-use crate::params::{color_of, f64_of, get, id, num, paints_of, req_string, req_targets, string, targets};
+use crate::params::{f64_of, get, id, num, paints_of, req_string, req_targets, string, targets};
 use crate::{EngineError, Result, Session, bad, spec};
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -51,13 +48,6 @@ pub fn specs() -> Vec<CommandSpec> {
             detach
         ),
         spec!("style.update", "Edit style", "{style, name?, description?, value?, from? (node id: redefine from it)}", true, update),
-        spec!(
-            "style.bind",
-            "Bind variable in style",
-            "{style, field, variable? (id or name; none: unbind)}  bind a variable to a field of the style's value: a paint style's `fills/<i>/color` (or `fill`: its first paint) and `fills/<i>/stops/<j>/color`, an effect style's `effects/<i>/<color|radius|spread|offsetX|offsetY|startRadius>` (glass: `lightAngle|lightIntensity|refraction|depth|dispersion|radius|splay`), a grid style's `layoutGrids/<i>/<size|count|gutter|offset>`, a text style's `fontSize|lineHeight|letterSpacing|fontWeight` (numbers; line height and letter spacing in px, as the reference tool applies them; a weight picks the family's face nearest it and the `wght` axis of a variable font) and `fontFamily|fontStyle` (strings; a weight bound as a number replaces a bound style name and the reverse). Every layer using the style shows the field resolved in its own modes; the style keeps it resolved in the default modes",
-            true,
-            bind_style
-        ),
         spec!("style.duplicate", "Duplicate style", "{style} → {id} (right below it, named \"<name> copy\")", true, duplicate),
         spec!(
             "style.move",
@@ -113,102 +103,6 @@ pub fn specs() -> Vec<CommandSpec> {
                     .collect(),
             ))
         }),
-        spec!("variable.createCollection", "Create variable collection", "{name, modes? [names]}", true, |s, p| {
-            let cmd = "variable.createCollection";
-            let name = req_string(cmd, p, "name")?.trim().to_string();
-            if name.is_empty() {
-                return Err(bad(cmd, "name can't be empty"));
-            }
-            let modes: Vec<String> = match get(p, "modes") {
-                Some(Value::Array(a)) => a.iter().filter_map(|m| m.as_str().map(|m| m.trim().to_string())).collect(),
-                _ => vec!["Mode 1".into()],
-            };
-            if modes.is_empty() {
-                return Err(bad(cmd, "a collection needs at least one mode"));
-            }
-            if modes.iter().any(String::is_empty) {
-                return Err(bad(cmd, "mode names can't be empty"));
-            }
-            let doc = s.doc_mut()?;
-            if doc.variables.collections.iter().any(|c| c.name == name) {
-                return Err(bad(cmd, format!("a collection named `{name}` already exists")));
-            }
-            let id = doc.new_collection_id();
-            let modes = modes.into_iter().enumerate().map(|(i, m)| Mode { id: format!("{id}/mode{}", i + 1), name: m }).collect();
-            doc.variables.collections.push(Collection { id: id.clone(), name, modes, extends: None });
-            Ok(json!({"id": id}))
-        }),
-        spec!("variable.addMode", "Add mode", "{collection, name, from? (mode id or name to duplicate; default: the default mode)}", true, |s, p| {
-            let c = req_string("variable.addMode", p, "collection")?;
-            let name = req_string("variable.addMode", p, "name")?;
-            let missing = || bad("variable.addMode", "no such collection");
-            let doc = s.doc_mut()?;
-            let cid = doc.variables.collections.iter().find(|x| x.id == c || x.name == c).map(|x| x.id.clone()).ok_or_else(missing)?;
-            super::variables::check_modes_editable(doc, "variable.addMode", &cid)?;
-            // A fresh id (modes can be deleted, so the count alone may repeat one; in a live
-            // session it comes from this client's id space).
-            let mid = doc.new_mode_id(&cid).ok_or_else(missing)?;
-            let coll = doc.variables.collections.iter_mut().find(|x| x.id == cid).ok_or_else(missing)?;
-            let first = match string(p, "from") {
-                Some(f) => Some(coll.find_mode(&f).map(|m| m.id.clone()).ok_or_else(|| bad("variable.addMode", format!("no mode `{f}`")))?),
-                None => coll.modes.first().map(|m| m.id.clone()),
-            };
-            coll.modes.push(Mode { id: mid.clone(), name });
-            // New mode starts with the default mode's values (a duplicate with its source's).
-            for v in doc.variables.variables.iter_mut().filter(|v| v.collection == cid) {
-                if let Some(val) = first.as_ref().and_then(|f| v.values.get(f)).cloned() {
-                    v.values.insert(mid.clone(), val);
-                }
-            }
-            Ok(json!({"id": mid}))
-        }),
-        spec!(
-            "variable.create",
-            "Create variable",
-            "{collection, name, type: color|number|string|boolean, value (default mode) | values {modeName: value}, description?}  a value may also be {alias: variable} (same type); a colour value may also be {alpha: {variable, opacity 0..1}} (that variable's colour with its alpha replaced by the opacity) or {mix: {from, to, t}} (operands {variable: variable} or {literal: colour}; t is 0..1, 0 gives from and 1 to; blended per channel over the stored values, in the document's colour profile, including alpha; converting the profile keeps a mix's ends exact and moves its colours in between slightly), each alone in its object",
-            true,
-            var_create
-        ),
-        spec!(
-            "variable.set",
-            "Set variable value",
-            "{variable, mode? (name or id; default first), value | {alias: variable} (same type, no loops) | {alpha} | {mix} (colour variables; shapes as in variable.create; no loops)}",
-            true,
-            var_set
-        ),
-        spec!(
-            "variable.delete",
-            "Delete variable",
-            "{variable} (bound layers keep their values; variables aliasing it take its values; colour calculations reading it keep the colour they show)",
-            true,
-            |s, p| {
-                let v = req_string("variable.delete", p, "variable")?;
-                let doc = s.doc_mut()?;
-                let var = doc.variables.get(&v).ok_or_else(|| bad("variable.delete", "no such variable"))?;
-                if var.extends.is_some() {
-                    return Err(bad("variable.delete", "an inherited variable stays while the collection it extends has it"));
-                }
-                // Bound layers keep their values; aliases to it take its values.
-                let gone = std::collections::BTreeSet::from([var.id.clone()]);
-                super::variables::forget_variables(doc, &gone)?;
-                ok()
-            }
-        ),
-        spec!(
-            "variable.bind",
-            "Bind variable",
-            "{ids?, field (fill|stroke (first paint)|fills/<i>/color|strokes/<i>/color|fills/<i>/stops/<j>/color (gradient stops)|effects/<i>/<offsetX|offsetY|radius|startRadius|spread|color|lightAngle|lightIntensity|refraction|depth|dispersion|splay> (glass: `radius` is its frost; intensity, refraction, dispersion and splay in percent)|layoutGrids/<i>/<size|count|gutter|offset>|componentProperties/<name> (instances: boolean/text properties; variant properties take string variables naming a value)|width|height|opacity (percent)|cornerRadius|gap|paddingHorizontal|characters|visible|fontSize…; list indices bottom first), variable (null unbinds)}",
-            true,
-            bind
-        ),
-        spec!(
-            "variable.setMode",
-            "Set variable mode",
-            "{ids? (frames/page), collection, mode (id or name; null: Auto, inherited from the parent)}",
-            true,
-            set_mode
-        ),
-        spec!("variable.list", "List variables", "{}", false, |s, _| Ok(serde_json::to_value(&s.doc()?.variables).unwrap_or(Value::Null))),
     ]
 }
 
@@ -508,52 +402,6 @@ fn apply_style(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
-fn bind_style(s: &mut Session, p: &Value) -> Result<Value> {
-    let cmd = "style.bind";
-    let st = req_string(cmd, p, "style")?;
-    let field = req_string(cmd, p, "field")?;
-    let doc = s.doc_mut()?;
-    let idx = doc.styles.iter().position(|x| x.id == st || x.name == st).ok_or_else(|| bad(cmd, "no such style"))?;
-    if doc.styles.get(idx).is_some_and(|x| crate::library::is_remote_style(doc, &x.id)) {
-        return Err(EngineError::Disabled(cmd.into(), crate::library::READ_ONLY.into()));
-    }
-    let var = match string(p, "variable") {
-        Some(v) => Some(doc.variables.get(&v).map(|x| (x.id.clone(), x.kind)).ok_or_else(|| bad(cmd, "no such variable"))?),
-        None => None,
-    };
-    let Some(style) = doc.styles.get_mut(idx) else { return Err(bad(cmd, "no such style")) };
-    let want = crate::style_vars::field_type(&style.kind, &field).ok_or_else(|| bad(cmd, format!("the style has no field `{field}` to bind")))?;
-    let key = crate::style_vars::canonical(&field);
-    match var {
-        Some((_, kind)) if kind != want => return Err(bad(cmd, format!("`{field}` takes a {} variable, not a {} one", want.id(), kind.id()))),
-        Some((id, _)) => {
-            if style.bound.get(&key) != Some(&id)
-                && let StyleKind::Paint { paints } = &mut style.kind
-            {
-                rebind_paint_alpha(paints, &mut [], &key, true);
-            }
-            match key.as_str() {
-                "fontWeight" => style.bound.remove("fontStyle"),
-                "fontStyle" => style.bound.remove("fontWeight"),
-                _ => None,
-            };
-            style.bound.insert(key, id);
-        }
-        None => {
-            if style.bound.remove(&key).is_some()
-                && let StyleKind::Paint { paints } = &mut style.kind
-            {
-                rebind_paint_alpha(paints, &mut [], &key, false);
-            }
-        }
-    }
-    // The style takes its default-mode value, and each layer using it its own.
-    let sid = style.id.clone();
-    crate::style_vars::settle(doc);
-    propagate_style(doc, &sid);
-    ok()
-}
-
 fn update(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "style.update";
     let st = req_string(cmd, p, "style")?;
@@ -615,7 +463,14 @@ fn style_sets(field: &str, kind: &StyleKind, key: &str) -> bool {
 
 /// A style name with each `/`-separated folder part trimmed; empty names are refused.
 fn style_name(cmd: &str, name: &str) -> Result<String> {
-    super::variables::clean_name(name).ok_or_else(|| bad(cmd, "name can't be empty"))
+    clean_name(name).ok_or_else(|| bad(cmd, "name can't be empty"))
+}
+
+/// A style name with each `/`-separated folder part trimmed; None when nothing is left.
+pub(crate) fn clean_name(name: &str) -> Option<String> {
+    let parts: Vec<&str> = name.split('/').map(str::trim).filter(|s| !s.is_empty()).collect();
+    let out = parts.join("/");
+    (!out.is_empty()).then(|| out.chars().take(500).collect())
 }
 
 /// The index of local style `st` (id or name); library styles are read-only.
@@ -852,63 +707,6 @@ pub fn sync_list_styles(doc: &mut Document, before: &Document, ids: &[NodeId]) {
     }
 }
 
-/// `variable.bind`: bind (or with no variable, unbind) `field` of the targets.
-pub fn bind(s: &mut Session, p: &Value) -> Result<Value> {
-    crate::library::counting_links(s, string(p, "variable").is_none(), |s| bind_field(s, p))
-}
-
-fn bind_field(s: &mut Session, p: &Value) -> Result<Value> {
-    let cmd = "variable.bind";
-    let field = req_string(cmd, p, "field")?;
-    let var = string(p, "variable");
-    let ids = req_targets(cmd, s, p)?;
-    let doc = s.doc_mut()?;
-    let vid = match &var {
-        Some(v) => Some(doc.variables.get(v).map(|x| x.id.clone()).ok_or_else(|| bad(cmd, "no such variable"))?),
-        None => None,
-    };
-    bind_variable(cmd, doc, &ids, &field, vid.as_deref())?;
-    ok()
-}
-
-/// Bind an already resolved variable id, or unbind, inside the caller's transaction. Props and
-/// `variable.bind` share type checks and paint alpha handling; normalisation applies the value.
-pub(crate) fn bind_variable(cmd: &str, doc: &mut Document, ids: &[NodeId], field: &str, vid: Option<&str>) -> Result<()> {
-    // An instance's component property takes a variable of its type; other fields the types their
-    // scopes belong to.
-    if let Some(v) = vid.and_then(|v| doc.variables.get_by_id(v)) {
-        for i in ids {
-            match field.strip_prefix(crate::components::PROP_BINDING) {
-                Some(name) => super::component::check_prop_binding(doc, *i, name, v.kind).map_err(|e| bad(cmd, e))?,
-                None if !super::variables::has_field(doc, *i, field) => {
-                    return Err(bad(cmd, format!("the layer has no field `{field}` to bind")));
-                }
-                None if !super::variables::field_takes(doc, *i, field, v.kind) => {
-                    return Err(bad(cmd, format!("`{field}` doesn't take a {} variable", v.kind.id())));
-                }
-                None => {}
-            }
-        }
-    }
-    for i in ids {
-        let n = doc.get_mut(*i)?;
-        match vid {
-            Some(v) => {
-                if n.bound.get(field).map(String::as_str) != Some(v) {
-                    rebind_paint_alpha(&mut n.fills, &mut n.strokes, field, true);
-                }
-                n.bound.insert(field.to_string(), v.to_string());
-            }
-            None => {
-                if n.bound.remove(field).is_some() {
-                    rebind_paint_alpha(&mut n.fills, &mut n.strokes, field, false);
-                }
-            }
-        }
-    }
-    Ok(())
-}
-
 /// Remove every binding key of the slot (`fill` and `fills/0/color` name the same one); true when
 /// one was there.
 pub(crate) fn unbind_slot(n: &mut figcraft_doc::Node, fills: bool, index: usize) -> bool {
@@ -946,155 +744,6 @@ pub(crate) fn rebind_paint_alpha(fills: &mut [Paint], strokes: &mut [Paint], fie
     }
 }
 
-/// `variable.setMode`: choose a collection's mode on frames (the page when none are given).
-pub fn set_mode(s: &mut Session, p: &Value) -> Result<Value> {
-    let cmd = "variable.setMode";
-    let c = req_string(cmd, p, "collection")?;
-    let doc = s.doc()?;
-    let coll = doc.variables.collection(&c).ok_or_else(|| bad(cmd, "no such collection"))?;
-    // A null mode clears the explicit mode: the layer inherits it again.
-    let mode = match p.get("mode") {
-        Some(Value::Null) => None,
-        _ => {
-            let m = req_string(cmd, p, "mode")?;
-            Some(coll.modes.iter().find(|x| x.id == m || x.name == m).map(|x| x.id.clone()).ok_or_else(|| bad(cmd, "no such mode"))?)
-        }
-    };
-    let cid = coll.id.clone();
-    let mut ids = targets(s, p);
-    if ids.is_empty() {
-        ids = vec![s.page()?];
-    }
-    let doc = s.doc_mut()?;
-    for i in ids {
-        let modes = &mut doc.get_mut(i)?.var_modes;
-        match &mode {
-            Some(m) => modes.insert(cid.clone(), m.clone()),
-            None => modes.remove(&cid),
-        };
-    }
-    ok()
-}
-
-/// A `value`/`values` entry of `kind`: a plain value of that type, `{alias: variable}`, or (colour
-/// variables) an `{alpha}`/`{mix}` calculation. An alias stays a name here — the caller binds it to
-/// an id; a calculation binds its own operands as they are checked. `for_id` is the variable being
-/// set when it already exists (a calculation may not lead back to it).
-fn var_value(cmd: &str, vars: &Variables, kind: VariableType, for_id: Option<&VariableId>, v: &Value) -> Result<VariableValue> {
-    // Calculations first: they refuse sibling keys, so `{alias, alpha}` is an error rather than
-    // quietly one of the two.
-    if v.get("alpha").is_some() || v.get("mix").is_some() {
-        return super::variables::colour_calc(cmd, vars, kind, for_id, v);
-    }
-    if let Some(a) = v.get("alias").and_then(Value::as_str) {
-        return Ok(VariableValue::Alias(a.to_string()));
-    }
-    Ok(match kind {
-        VariableType::Color => VariableValue::Color(color_of(v).ok_or_else(|| bad(cmd, "invalid value"))?),
-        VariableType::Number => VariableValue::Number(f64_of(v).ok_or_else(|| bad(cmd, "invalid value"))?),
-        VariableType::String => VariableValue::String(v.as_str().map(str::to_string).unwrap_or_else(|| v.to_string())),
-        VariableType::Boolean => VariableValue::Boolean(v.as_bool().ok_or_else(|| bad(cmd, "invalid value"))?),
-    })
-}
-
-/// `variable.create`: a variable with a value for every mode of its collection (`values` by mode,
-/// then `value` for the modes left, then its type's default). Every value is checked before the
-/// variable exists (alias targets, calculation operands, the 32-variable limit), so a refused one
-/// leaves nothing behind.
-fn var_create(s: &mut Session, p: &Value) -> Result<Value> {
-    let cmd = "variable.create";
-    let c = req_string(cmd, p, "collection")?;
-    let name = req_string(cmd, p, "name")?;
-    let kind = match req_string(cmd, p, "type")?.to_ascii_lowercase().as_str() {
-        "color" => VariableType::Color,
-        "number" | "float" => VariableType::Number,
-        "string" => VariableType::String,
-        "boolean" | "bool" => VariableType::Boolean,
-        _ => return Err(bad(cmd, "type: color|number|string|boolean")),
-    };
-    let doc = s.doc_mut()?;
-    let coll = doc.variables.collection(&c).cloned().ok_or_else(|| bad(cmd, "no such collection"))?;
-    let mut values = BTreeMap::new();
-    if let Some(Value::Object(m)) = get(p, "values") {
-        for (mode, v) in m {
-            let mid = coll
-                .modes
-                .iter()
-                .find(|x| x.id == *mode || x.name == *mode)
-                .map(|x| x.id.clone())
-                .ok_or_else(|| bad(cmd, format!("no mode `{mode}`")))?;
-            values.insert(mid, var_value(cmd, &doc.variables, kind, None, v)?);
-        }
-    }
-    if let Some(v) = get(p, "value") {
-        let val = var_value(cmd, &doc.variables, kind, None, v)?;
-        for m in &coll.modes {
-            values.entry(m.id.clone()).or_insert_with(|| val.clone());
-        }
-    }
-    let default = VariableValue::default_for(kind);
-    for m in &coll.modes {
-        values.entry(m.id.clone()).or_insert_with(|| default.clone());
-    }
-    // Aliases name an existing variable of the same type (stored by id; nothing refers to the new
-    // variable yet, so they can't loop).
-    for val in values.values_mut() {
-        if let VariableValue::Alias(a) = val {
-            let t = doc.variables.get(a).filter(|t| t.kind == kind).ok_or_else(|| bad(cmd, format!("no {} variable `{a}` to alias", kind.id())))?;
-            *a = t.id.clone();
-        }
-    }
-    // The new variable has no id yet and nothing reads it, so any stand-in id will do.
-    for (m, val) in &values {
-        super::variables::check_resolves(cmd, &doc.variables, "", &coll.id, m, val)?;
-    }
-    let id = doc.new_variable_id();
-    doc.variables.variables.push(Variable {
-        id: id.clone(),
-        name,
-        collection: coll.id,
-        kind,
-        values,
-        description: string(p, "description").unwrap_or_default(),
-        scopes: None,
-        hidden_from_publishing: false,
-        extends: None,
-        overrides: Default::default(),
-        code_syntax: Default::default(),
-    });
-    Ok(json!({"id": id}))
-}
-
-/// `variable.set`: one mode's value (the default mode when none is named), checked against the
-/// variable as it stands before anything changes: an alias or calculation may not lead back to it,
-/// and a calculation must fit the 32-variable limit. On a variable an extended collection inherits,
-/// the value becomes that mode's override.
-pub fn var_set(s: &mut Session, p: &Value) -> Result<Value> {
-    let cmd = "variable.set";
-    let v = req_string(cmd, p, "variable")?;
-    let doc = s.doc_mut()?;
-    let var = doc.variables.get(&v).cloned().ok_or_else(|| bad(cmd, "no such variable"))?;
-    let coll = doc.variables.collection_by_id(&var.collection).cloned().ok_or_else(|| bad(cmd, "variable has no collection"))?;
-    let mode = match string(p, "mode") {
-        Some(m) => coll.find_mode(&m).map(|x| x.id.clone()).ok_or_else(|| bad(cmd, "no such mode"))?,
-        None => coll.default_mode().cloned().ok_or_else(|| bad(cmd, "collection has no modes"))?,
-    };
-    let raw = get(p, "value").ok_or_else(|| bad(cmd, "invalid value"))?;
-    let val = match var_value(cmd, &doc.variables, var.kind, Some(&var.id), raw)? {
-        VariableValue::Alias(a) => VariableValue::Alias(super::variables::alias_target(&doc.variables, &var, &a).map_err(|e| bad(cmd, e))?),
-        v => v,
-    };
-    super::variables::check_resolves(cmd, &doc.variables, &var.id, &var.collection, &mode, &val)?;
-    if let Some(slot) = doc.variables.variables.iter_mut().find(|x| x.id == var.id) {
-        // An inherited variable's value of its own overrides the inherited one in that mode.
-        if slot.extends.is_some() {
-            slot.overrides.insert(mode.clone());
-        }
-        slot.values.insert(mode, val);
-    }
-    ok()
-}
-
 /// Write bound variable values into nodes (called during normalisation).
 pub fn apply_bindings(doc: &mut Document) {
     apply_bindings_to(doc, None);
@@ -1120,7 +769,7 @@ pub(crate) fn detach_edited(doc: &mut Document, before: &[std::sync::Arc<Node>])
         let edited: Vec<String> = n
             .bound
             .keys()
-            // A binding the edit itself made (`boundVariables`) stays.
+            // A binding the edit itself changed is the edit's own: it stays.
             .filter(|f| old.bound.get(*f) == n.bound.get(*f))
             .filter(|f| super::lists::list_binding(f).is_none() && !f.starts_with(crate::components::PROP_BINDING))
             .filter(|f| bound_field(old, f) != bound_field(n, f))

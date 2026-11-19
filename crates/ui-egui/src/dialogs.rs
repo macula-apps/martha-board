@@ -1,4 +1,4 @@
-//! Dialogs: About, Preferences, keyboard shortcuts, find & replace, rename layers, variables,
+//! Dialogs: About, Preferences, keyboard shortcuts, find & replace, rename layers,
 //! export.
 
 use std::path::Path;
@@ -36,7 +36,6 @@ pub mod missing_fonts;
 pub mod plugins_ui;
 pub mod sampled_color;
 pub mod updates_ui;
-pub mod variables_panel;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -206,7 +205,7 @@ pub fn keys(app: &mut FigApp, ctx: &Context) {
 }
 
 /// Draw the app's dialogs and cards: pending opens/imports/missing fonts, About,
-/// Preferences, shortcuts, find/replace, batch rename, menu input, variables, dev compare,
+/// Preferences, shortcuts, find/replace, batch rename, menu input, dev compare,
 /// branch, export preview, colour profile, plugin, live join/publish, online dialogs and
 /// close confirmation.
 pub fn show(app: &mut FigApp, ctx: &Context) {
@@ -398,7 +397,6 @@ pub fn show(app: &mut FigApp, ctx: &Context) {
     }
     batch_rename_dialog(app, ctx);
     menu_input_dialog(app, ctx);
-    crate::variables_panel::show(app, ctx);
     crate::branch_ui::show(app, ctx);
     if app.ui.export_preview {
         export_dialog(app, ctx);

@@ -1,9 +1,9 @@
-use super::menu::{blend_menu, context_popup, menu_check, menu_item, menu_popup, preview_blend, row, row_context_menu, row_target};
+use super::menu::{blend_menu, context_popup, menu_item, menu_popup, preview_blend, row, row_context_menu, row_target};
 use super::stroke::stroke_settings;
 use super::{
     Align2, BlendMode, CornerRadius, Document, FIELD_H, FieldEdit, FigApp, Icon, Id, Lead, ListDrag, MaskType, Node, NodeId, NodeKind, Paint,
-    PaintKind, Rect, Sense, Stroke, StrokeAlign, StyleSlot, Tip, Tokens, Ui, Value, VariableType, common, icons, json, moved_index, pos2, regular,
-    removed_index, style_picker, tr, trf, vec2, widgets,
+    PaintKind, Rect, Sense, Stroke, StrokeAlign, StyleSlot, Tip, Tokens, Ui, Value, common, icons, json, moved_index, pos2, regular, removed_index,
+    style_picker, tr, vec2, widgets,
 };
 use crate::property_rows::PropertyKind;
 
@@ -17,7 +17,6 @@ pub(super) fn appearance(app: &mut FigApp, ui: &mut Ui, doc: &Document, sel: &[N
         tr("Appearance"),
         &[
             (if visible { Icon::Eye } else { Icon::EyeOff }, crate::shortcuts::tip(tr("Show/Hide"), "object.toggleVisible")),
-            (Icon::Variable, tr("Apply variable to visibility")),
             (Icon::Blend, tr("Blend mode")),
         ],
         false,
@@ -26,13 +25,9 @@ pub(super) fn appearance(app: &mut FigApp, ui: &mut Ui, doc: &Document, sel: &[N
         app.run("object.toggleVisible", json!({"ids": ids}));
     }
     if hdr == Some(1) {
-        crate::variable_ui::open_at_pointer(ui, &ids, "visible", VariableType::Boolean);
-    }
-    if hdr == Some(2) {
         ui.data_mut(|d| d.insert_temp(Id::unique("blend_open"), !d.get_temp::<bool>(Id::unique("blend_open")).unwrap_or(false)));
     }
     let col = widgets::col_width(ui.available_width());
-    crate::variable_ui::bound_row(app, ui, &ids, "visible", VariableType::Boolean, Lead::Icon(Icon::Eye, tr("Visible")), col * 2.0 + 8.0);
     // Masks: how they mask.
     if crate::selection_cache::every(doc, sel, |n| n.is_mask) {
         let mt = common(doc, sel, |n| n.mask_type);
@@ -65,20 +60,11 @@ pub(super) fn appearance(app: &mut FigApp, ui: &mut Ui, doc: &Document, sel: &[N
     widgets::sublabels(ui, tr("Opacity"), radius_ok.then_some(tr("Corner radius")));
     row(ui, 32.0, |ui| {
         let lead = Lead::Icon(Icon::Opacity, tr("Opacity"));
-        let e = crate::variable_ui::number_field_mixed(app, ui, &ids, "opacity", Id::unique("ap_op"), lead, op, "%", col);
+        let e = widgets::number_field_mixed(ui, Id::unique("ap_op"), lead, op, "%", col, 1.0);
         app.field_of(&ids, "opacity", e, op_of, |v| json!((v / 100.0).clamp(0.0, 1.0)));
         if radius_ok {
-            let e = crate::variable_ui::number_field_mixed(
-                app,
-                ui,
-                &ids,
-                "cornerRadius",
-                Id::unique("ap_rad"),
-                Lead::Icon(Icon::CornerRadius, tr("Corner radius")),
-                r.flatten(),
-                "",
-                col,
-            );
+            let e =
+                widgets::number_field_mixed(ui, Id::unique("ap_rad"), Lead::Icon(Icon::CornerRadius, tr("Corner radius")), r.flatten(), "", col, 1.0);
             // A relative edit starts from the radius shown; a rectangle with differing corners
             // starts from its largest.
             let radius_of = |n: &Node| shown(n).unwrap_or_else(|| n.corners.radii.iter().copied().fold(0.0, f64::max));
@@ -106,17 +92,7 @@ pub(super) fn appearance(app: &mut FigApp, ui: &mut Ui, doc: &Document, sel: &[N
         for pair in corners.chunks(2).filter(|_| indep_ok) {
             row(ui, 32.0, |ui| {
                 for (key, name, icon, k) in pair {
-                    let e = crate::variable_ui::number_field(
-                        app,
-                        ui,
-                        &ids,
-                        key,
-                        Id::unique(("corner", *k)),
-                        Lead::Icon(*icon, name),
-                        radii.map(|r| r[*k]),
-                        "",
-                        col,
-                    );
+                    let e = widgets::number_field(ui, Id::unique(("corner", *k)), Lead::Icon(*icon, name), radii.map(|r| r[*k]), "", col, 1.0);
                     app.field(&ids, key, e, |v| json!(v.max(0.0)));
                 }
             });
@@ -148,116 +124,6 @@ pub(super) fn appearance(app: &mut FigApp, ui: &mut Ui, doc: &Document, sel: &[N
         });
     }
     ui.add_space(8.0);
-}
-
-/// The variable modes of the selected frames (sections, components, instances): a row per
-/// collection with more than one mode, Auto (the mode the layer inherits from its parent) or a mode
-/// of its own (`variable.setMode`). Collections from enabled libraries follow under their
-/// library's name (`library.setVariableMode` copies the collection in). Returns whether it showed.
-pub(super) fn variable_modes(app: &mut FigApp, ui: &mut Ui, doc: &Document, sel: &[NodeId]) -> bool {
-    if !crate::selection_cache::every(doc, sel, |n| n.kind.is_frame_like()) {
-        return false;
-    }
-    mode_section(app, ui, doc, sel, false)
-}
-
-/// The same section for the current page, with nothing selected: Auto there is the collection's
-/// default mode, and a pick sets the page's own (`variable.setMode` without layers).
-pub(super) fn page_variable_modes(app: &mut FigApp, ui: &mut Ui, doc: &Document, page: NodeId) -> bool {
-    mode_section(app, ui, doc, &[page], true)
-}
-
-/// The Variable modes section of `sel` (the page when `on_page`): one row per multi-mode collection.
-fn mode_section(app: &mut FigApp, ui: &mut Ui, doc: &Document, sel: &[NodeId], on_page: bool) -> bool {
-    let libs = crate::variable_ui::libraries(app, doc);
-    let rows = crate::variable_ui::mode_rows(doc, &libs);
-    if rows.is_empty() {
-        return false;
-    }
-    let t = Tokens::get(ui.ctx());
-    widgets::section_header(ui, tr("Variable modes"), &[], false);
-    // The collection's name, then a wider mode picker ("Auto (Light)") across both field columns.
-    let col = widgets::col_width(ui.available_width());
-    let (name_w, pick_w) = ((col * 0.7).round(), (col * 1.3).round());
-    // Auto resolves as for the first selected layer: from its parent, or an instance's main.
-    let parent_modes = sel.first().map(|i| doc.inherited_modes(*i)).unwrap_or_default();
-    let mut group = None;
-    for r in &rows {
-        let c = r.coll;
-        // Library collections under their library's name.
-        if r.library != group {
-            group = r.library;
-            if let Some((_, lib)) = r.library {
-                widgets::sublabels(ui, lib, None);
-            }
-        }
-        let name_of = |m: &str| c.modes.iter().find(|x| x.id == m).map_or("", |x| x.name.as_str());
-        // Each layer's own mode (None: Auto); None overall when they differ.
-        let own = match r.local {
-            Some(l) => common(doc, sel, |n| n.var_modes.get(l).cloned()),
-            None => Some(None),
-        };
-        let inherited = r.local.and_then(|l| parent_modes.get(l)).or(c.default_mode()).map_or("", |m| name_of(m));
-        let auto = trf("Auto ({mode})", &[("mode", &inherited)]);
-        let label = match &own {
-            Some(Some(m)) => name_of(m).to_string(),
-            Some(None) => auto.clone(),
-            None => tr("Mixed").into(),
-        };
-        let hover = match r.library {
-            Some((_, lib)) => trf("{name} (from {library})", &[("name", &c.name), ("library", &lib)]),
-            None => c.name.clone(),
-        };
-        row(ui, 32.0, |ui| {
-            let (rect, _) = ui.allocate_exact_size(vec2(name_w, FIELD_H), Sense::hover());
-            let name = widgets::elide(ui, &c.name, name_w);
-            ui.painter().text(pos2(rect.min.x, rect.center().y), Align2::LEFT_CENTER, &name, regular(11.0), t.text);
-            if name != c.name || r.library.is_some() {
-                ui.interact(rect, Id::unique(("var_mode_name", &c.id)), Sense::hover()).on_hover_text(&hover);
-            }
-            let resp = widgets::dropdown(ui, &label, pick_w, None);
-            menu_popup(&resp).width(180.0).show(|ui| {
-                let mut pick = None;
-                if menu_check(ui, own == Some(None), &auto, "") {
-                    pick = Some(Value::Null);
-                }
-                ui.separator();
-                for m in &c.modes {
-                    if menu_check(ui, own.as_ref().is_some_and(|o| o.as_ref() == Some(&m.id)), &m.name, "") {
-                        pick = Some(json!(m.id));
-                    }
-                }
-                if let Some(mode) = pick {
-                    set_variable_mode(app, if on_page { &[] } else { sel }, r, mode);
-                    ui.close();
-                }
-            });
-        });
-    }
-    ui.add_space(8.0);
-    true
-}
-
-/// Set `sel`'s mode of the collection of `row` (`mode` null: Auto; no `sel`: the page's). A library collection goes
-/// through `library.setVariableMode` (copying it in); Auto on one never used here is already so.
-fn set_variable_mode(app: &mut FigApp, sel: &[NodeId], row: &crate::variable_ui::ModeRow, mode: Value) {
-    match (row.library, row.key, row.local) {
-        (Some((lib, _)), Some(key), _) if !mode.is_null() => {
-            let mut p = json!({"library": lib, "collection": key, "mode": mode});
-            if !sel.is_empty() {
-                p["ids"] = json!(sel);
-            }
-            app.run("library.setVariableMode", p);
-        }
-        (_, _, Some(local)) => {
-            let mut p = json!({"collection": local, "mode": mode});
-            if !sel.is_empty() {
-                p["ids"] = json!(sel);
-            }
-            app.run("variable.setMode", p);
-        }
-        _ => {}
-    }
 }
 
 /// While a range of text is selected, the Fill section edits that range's colour.
@@ -413,17 +279,7 @@ pub(super) fn paints(app: &mut FigApp, ui: &mut Ui, doc: &Document, sel: &[NodeI
                     }
                 }
             });
-            let e = crate::variable_ui::number_field_mixed(
-                app,
-                ui,
-                &ids,
-                "strokeWeight",
-                Id::unique("stroke_w"),
-                Lead::Icon(Icon::Menu, tr("Stroke weight")),
-                weight,
-                "",
-                field_w,
-            );
+            let e = widgets::number_field_mixed(ui, Id::unique("stroke_w"), Lead::Icon(Icon::Menu, tr("Stroke weight")), weight, "", field_w, 1.0);
             app.field_of(&ids, "strokeWeight", e, |n| n.stroke.weight, |v| json!(v.max(0.0)));
             let adv_id = Id::unique("stroke_adv");
             let open = ui.data(|d| d.get_temp::<bool>(adv_id)).unwrap_or(false);
@@ -458,8 +314,7 @@ pub(super) fn paints(app: &mut FigApp, ui: &mut Ui, doc: &Document, sel: &[NodeI
                 advanced(ui);
             }
         });
-        // Per-side weights, two to a row (like the corner radii) so a bound variable's name fits:
-        // each side binds to a number variable on its own.
+        // Per-side weights, two to a row (like the corner radii).
         if let Some(sides) = common(doc, sel, |n| n.stroke.sides).flatten() {
             let col = widgets::col_width(ui.available_width());
             let fields = ["T", "R", "B", "L"].into_iter().zip(figcraft_engine::cmd::props::STROKE_SIDES);
@@ -467,7 +322,7 @@ pub(super) fn paints(app: &mut FigApp, ui: &mut Ui, doc: &Document, sel: &[NodeI
                 row(ui, 32.0, |ui| {
                     for (k, (label, field)) in fields.clone().enumerate().skip(first).take(2) {
                         let v = sides.get(k).copied();
-                        let e = crate::variable_ui::number_field(app, ui, &ids, field, Id::unique(("stroke_side", k)), Lead::Text(label), v, "", col);
+                        let e = widgets::number_field(ui, Id::unique(("stroke_side", k)), Lead::Text(label), v, "", col, 1.0);
                         app.field(&ids, field, e, |x| json!(x.max(0.0)));
                     }
                 });
@@ -496,12 +351,13 @@ fn paint_row(app: &mut FigApp, ui: &mut Ui, ids: &[NodeId], i: usize, p: &Paint,
             // The variable bound to this paint's colour (its key on the layers: `fill` or `fills/<i>/color`).
             let bound = app.session.doc().ok().filter(|_| !region).and_then(|d| {
                 let key = ids.first().and_then(|id| d.node(*id)).and_then(|n| figcraft_engine::cmd::lists::paint_binding_key(n, fills, i))?;
-                Some((key.to_string(), crate::variable_ui::bound_name(d, &ids, key)?))
+                bound_name(d, &ids, key)
             });
             match &p.kind {
+                // A file can bind it: the variable's name shows, read-only (variables have no editor).
                 PaintKind::Solid { .. } if bound.is_some() => {
-                    let (key, name) = bound.clone().unwrap_or_default();
-                    let chip = Rect::from_min_max(pos2(text_r.min.x - 2.0, r.min.y + 3.0), pos2(text_r.max.x - 20.0, r.max.y - 3.0));
+                    let name = bound.clone().unwrap_or_default();
+                    let chip = Rect::from_min_max(pos2(text_r.min.x - 2.0, r.min.y + 3.0), pos2(text_r.max.x - 2.0, r.max.y - 3.0));
                     child.painter().rect_filled(chip, CornerRadius::same(4), t.hover);
                     child.painter().rect_stroke(chip, CornerRadius::same(4), Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
                     let short = name.rsplit('/').next().unwrap_or(&name).to_string();
@@ -513,12 +369,6 @@ fn paint_row(app: &mut FigApp, ui: &mut Ui, ids: &[NodeId], i: usize, p: &Paint,
                         t.text,
                     );
                     let _ = child.interact(chip, Id::unique(("bound_paint", fills, i)), Sense::hover()).on_hover_text(&name);
-                    let dr = Rect::from_center_size(pos2(text_r.max.x - 9.0, r.center().y), vec2(18.0, 18.0));
-                    let dresp = child.interact(dr, Id::unique(("detach_paint", fills, i)), Sense::click()).tip(tr("Detach variable"));
-                    icons::paint(child.painter(), dr.shrink(3.0), Icon::Detach, t.icon_secondary);
-                    if dresp.clicked() {
-                        app.run("variable.bind", json!({"ids": ids, "field": key, "variable": null}));
-                    }
                 }
                 PaintKind::Solid { color } => {
                     if let Some(h) = widgets::text_field_inline(
@@ -611,4 +461,14 @@ fn paint_label(p: &Paint) -> String {
         PaintKind::Image(_) => tr("Image").into(),
         PaintKind::Pattern(_) => tr("Pattern").into(),
     }
+}
+
+/// The name of the variable `field` is bound to on every one of `ids`, if they agree.
+fn bound_name(doc: &Document, ids: &[NodeId], field: &str) -> Option<String> {
+    let mut it = ids.iter().map(|i| doc.node(*i).and_then(|n| n.bound.get(field)).cloned());
+    let first = it.next().flatten()?;
+    if !it.all(|v| v.as_ref() == Some(&first)) {
+        return None;
+    }
+    doc.variables.get_by_id(&first).map(|v| v.name.clone())
 }

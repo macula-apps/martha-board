@@ -125,28 +125,6 @@ fn task_paint_style() {
     assert_eq!(c.node(&b)["fills"][0]["color"].as_str().unwrap().to_uppercase(), "#0000FF");
 }
 
-/// Task 5: colour variables with Light/Dark modes bound to a frame; switching modes recolours it.
-#[test]
-fn task_variables_light_dark() {
-    let mut c = Client::new();
-    let coll = c.run("variable.createCollection", json!({"name": "Theme", "modes": ["Light", "Dark"]}))["id"].clone();
-    let bg = c
-        .run("variable.create", json!({"collection": coll, "name": "color/bg", "type": "color", "values": {"Light": "#FFFFFF", "Dark": "#111111"}}))
-        ["id"]
-        .clone();
-    let frame = c.create(json!({"type": "frame", "name": "Screen", "width": 300, "height": 200}));
-    c.run("variable.bind", json!({"ids": [frame], "field": "fill", "variable": bg}));
-    let n = c.node(&frame);
-    assert_eq!(n["fills"][0]["color"].as_str().unwrap().to_uppercase(), "#FFFFFF");
-    assert!(n["boundVariables"].to_string().contains(bg.as_str().unwrap()));
-    c.run("variable.setMode", json!({"ids": [frame], "collection": coll, "mode": "Dark"}));
-    assert_eq!(c.node(&frame)["fills"][0]["color"].as_str().unwrap().to_uppercase(), "#111111");
-    c.run("variable.setMode", json!({"ids": [frame], "collection": coll, "mode": "Light"}));
-    assert_eq!(c.node(&frame)["fills"][0]["color"].as_str().unwrap().to_uppercase(), "#FFFFFF");
-    let list = c.run("variable.list", json!({}));
-    assert!(list.to_string().contains("color/bg"));
-}
-
 /// Task 6: align three shapes, distribute them, group them.
 #[test]
 fn task_group_align_distribute() {

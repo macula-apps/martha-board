@@ -2,6 +2,7 @@ use serde_json::json;
 
 use super::*;
 use crate::params::id_of;
+use crate::test_variables as tv;
 use figcraft_doc::{Style, StyleRun, TextStyle};
 
 fn text(s: &mut Session, family: &str) -> figcraft_doc::NodeId {
@@ -43,9 +44,9 @@ fn lists_families_of_layers_ranges_styles_and_variables_once_each() {
         },
         bound: Default::default(),
     });
-    s.execute("variable.createCollection", &json!({"name": "Type", "modes": ["Light", "Dark"]})).unwrap();
-    s.execute("variable.create", &json!({"collection": "Type", "name": "Family", "type": "string", "value": "FigCraft Missing D"})).unwrap();
-    s.execute("variable.set", &json!({"variable": "Family", "mode": "Dark", "value": "FigCraft Missing H"})).unwrap();
+    tv::collection(&mut s, "Type", &["Light", "Dark"]);
+    tv::variable(&mut s, "Type", "Family", "string", &[json!("FigCraft Missing D")]);
+    tv::set(&mut s, "Family", "Dark", json!("FigCraft Missing H"));
     let var = s.doc().unwrap().variables.get("Family").unwrap().id.clone();
     s.doc_mut().unwrap().get_mut(b).unwrap().bound.insert("fontFamily".into(), var);
 
@@ -92,8 +93,8 @@ fn a_family_found_only_by_the_system_scan_is_not_missing() {
 fn blank_families_and_aliases_are_handled() {
     let mut s = Session::new();
     text(&mut s, "  ");
-    s.execute("variable.createCollection", &json!({"name": "Type"})).unwrap();
-    s.execute("variable.create", &json!({"collection": "Type", "name": "Base", "type": "string", "value": "FigCraft Missing F"})).unwrap();
+    tv::collection(&mut s, "Type", &["Mode 1"]);
+    tv::variable(&mut s, "Type", "Base", "string", &[json!("FigCraft Missing F")]);
     let base = s.doc().unwrap().variables.get("Base").unwrap().id.clone();
     let t = text(&mut s, "FigCraft Missing G");
     let doc = s.doc_mut().unwrap();
@@ -127,9 +128,9 @@ fn blank_families_and_aliases_are_handled() {
 #[test]
 fn branching_alias_chains_are_walked_once_per_variable() {
     let mut s = Session::new();
-    s.execute("variable.createCollection", &json!({"name": "Type"})).unwrap();
+    tv::collection(&mut s, "Type", &["Mode 1"]);
     for i in 0..32 {
-        s.execute("variable.create", &json!({"collection": "Type", "name": format!("V{i}"), "type": "string", "value": "x"})).unwrap();
+        tv::variable(&mut s, "Type", &format!("V{i}"), "string", &[json!("x")]);
     }
     let doc = s.doc_mut().unwrap();
     let ids: Vec<String> = doc.variables.variables.iter().map(|v| v.id.clone()).collect();

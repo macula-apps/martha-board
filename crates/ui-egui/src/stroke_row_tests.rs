@@ -1,7 +1,6 @@
 //! The stroke's position / weight row in the Design panel, driven headless at the panel's default
-//! width: the weight field keeps room for its value beside the variable button, whose click opens
-//! the variable picker, and the row's buttons stay inside the panel (#1452: the weight field was
-//! so narrow that the variable button sat on its icon and hid the value).
+//! width: the weight field keeps room for its value beside its icon, and the row's buttons stay
+//! inside the panel (#1452: the weight field was so narrow that the value was hidden).
 
 use egui::accesskit::Role;
 use egui::{Id, Pos2, Rect};
@@ -22,7 +21,7 @@ fn scene(kind: &str) -> Ui {
     u
 }
 
-/// The area of part `part` ("lead", "field" or "bind") of the stroke weight field.
+/// The area of part `part` ("lead" or "field") of the stroke weight field.
 fn weight(u: &Ui, part: &str) -> Rect {
     u.ctx.read_response(Id::unique("stroke_w").with(part)).unwrap_or_else(|| panic!("the weight field's {part} shows")).rect
 }
@@ -38,15 +37,14 @@ fn named_button(u: &mut Ui, label: &str) -> Rect {
     Rect::from_min_max(Pos2::new(b.x0 as f32, b.y0 as f32), Pos2::new(b.x1 as f32, b.y1 as f32))
 }
 
-/// The variable button clears the weight's icon and leaves the value room for a few digits, for
-/// layers with per-side strokes (one more button in the row) and without.
+/// The weight field leaves the value room for a few digits beside its icon, for layers with
+/// per-side strokes (one more button in the row) and without.
 #[test]
-fn weight_field_keeps_its_value_beside_the_variable_button() {
+fn weight_field_keeps_room_for_its_value() {
     for kind in ["rectangle", "ellipse"] {
         let u = scene(kind);
-        let (lead, field, bind) = (weight(&u, "lead"), weight(&u, "field"), weight(&u, "bind"));
-        assert!(bind.min.x >= lead.max.x + 4.0, "{kind}: the variable button {bind:?} sits on the icon {lead:?}");
-        assert!(bind.min.x - field.min.x >= 16.0, "{kind}: no room for the value left of the variable button in {field:?} ({bind:?})");
+        let (lead, field) = (weight(&u, "lead"), weight(&u, "field"));
+        assert!(field.max.x - lead.max.x >= 20.0, "{kind}: no room for the value right of the icon {lead:?} in {field:?}");
     }
 }
 
@@ -65,18 +63,4 @@ fn stroke_row_buttons_stay_inside_the_panel() {
             assert!(sides.max.x <= advanced.min.x, "{kind}: the per-side button {sides:?} overlaps Advanced {advanced:?}");
         }
     }
-}
-
-/// A click on the variable button opens the variable picker for the weight.
-#[test]
-fn variable_button_opens_the_picker() {
-    let mut u = scene("rectangle");
-    let field = weight(&u, "field");
-    let at = weight(&u, "bind").center();
-    // The button shows while the pointer is over the field.
-    u.frame(vec![egui::Event::PointerMoved(field.center())]);
-    u.button(at, true);
-    u.button(at, false);
-    u.frame(vec![]);
-    assert!(crate::variable_ui::picker_open(&u.ctx), "the variable picker opened");
 }

@@ -132,9 +132,8 @@ fn applying_color_styles_links_matching_fill_and_stroke_lists_only() {
 fn explicit_color_detaches_its_binding_but_keeps_other_bindings() {
     let mut s = Session::new();
     let a = rectangle(&mut s, "#ff0000");
-    run(&mut s, "variable.createCollection", json!({"name":"Theme"}));
-    let v = run(&mut s, "variable.create", json!({"collection":"Theme","name":"Brand","type":"color","value":"#ff0000"}))["id"].clone();
-    run(&mut s, "variable.bind", json!({"id":a,"field":"fill","variable":v}));
+    let v = theme_variable(&mut s, "Brand", "#ff0000");
+    bind(&mut s, a, "fill", &v);
     let red = group(&s, &[a], "FF0000");
     run(&mut s, "selection.setPaint", json!({"targets":red.targets,"paint":"#0000ff"}));
     assert_eq!(fill(&s, a), "0000FF");
@@ -156,14 +155,8 @@ fn invalid_or_stale_targets_roll_back_atomically() {
     assert!(s.execute("selection.setPaint", &json!({"targets":red.targets,"paint":"#0000ff"})).is_err());
     assert_eq!(fill(&s, a), "FF0000");
     assert_eq!(s.undo_depth(), before);
-    for command in [
-        "selection.setPaint",
-        "selection.selectColor",
-        "selection.applyColorStyle",
-        "selection.bindColorVariable",
-        "selection.detachColor",
-        "selection.createColorStyle",
-    ] {
+    for command in ["selection.setPaint", "selection.selectColor", "selection.applyColorStyle", "selection.detachColor", "selection.createColorStyle"]
+    {
         for params in [json!({}), json!({"targets":[]}), json!({"targets":[{"id":a,"fills":true,"index":0,"range":[0,1]}]})] {
             assert!(s.execute(command, &params).is_err());
         }
@@ -178,13 +171,12 @@ fn equal_resolved_colors_from_different_styles_or_variables_stay_separate() {
     let c = rectangle(&mut s, "#ff0000");
     let style = run(&mut s, "style.create", json!({"type":"paint","name":"Brand","value":"#ff0000"}))["id"].clone();
     run(&mut s, "style.apply", json!({"id":a,"style":style,"target":"fill"}));
-    run(&mut s, "variable.createCollection", json!({"name":"Theme"}));
-    let variable = run(&mut s, "variable.create", json!({"collection":"Theme","name":"Accent","type":"color","value":"#ff0000"}))["id"].clone();
-    run(&mut s, "variable.bind", json!({"id":b,"field":"fill","variable":variable}));
+    let variable = theme_variable(&mut s, "Accent", "#ff0000");
+    bind(&mut s, b, "fill", &variable);
     let colors = collect(s.doc().unwrap(), &[a, b, c]);
     assert_eq!(colors.len(), 3);
     assert_eq!(colors[0].style.as_deref(), style.as_str());
-    assert_eq!(colors[1].variable.as_deref(), variable.as_str());
+    assert_eq!(colors[1].variable.as_deref(), Some(variable.as_str()));
     assert!(colors[2].style.is_none() && colors[2].variable.is_none());
 }
 
@@ -223,9 +215,8 @@ fn masks_and_boolean_operands_are_not_selection_colors() {
 fn range_edit_keeps_a_node_binding_that_other_characters_inherit() {
     let mut s = Session::new();
     let id = NodeId(run(&mut s, "text.create", json!({"text":"abc","props":{"fill":"#ff0000"}}))["id"].as_u64().unwrap());
-    run(&mut s, "variable.createCollection", json!({"name":"Theme"}));
-    let v = run(&mut s, "variable.create", json!({"collection":"Theme","name":"Brand","type":"color","value":"#ff0000"}))["id"].clone();
-    run(&mut s, "variable.bind", json!({"id":id,"field":"fill","variable":v}));
+    let v = theme_variable(&mut s, "Brand", "#ff0000");
+    bind(&mut s, id, "fill", &v);
     run(&mut s, "text.style", json!({"id":id,"start":1,"end":2,"textFills":["#0000ff"]}));
     let blue = group(&s, &[id], "0000FF");
     run(&mut s, "selection.setPaint", json!({"targets":blue.targets,"paint":"#00ff00"}));
@@ -254,9 +245,8 @@ fn selection_color_edits_respect_read_only_version_previews() {
 fn opacity_edits_keep_the_color_variable_binding() {
     let mut s = Session::new();
     let a = rectangle(&mut s, "#ff0000");
-    run(&mut s, "variable.createCollection", json!({"name":"Theme"}));
-    let v = run(&mut s, "variable.create", json!({"collection":"Theme","name":"Brand","type":"color","value":"#ff0000"}))["id"].clone();
-    run(&mut s, "variable.bind", json!({"id":a,"field":"fill","variable":v}));
+    let v = theme_variable(&mut s, "Brand", "#ff0000");
+    bind(&mut s, a, "fill", &v);
     let mut red = group(&s, &[a], "FF0000");
     red.paint.opacity = 0.5;
     run(&mut s, "selection.setPaint", json!({"targets":red.targets,"paint":red.paint}));
@@ -278,77 +268,65 @@ fn whole_text_fill_keeps_a_color_style_link() {
     assert_eq!(fill(&s, id), "00FF00");
 }
 
-fn theme_variable(s: &mut Session, name: &str, hex: &str) -> Value {
-    if s.doc().unwrap().variables.collection("Theme").is_none() {
-        run(s, "variable.createCollection", json!({"name":"Theme"}));
-    }
-    run(s, "variable.create", json!({"collection":"Theme","name":name,"type":"color","value":hex}))["id"].clone()
+/// Edit the document as a file or a collaborator brings it (one gesture: normalised like an edit,
+/// bound layers take their variables' values). The variables editor left (#16).
+fn edit_doc(s: &mut Session, f: impl FnOnce(&mut figcraft_doc::Document)) {
+    s.begin_interaction("Edit").unwrap();
+    s.preview(|d, _| {
+        f(d);
+        Ok(())
+    })
+    .unwrap();
+    s.commit_interaction().unwrap();
 }
 
-#[test]
-fn applying_a_color_variable_binds_matching_fill_and_stroke_slots_only() {
-    let mut s = Session::new();
-    let a = rectangle(&mut s, "#ff0000");
-    let b = rectangle(&mut s, "#0000ff");
-    run(&mut s, "stroke.add", json!({"id":b,"color":"#ff0000"}));
-    let v = theme_variable(&mut s, "Brand", "#00ff00");
-    let red = group(&s, &[a, b], "FF0000");
-    let before = s.undo_depth();
-    run(&mut s, "selection.bindColorVariable", json!({"targets":red.targets,"variable":"Brand"}));
-    assert_eq!(fill(&s, a), "00FF00");
-    assert_eq!(fill(&s, b), "0000FF");
-    assert_eq!(s.doc().unwrap().node(b).unwrap().strokes[0].solid_color().unwrap().to_hex(), "00FF00");
-    assert_eq!(s.doc().unwrap().node(a).unwrap().bound.get("fills/0/color").map(String::as_str), v.as_str());
-    assert_eq!(s.doc().unwrap().node(b).unwrap().bound.get("strokes/0/color").map(String::as_str), v.as_str());
-    assert_eq!(s.undo_depth().0, before.0 + 1);
-    run(&mut s, "variable.set", json!({"variable":v,"value":"#ffff00"}));
-    assert_eq!(fill(&s, a), "FFFF00");
-    assert_eq!(fill(&s, b), "0000FF");
-    let bound = collect(s.doc().unwrap(), &[a, b]).into_iter().find(|g| g.variable.is_some()).unwrap();
-    assert_eq!(bound.targets.len(), 2);
-    s.undo().unwrap();
-    s.undo().unwrap();
-    assert_eq!(fill(&s, a), "FF0000");
-    assert!(s.doc().unwrap().node(a).unwrap().bound.is_empty());
+/// A colour variable `name` holding `hex` in a one-mode "Theme" collection → its id.
+fn theme_variable(s: &mut Session, name: &str, hex: &str) -> String {
+    let mut id = String::new();
+    edit_doc(s, |doc| {
+        let cid = match doc.variables.collection("Theme") {
+            Some(c) => c.id.clone(),
+            None => {
+                let cid = doc.new_collection_id();
+                let mode = figcraft_doc::Mode { id: format!("{cid}/mode1"), name: "Mode 1".into() };
+                doc.variables.collections.push(figcraft_doc::Collection { id: cid.clone(), name: "Theme".into(), modes: vec![mode], extends: None });
+                cid
+            }
+        };
+        let modes: Vec<String> = doc.variables.collection_by_id(&cid).unwrap().modes.iter().map(|m| m.id.clone()).collect();
+        let value = figcraft_doc::VariableValue::Color(figcraft_color::Color::parse_css(hex).unwrap());
+        id = doc.new_variable_id();
+        doc.variables.variables.push(figcraft_doc::Variable {
+            id: id.clone(),
+            name: name.into(),
+            collection: cid,
+            kind: figcraft_doc::VariableType::Color,
+            values: modes.into_iter().map(|m| (m, value.clone())).collect(),
+            description: String::new(),
+            scopes: None,
+            hidden_from_publishing: false,
+            extends: None,
+            overrides: Default::default(),
+            code_syntax: Default::default(),
+        });
+    });
+    id
 }
 
-#[test]
-fn a_color_variable_replaces_a_style_link_and_an_earlier_binding() {
-    let mut s = Session::new();
-    let a = rectangle(&mut s, "#ff0000");
-    let b = rectangle(&mut s, "#ff0000");
-    let style = run(&mut s, "style.create", json!({"type":"paint","name":"Brand","value":"#ff0000"}))["id"].clone();
-    run(&mut s, "style.apply", json!({"id":a,"style":style,"target":"fill"}));
-    let old = theme_variable(&mut s, "Old", "#ff0000");
-    run(&mut s, "variable.bind", json!({"id":b,"field":"fill","variable":old}));
-    let new = theme_variable(&mut s, "New", "#0000ff");
-    let targets: Vec<_> = collect(s.doc().unwrap(), &[a, b]).into_iter().flat_map(|g| g.targets).collect();
-    run(&mut s, "selection.bindColorVariable", json!({"targets":targets,"variable":new}));
-    for id in [a, b] {
-        let n = s.doc().unwrap().node(id).unwrap();
-        assert!(n.styles.fill.is_none());
-        assert_eq!(n.bound.len(), 1, "one binding for the slot: {:?}", n.bound);
-        assert_eq!(n.bound.values().next().map(String::as_str), new.as_str());
-        assert_eq!(fill(&s, id), "0000FF");
-    }
-    assert_eq!(collect(s.doc().unwrap(), &[a, b]).len(), 1);
+/// Bind `field` of layer `id` to `variable` (an id), as a file holds the binding.
+fn bind(s: &mut Session, id: NodeId, field: &str, variable: &str) {
+    edit_doc(s, |doc| {
+        doc.get_mut(id).unwrap().bound.insert(field.into(), variable.into());
+    });
 }
 
-#[test]
-fn a_color_variable_on_a_text_range_with_its_own_fills_takes_its_value() {
-    let mut s = Session::new();
-    let id = NodeId(run(&mut s, "text.create", json!({"text":"abc","props":{"fill":"#ff0000"}}))["id"].as_u64().unwrap());
-    run(&mut s, "text.style", json!({"id":id,"start":1,"end":2,"fontSize":30,"textFills":["#0000ff"]}));
-    theme_variable(&mut s, "Brand", "#00ff0080");
-    let blue = group(&s, &[id], "0000FF");
-    run(&mut s, "selection.bindColorVariable", json!({"targets":blue.targets,"variable":"Brand"}));
-    let n = s.doc().unwrap().node(id).unwrap();
-    let t = n.kind.text().unwrap();
-    let paint = &t.style_at(1).fills.as_ref().unwrap()[0];
-    assert_eq!(paint.solid_color().unwrap().to_css_hex(), "#00FF0080");
-    assert_eq!(t.style_at(1).font_size, 30.0);
-    assert!(n.bound.is_empty());
-    assert_eq!(fill(&s, id), "FF0000");
+/// Give `variable` (an id) the colour `hex` in every mode.
+fn set_variable(s: &mut Session, variable: &str, hex: &str) {
+    edit_doc(s, |doc| {
+        let value = figcraft_doc::VariableValue::Color(figcraft_color::Color::parse_css(hex).unwrap());
+        let v = doc.variables.variables.iter_mut().find(|v| v.id == variable).unwrap();
+        v.values.values_mut().for_each(|x| *x = value.clone());
+    });
 }
 
 #[test]
@@ -360,8 +338,8 @@ fn detaching_a_selection_color_keeps_its_value() {
     let style = run(&mut s, "style.create", json!({"type":"paint","name":"Brand","value":"#00ff00"}))["id"].clone();
     run(&mut s, "style.apply", json!({"id":a,"style":style,"target":"fill"}));
     let v = theme_variable(&mut s, "Accent", "#ffff0080");
-    run(&mut s, "variable.bind", json!({"id":b,"field":"fill","variable":v}));
-    run(&mut s, "variable.bind", json!({"id":c,"field":"fill","variable":v}));
+    bind(&mut s, b, "fill", &v);
+    bind(&mut s, c, "fill", &v);
     let colors = collect(s.doc().unwrap(), &[a, b]);
     assert_eq!(colors.len(), 2);
     let before = s.undo_depth();
@@ -374,57 +352,9 @@ fn detaching_a_selection_color_keeps_its_value() {
     assert!(!s.doc().unwrap().node(c).unwrap().bound.is_empty());
     assert_eq!(fill(&s, a), "00FF00");
     assert_eq!(s.doc().unwrap().node(b).unwrap().fills[0].solid_color().unwrap().to_css_hex(), "#FFFF0080");
-    run(&mut s, "variable.set", json!({"variable":v,"value":"#000000"}));
+    set_variable(&mut s, &v, "#000000");
     assert_eq!(fill(&s, b), "FFFF00");
     assert!(collect(s.doc().unwrap(), &[a, b]).iter().all(|g| g.style.is_none() && g.variable.is_none()));
-}
-
-#[test]
-fn color_variables_refuse_gradients_other_types_and_unknown_names() {
-    use figcraft_color::{Color, Gradient, GradientKind};
-    let mut s = Session::new();
-    let a = rectangle(&mut s, "#ff0000");
-    let gradient = Paint::gradient(Gradient::default_for(GradientKind::Linear, Color::BLACK));
-    run(&mut s, "fill.add", json!({"id":a,"paint":gradient}));
-    theme_variable(&mut s, "Brand", "#00ff00");
-    run(&mut s, "variable.create", json!({"collection":"Theme","name":"Gap","type":"number","value":8}));
-    let colors = collect(s.doc().unwrap(), &[a]);
-    let solid = colors.iter().find(|g| g.paint.solid_color().is_some()).unwrap();
-    let ramp = colors.iter().find(|g| g.paint.solid_color().is_none()).unwrap();
-    let before = s.undo_depth();
-    for (targets, variable) in [(&ramp.targets, "Brand"), (&solid.targets, "Gap"), (&solid.targets, "Missing")] {
-        assert!(s.execute("selection.bindColorVariable", &json!({"targets":targets,"variable":variable})).is_err());
-    }
-    assert!(s.execute("selection.bindColorVariable", &json!({"targets":solid.targets})).is_err());
-    assert!(s.doc().unwrap().node(a).unwrap().bound.is_empty());
-    assert_eq!(s.undo_depth(), before);
-    run(&mut s, "selection.bindColorVariable", json!({"targets":solid.targets,"variable":"Brand"}));
-    assert_eq!(s.doc().unwrap().node(a).unwrap().bound.len(), 1);
-    assert_eq!(s.undo_depth().0, before.0 + 1);
-}
-
-#[test]
-fn scopes_filter_the_menu_but_the_command_binds_anyway() {
-    let mut s = Session::new();
-    let a = rectangle(&mut s, "#ff0000");
-    run(&mut s, "stroke.add", json!({"id":a,"color":"#ff0000"}));
-    theme_variable(&mut s, "Line", "#00ff00");
-    theme_variable(&mut s, "Hidden", "#0000ff");
-    run(&mut s, "variable.update", json!({"variable":"Line","scopes":["STROKE_COLOR"]}));
-    run(&mut s, "variable.update", json!({"variable":"Hidden","scopes":[]}));
-    let red = group(&s, &[a], "FF0000");
-    let fill_slot: Vec<_> = red.targets.iter().filter(|t| t.fills).cloned().collect();
-    let stroke_slot: Vec<_> = red.targets.iter().filter(|t| !t.fills).cloned().collect();
-    let doc = s.doc().unwrap();
-    let offered = |targets: &[figcraft_engine::selection_colors::PaintTarget], v: &str| figcraft_engine::selection_colors::in_scope(doc, targets, v);
-    assert!(offered(&stroke_slot, "Line"));
-    assert!(!offered(&red.targets, "Line") && !offered(&fill_slot, "Line") && !offered(&stroke_slot, "Hidden"));
-    run(&mut s, "selection.bindColorVariable", json!({"targets":stroke_slot,"variable":"Line"}));
-    assert_eq!(s.doc().unwrap().node(a).unwrap().strokes[0].solid_color().unwrap().to_hex(), "00FF00");
-    assert_eq!(fill(&s, a), "FF0000");
-    // As with `variable.bind`, the command itself binds outside the scopes.
-    run(&mut s, "selection.bindColorVariable", json!({"targets":fill_slot,"variable":"Line"}));
-    assert_eq!(fill(&s, a), "00FF00");
 }
 
 #[test]
@@ -536,14 +466,14 @@ fn a_style_created_from_a_variable_bound_row_keeps_following_the_variable() {
     let b = rectangle(&mut s, "#ff0000");
     let v = theme_variable(&mut s, "Brand", "#ff0000");
     for id in [a, b] {
-        run(&mut s, "variable.bind", json!({"id":id,"field":"fill","variable":v}));
+        bind(&mut s, id, "fill", &v);
     }
     let red = group(&s, &[a, b], "FF0000");
     assert_eq!(red.targets.len(), 2);
     run(&mut s, "selection.createColorStyle", json!({"targets":red.targets,"name":"Brand"}));
     let style = s.doc().unwrap().style("Brand").unwrap();
-    assert_eq!(style.bound.get("fills/0/color").map(String::as_str), v.as_str());
-    run(&mut s, "variable.set", json!({"variable":v,"value":"#00ff00"}));
+    assert_eq!(style.bound.get("fills/0/color").map(String::as_str), Some(v.as_str()));
+    set_variable(&mut s, &v, "#00ff00");
     assert_eq!(fill(&s, a), "00FF00");
     assert_eq!(fill(&s, b), "00FF00");
 }
@@ -556,11 +486,11 @@ fn a_style_created_from_a_gradient_keeps_its_stop_variables() {
     let paint = Paint::gradient(Gradient::default_for(GradientKind::Linear, Color::BLACK));
     run(&mut s, "fill.set", json!({"id":a,"paint":paint}));
     let v = theme_variable(&mut s, "Brand", "#ff0000");
-    run(&mut s, "variable.bind", json!({"id":a,"field":"fills/0/stops/0/color","variable":v}));
+    bind(&mut s, a, "fills/0/stops/0/color", &v);
     let row = collect(s.doc().unwrap(), &[a]).into_iter().next().unwrap();
     run(&mut s, "selection.createColorStyle", json!({"targets":row.targets,"name":"Shade"}));
     assert!(s.doc().unwrap().style("Shade").unwrap().bound.contains_key("fills/0/stops/0/color"));
-    run(&mut s, "variable.set", json!({"variable":v,"value":"#00ff00"}));
+    set_variable(&mut s, &v, "#00ff00");
     let PaintKind::Gradient(g) = &s.doc().unwrap().node(a).unwrap().fills[0].kind else { panic!("not a gradient") };
     assert_eq!(g.stops[0].color.to_hex(), "00FF00");
 }
@@ -571,7 +501,7 @@ fn creating_a_style_refuses_targets_bound_to_different_variables() {
     let a = rectangle(&mut s, "#ff0000");
     let b = rectangle(&mut s, "#ff0000");
     let v = theme_variable(&mut s, "Brand", "#ff0000");
-    run(&mut s, "variable.bind", json!({"id":a,"field":"fill","variable":v}));
+    bind(&mut s, a, "fill", &v);
     let targets: Vec<_> = collect(s.doc().unwrap(), &[a, b]).into_iter().flat_map(|g| g.targets).collect();
     assert_eq!(targets.len(), 2);
     assert!(selection_colors::create_refusal(s.doc().unwrap(), &targets).is_some());

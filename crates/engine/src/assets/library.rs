@@ -1171,7 +1171,7 @@ pub fn accept_updates(doc: &mut Document, lib: &PublishedLibrary) -> Result<Pend
         let keys = |list: &[ImportedRecord]| list.iter().map(|r| r.key.clone()).collect::<BTreeSet<_>>();
         import_variables(doc, lib, &keys(&p.variables), &keys(&p.collections), true);
     }
-    crate::cmd::variables::sync_extensions(doc);
+    crate::variable_data::sync_extensions(doc);
     let m = &lib.manifest;
     if let Some(l) = doc.libraries_mut().enabled.iter_mut().find(|l| l.id == m.id)
         && (l.version != m.version || l.name != m.name)

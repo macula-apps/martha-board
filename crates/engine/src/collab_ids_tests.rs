@@ -1,5 +1,5 @@
-//! Several people creating styles, variables, collections, modes and comments at once with real
-//! commands: each gets ids from its own client space, so nothing created is overwritten.
+//! Several people creating styles and comments at once with real commands (variables have no
+//! commands since #16): each gets ids from its own client space, so nothing created is overwritten.
 
 use figcraft_collab::sim::Sim;
 use figcraft_collab::{Change, Entry};
@@ -14,10 +14,6 @@ fn creations(who: usize, round: usize) -> Vec<(&'static str, Value)> {
     let name = format!("p{who} r{round}");
     vec![
         ("style.create", json!({"type": "paint", "name": name, "value": "#3366FF"})),
-        ("variable.create", json!({"collection": "Tokens", "name": name, "type": "number", "value": who})),
-        ("variable.duplicate", json!({"variable": "v0"})),
-        ("variable.createCollection", json!({"name": name})),
-        ("variable.addMode", json!({"collection": name, "name": "Dark"})),
         ("comment.add", json!({"x": 10 * who, "y": 10 * round, "text": name})),
     ]
 }
@@ -25,8 +21,7 @@ fn creations(who: usize, round: usize) -> Vec<(&'static str, Value)> {
 #[test]
 fn concurrent_creations_with_real_commands_all_survive() {
     let start = base();
-    let (styles, vars, colls, comments) =
-        (start.styles.len(), start.variables.variables.len(), start.variables.collections.len(), start.comments.len());
+    let (styles, vars, comments) = (start.styles.len(), start.variables.variables.len(), start.comments.len());
     for seed in 0..8 {
         let n = 2 + (seed as usize % 3);
         let rounds = 2;
@@ -49,15 +44,12 @@ fn concurrent_creations_with_real_commands_all_survive() {
         let d = sim.server.document();
         let made = n * rounds;
         assert_eq!(d.styles.len(), styles + made, "seed {seed}: every style survives");
-        // Each round: one new variable and one copy.
-        assert_eq!(d.variables.variables.len(), vars + 2 * made, "seed {seed}: every variable survives");
-        assert_eq!(d.variables.collections.len(), colls + made, "seed {seed}");
+        // Styles and comments add no variables.
+        assert_eq!(d.variables.variables.len(), vars, "seed {seed}");
         assert_eq!(d.comments.len(), comments + made, "seed {seed}: every comment survives");
         for who in 0..n {
             for round in 0..rounds {
                 let name = format!("p{who} r{round}");
-                let coll = d.variables.collections.iter().find(|c| c.name == name).unwrap_or_else(|| panic!("seed {seed}: {name}'s collection"));
-                assert_eq!(coll.modes.len(), 2, "seed {seed}: {name}'s modes");
                 assert!(d.styles.iter().any(|s| s.name == name) && d.comments.iter().any(|c| c.first.text == name), "seed {seed}: {name}");
             }
         }
@@ -69,9 +61,6 @@ fn outside_a_session_the_ids_are_unchanged() {
     let mut s = Session::with_document(base());
     let id = |v: Value| v["id"].clone();
     assert_eq!(id(s.execute("style.create", &json!({"type": "paint", "name": "A", "value": "#000000"})).unwrap()), "S:1");
-    assert_eq!(id(s.execute("variable.createCollection", &json!({"name": "More"})).unwrap()), "VariableCollectionId:2");
-    assert_eq!(id(s.execute("variable.addMode", &json!({"collection": "More", "name": "Dark"})).unwrap()), "VariableCollectionId:2/mode2");
-    assert_eq!(id(s.execute("variable.create", &json!({"collection": "More", "name": "x", "type": "number", "value": 1})).unwrap()), "VariableID:5");
     assert_eq!(id(s.execute("comment.add", &json!({"x": 0, "y": 0, "text": "hi"})).unwrap()), 1);
 }
 

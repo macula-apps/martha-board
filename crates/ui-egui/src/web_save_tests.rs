@@ -6,8 +6,25 @@ use figcraft_doc::{ExportSetting, NodeId};
 use figcraft_engine::Session;
 use serde_json::json;
 
-use crate::FigApp;
-use crate::variables_export_ui_tests::{Browser, Downloads};
+use crate::{FigApp, Services};
+
+type Downloads = std::sync::Arc<std::sync::Mutex<Vec<(String, Vec<u8>)>>>;
+
+/// Services that save by downloads and keep them (`deliver` false: the browser refused).
+struct Browser {
+    got: Downloads,
+    deliver: bool,
+}
+
+impl Services for Browser {
+    fn downloads(&self) -> bool {
+        true
+    }
+    fn download(&mut self, name: &str, bytes: &[u8]) -> bool {
+        self.got.lock().unwrap().push((name.to_string(), bytes.to_vec()));
+        self.deliver
+    }
+}
 
 fn browser(deliver: bool) -> (FigApp, Downloads, NodeId) {
     let mut s = Session::new();

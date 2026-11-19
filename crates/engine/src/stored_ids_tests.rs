@@ -1,35 +1,29 @@
-//! A variable renamed to another one's id never takes its place (#1613), beside #1618's tests:
-//! an id a person types (`variable.bind`, `variable.set`) finds the variable with that exact id
-//! before one named like it, and the Tailwind export and expressions read the stored id. Names still
-//! work where a person types them.
+//! A variable renamed to another one's id never takes its place (#1613), beside #1618's tests: a
+//! binding and an expression read the stored id, not a variable named like it.
 
 use figcraft_doc::VariableValue;
 use figcraft_doc::proto::Expr;
-use serde_json::{Value, json};
+use serde_json::json;
 
 use crate::Session;
 use crate::components::tests::ex;
+use crate::test_variables as tv;
 
 /// The issue's document: Theme with `shadow`, `surface` and `alias` (→ surface), then `shadow`
-/// renamed to surface's id with Web code syntax `--shadow`. Ids of shadow, surface and alias.
+/// renamed to surface's id with Web code syntax `--shadow`, as a file can hold it. Ids of shadow,
+/// surface and alias.
 fn renamed_like_an_id() -> (Session, String, String, String) {
     let mut s = Session::new();
-    ex(&mut s, "variable.createCollection", json!({"name": "Theme"}));
-    let id = |v: Value| v["id"].as_str().unwrap().to_string();
-    let shadow = id(ex(&mut s, "variable.create", json!({"collection": "Theme", "name": "shadow", "type": "color", "value": "#FF0000"})));
-    let surface = id(ex(&mut s, "variable.create", json!({"collection": "Theme", "name": "surface", "type": "color", "value": "#0D99FF"})));
-    let alias = id(ex(&mut s, "variable.create", json!({"collection": "Theme", "name": "alias", "type": "color", "value": {"alias": "surface"}})));
-    ex(&mut s, "variable.update", json!({"variable": shadow, "name": surface, "codeSyntax": {"WEB": "--shadow"}}));
+    tv::collection(&mut s, "Theme", &["Mode 1"]);
+    let shadow = tv::variable(&mut s, "Theme", "shadow", "color", &[json!("#FF0000")]);
+    let surface = tv::variable(&mut s, "Theme", "surface", "color", &[json!("#0D99FF")]);
+    let alias = tv::variable(&mut s, "Theme", "alias", "color", &[json!("#000000")]);
+    tv::set_all(&mut s, &alias, VariableValue::Alias(surface.clone()));
+    tv::edit_variable(&mut s, &shadow, |v| {
+        v.name.clone_from(&surface);
+        v.code_syntax.insert("WEB".into(), "--shadow".into());
+    });
     (s, shadow, surface, alias)
-}
-
-#[test]
-fn exported_aliases_point_at_the_stored_id() {
-    let (mut s, ..) = renamed_like_an_id();
-    let css = ex(&mut s, "variable.export", json!({"format": "css"}))["text"].as_str().unwrap().to_string();
-    assert!(css.contains("--alias: var(--surface);"), "{css}");
-    let tw = ex(&mut s, "variable.export", json!({"format": "tailwind"}))["text"].as_str().unwrap().to_string();
-    assert!(tw.contains("var(--color-surface)") && !tw.contains("var(--shadow)"), "{tw}");
 }
 
 #[test]
@@ -37,7 +31,7 @@ fn a_fill_binding_names_the_stored_variable() {
     let (mut s, _, surface, _) = renamed_like_an_id();
     let r = ex(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10}));
     let r = crate::params::id_of(&r["id"]).unwrap();
-    ex(&mut s, "variable.bind", json!({"ids": [r.0], "field": "fill", "variable": surface}));
+    tv::bind(&mut s, &[r], "fill", &surface);
     let doc = s.doc().unwrap();
     let n = doc.node(r).unwrap();
     let key = crate::cmd::lists::paint_binding_key(n, true, 0).unwrap();
@@ -47,8 +41,13 @@ fn a_fill_binding_names_the_stored_variable() {
 #[test]
 fn expressions_read_and_show_the_stored_variable() {
     let (mut s, _, surface, _) = renamed_like_an_id();
-    ex(&mut s, "variable.addMode", json!({"collection": "Theme", "name": "Dark"}));
-    ex(&mut s, "variable.set", json!({"variable": surface, "mode": "Dark", "value": "#00FF00"}));
+    crate::variable_data::edit(&mut s, |doc| {
+        let c = doc.variables.collections.iter_mut().find(|c| c.name == "Theme").unwrap();
+        c.modes.push(figcraft_doc::Mode { id: format!("{}/mode2", c.id), name: "Dark".into() });
+        Ok(())
+    })
+    .unwrap();
+    tv::set(&mut s, &surface, "Dark", json!("#00FF00"));
     let vars = &s.doc().unwrap().variables;
     let theme = vars.collection("Theme").unwrap().clone();
     let dark = theme.find_mode("Dark").unwrap().id.clone();

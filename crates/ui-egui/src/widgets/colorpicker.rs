@@ -42,11 +42,6 @@ pub enum PickerTarget {
         start: usize,
         end: usize,
     },
-    /// A colour variable's value in one mode.
-    Variable {
-        id: String,
-        mode: String,
-    },
     /// One paint of a colour style (edited from the style picker).
     Style {
         id: String,
@@ -105,14 +100,6 @@ fn current_paint(app: &FigApp, target: &PickerTarget) -> Option<Paint> {
         }
         PickerTarget::Effect { ids, index, secondary } => doc.node(*ids.first()?)?.effects.get(*index)?.color(*secondary).map(Paint::solid),
         PickerTarget::TextRange { id, start, .. } => range_fills(doc, *id, *start)?.into_iter().next(),
-        PickerTarget::Variable { id, mode } => match doc.variables.get_by_id(id)?.values.get(mode)? {
-            figcraft_doc::VariableValue::Color(c) => {
-                let mut p = Paint::solid(c.with_alpha(1.0));
-                p.opacity = c.a;
-                Some(p)
-            }
-            _ => None,
-        },
         PickerTarget::Style { id, index } => style_paints(doc, id)?.get(*index).cloned(),
         PickerTarget::PluginField { plugin, control, pending } => {
             let hex = match pending {
@@ -147,10 +134,6 @@ fn paint_command(app: &FigApp, target: &PickerTarget, paint: &Paint) -> Option<(
             ("effect.set", json!({"ids": ids, "index": index, "effect": e}))
         }
         PickerTarget::TextRange { id, start, end } => ("text.style", json!({"id": id, "start": start, "end": end, "textFills": [paint]})),
-        PickerTarget::Variable { id, mode } => {
-            let c = paint.solid_color().unwrap_or(Color::BLACK);
-            ("variable.set", json!({"variable": id, "mode": mode, "value": c.to_css_hex()}))
-        }
         PickerTarget::Style { id, index } => {
             let mut paints = app.session.doc().ok().and_then(|d| style_paints(d, id))?;
             if let Some(slot) = paints.get_mut(*index) {
@@ -861,7 +844,7 @@ fn image_controls(app: &mut FigApp, ui: &mut Ui, target: &PickerTarget, paint: &
     }
 }
 
-/// The gradient bar with its stops, the stop actions and the selected stop's colour variable.
+/// The gradient bar with its stops, the stop actions and the selected stop.
 /// The selected stop's colour (what the colour fields then edit).
 fn gradient_controls(
     app: &mut FigApp,
@@ -955,22 +938,19 @@ fn gradient_controls(
             write(app, target, paint, false);
         }
     });
-    // The selected stop's colour can come from a colour variable.
-    if let PickerTarget::Paint { fills, index, ids } = target {
-        let field = format!("{}/{index}/stops/{sel}/color", if *fills { "fills" } else { "strokes" });
+    // The selected stop and its colour.
+    if matches!(target, PickerTarget::Paint { .. }) {
         let stop = g.stops.get(sel).map(|s| s.color);
         ui.horizontal(|ui| {
             ui.add_space(16.0);
-            crate::variable_ui::bindable(app, ui, ids, &field, figcraft_doc::VariableType::Color, 208.0, |_, ui| {
-                let (r, _) = ui.allocate_exact_size(vec2(208.0, widgets::FIELD_H), Sense::hover());
-                ui.painter().rect_filled(r, CornerRadius::same(5), t.field);
-                let sw = Rect::from_center_size(pos2(r.min.x + 13.0, r.center().y), vec2(14.0, 14.0));
-                if let Some(c) = stop {
-                    widgets::paint_swatch(ui.painter(), sw, &Paint::solid(c));
-                    let text = trf("Stop {n}  {hex}", &[("n", &(sel + 1)), ("hex", &c.to_hex())]);
-                    ui.painter().text(pos2(sw.max.x + 8.0, r.center().y), Align2::LEFT_CENTER, text, regular(11.0), t.text);
-                }
-            });
+            let (r, _) = ui.allocate_exact_size(vec2(208.0, widgets::FIELD_H), Sense::hover());
+            ui.painter().rect_filled(r, CornerRadius::same(5), t.field);
+            let sw = Rect::from_center_size(pos2(r.min.x + 13.0, r.center().y), vec2(14.0, 14.0));
+            if let Some(c) = stop {
+                widgets::paint_swatch(ui.painter(), sw, &Paint::solid(c));
+                let text = trf("Stop {n}  {hex}", &[("n", &(sel + 1)), ("hex", &c.to_hex())]);
+                ui.painter().text(pos2(sw.max.x + 8.0, r.center().y), Align2::LEFT_CENTER, text, regular(11.0), t.text);
+            }
         });
     }
     edit_color
@@ -1045,8 +1025,7 @@ pub fn show(app: &mut FigApp, ctx: &egui::Context) {
     let own = picking || crate::handles::gradient_dragging(ctx) || crate::handles::crop_dragging(ctx);
     pop = pop.close_on_outside(!own);
     // Only the opening control is held out: any other sidebar or canvas press dismisses it.
-    let mut held: Vec<Rect> = app.ui.picker_button.into_iter().collect();
-    held.extend(crate::variable_ui::picker_rect(ctx));
+    let held: Vec<Rect> = app.ui.picker_button.into_iter().collect();
     let closed = pop.show(ctx, open, Hold { rects: &held, escape: false }, |ui| {
         ui.spacing_mut().item_spacing = vec2(8.0, 8.0);
         // The eyedropper's colour goes to this picker's paint (a stroke, an effect, a gradient stop...).
@@ -1054,17 +1033,11 @@ pub fn show(app: &mut FigApp, ctx: &egui::Context) {
             set_color(app, &target, &mut paint, c, stop_id(), ui);
         }
         // Paint type.
-        if !matches!(
-            target,
-            PickerTarget::Effect { .. } | PickerTarget::PageBackground | PickerTarget::Variable { .. } | PickerTarget::PluginField { .. }
-        ) {
+        if !matches!(target, PickerTarget::Effect { .. } | PickerTarget::PageBackground | PickerTarget::PluginField { .. }) {
             paint_type_row(ui, app, &target, &mut paint);
         }
         // The paint's own blend mode, with the paints and layers under it.
-        if !matches!(
-            target,
-            PickerTarget::Effect { .. } | PickerTarget::PageBackground | PickerTarget::Variable { .. } | PickerTarget::PluginField { .. }
-        ) {
+        if !matches!(target, PickerTarget::Effect { .. } | PickerTarget::PageBackground | PickerTarget::PluginField { .. }) {
             blend_row(ui, app, &target, &mut paint);
         }
         // Gradient stops.
@@ -1539,22 +1512,6 @@ mod selection_color_tests {
         assert_eq!(app.session.doc().unwrap().node(b).unwrap().fills[0].solid_color().unwrap().to_hex(), "0000FF");
         app.session.undo().unwrap();
         assert_eq!(app.session.doc().unwrap().node(a).unwrap().fills[0].solid_color().unwrap().to_hex(), "FF0000");
-    }
-
-    #[test]
-    fn writing_a_variable_keeps_its_alpha() {
-        // The picker holds a colour variable's alpha as the paint opacity; writing it back applies it once.
-        let (mut app, _, _) = setup();
-        app.session.execute("variable.createCollection", &json!({"name":"T"})).unwrap();
-        let v = app.session.execute("variable.create", &json!({"collection":"T","name":"tint","type":"color","value":"#0D6EFD80"})).unwrap();
-        let var = app.session.doc().unwrap().variables.get(v["id"].as_str().unwrap()).unwrap().clone();
-        let target = PickerTarget::Variable { id: var.id.clone(), mode: var.values.keys().next().unwrap().clone() };
-        for _ in 0..2 {
-            let paint = current_paint(&app, &target).unwrap();
-            write(&mut app, &target, &paint, false);
-        }
-        let c = current_paint(&app, &target).unwrap().solid_color().unwrap();
-        assert_eq!(c.to_css_hex().to_uppercase(), "#0D6EFD80");
     }
 
     #[test]

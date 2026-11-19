@@ -11,11 +11,11 @@
 //!   (preferred ones first), select it, reset it to the main's default content.
 
 use egui::{Id, Sense, Ui, vec2};
-use figcraft_doc::{Document, Node, NodeId, NodeKind, PropDef, VariableType};
+use figcraft_doc::{Document, Node, NodeId, NodeKind, PropDef};
 use figcraft_engine::cmd::component::{can_add_variant, can_combine_variants};
 use figcraft_engine::components::{
-    PROP_BINDING, default_variant, inside_instance, instance_prop_list, owning_component, owning_instance, prop_list, slot_def, slot_edited,
-    slots_of, variant_conflicts, variant_options, variant_props, variant_set,
+    default_variant, inside_instance, instance_prop_list, owning_component, owning_instance, prop_list, slot_def, slot_edited, slots_of,
+    variant_conflicts, variant_options, variant_props, variant_set,
 };
 use serde_json::{Value, json};
 
@@ -732,17 +732,14 @@ fn instance_props(app: &mut FigApp, ui: &mut Ui, doc: &Document, n: &Node, comps
             row(ui, 32.0, |ui| {
                 prop_label(ui, &k, Icon::ComponentSet);
                 let w = ui.available_width().max(60.0);
-                // A string variable naming one of the values can choose it.
-                crate::variable_ui::bindable(app, ui, &[id], &format!("{PROP_BINDING}{k}"), VariableType::String, w, |app, ui| {
-                    let resp = widgets::dropdown(ui, &cur, w, None);
-                    menu_popup(&resp).show(|ui| {
-                        for v in &vals {
-                            if menu_item(ui, v, "") {
-                                app.run("instance.setProperties", json!({"ids": [id], "properties": {k.clone(): v}}));
-                                ui.close();
-                            }
+                let resp = widgets::dropdown(ui, &cur, w, None);
+                menu_popup(&resp).show(|ui| {
+                    for v in &vals {
+                        if menu_item(ui, v, "") {
+                            app.run("instance.setProperties", json!({"ids": [id], "properties": {k.clone(): v}}));
+                            ui.close();
                         }
-                    });
+                    }
                 });
             });
         }
@@ -753,26 +750,20 @@ fn instance_props(app: &mut FigApp, ui: &mut Ui, doc: &Document, n: &Node, comps
         row(ui, 32.0, |ui| {
             prop_label(ui, &k, type_icon(&d));
             let w = ui.available_width().max(60.0);
-            // Boolean and text values can come from a boolean or string variable.
-            let bind_field = format!("{PROP_BINDING}{k}");
             match d {
                 PropDef::Boolean { .. } => {
-                    crate::variable_ui::bindable(app, ui, &[id], &bind_field, VariableType::Boolean, w, |app, ui| {
-                        let on = v.as_bool().unwrap_or(false);
-                        if widgets::checkbox(ui, on, "") {
-                            app.run("instance.setProperties", json!({"ids": [id], "properties": {k.clone(): !on}}));
-                        }
-                    });
+                    let on = v.as_bool().unwrap_or(false);
+                    if widgets::checkbox(ui, on, "") {
+                        app.run("instance.setProperties", json!({"ids": [id], "properties": {k.clone(): !on}}));
+                    }
                 }
                 PropDef::Text { .. } => {
-                    crate::variable_ui::bindable(app, ui, &[id], &bind_field, VariableType::String, w, |app, ui| {
-                        let cur = v.as_str().unwrap_or_default().to_string();
-                        if let Some(ns) = widgets::text_field(ui, Id::unique(("iprop", id, k.as_str())), &cur, w, "")
-                            && ns != cur
-                        {
-                            app.run("instance.setProperties", json!({"ids": [id], "properties": {k.clone(): ns}}));
-                        }
-                    });
+                    let cur = v.as_str().unwrap_or_default().to_string();
+                    if let Some(ns) = widgets::text_field(ui, Id::unique(("iprop", id, k.as_str())), &cur, w, "")
+                        && ns != cur
+                    {
+                        app.run("instance.setProperties", json!({"ids": [id], "properties": {k.clone(): ns}}));
+                    }
                 }
                 PropDef::InstanceSwap { preferred, .. } => {
                     if let Some(c) = swap_dropdown(ui, doc, figcraft_engine::params::id_of(&v), &preferred, comps, w, &k).1 {

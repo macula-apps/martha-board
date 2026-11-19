@@ -47,9 +47,7 @@ pub(crate) fn two_region_vector(s: &mut Session) -> NodeId {
 fn ui() -> Ui {
     let mut s = Session::new();
     let id = two_region_vector(&mut s);
-    s.execute("variable.createCollection", &json!({"name": "Theme"})).unwrap();
-    s.execute("variable.create", &json!({"collection": "Theme", "name": "brand", "type": "color", "value": "#0000FF"})).unwrap();
-    s.execute("variable.bind", &json!({"ids": [id.0], "field": "fill", "variable": "brand"})).unwrap();
+    crate::test_variables::bind_color(&mut s, &[id], "fill", "brand", "#0000FF");
     s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
     s.execute("vector.edit.begin", &json!({"id": id.0})).unwrap();
     s.execute("vector.edit.select", &json!({"regions": [1]})).unwrap();
@@ -78,28 +76,26 @@ fn button(c: &[(Role, String, String, Pos2)], name: &str) -> Pos2 {
     c.iter().find(|(r, l, _, _)| *r == Role::Button && l == name).map(|(_, _, _, p)| *p).unwrap_or_else(|| panic!("no {name} button: {c:?}"))
 }
 
-/// What the Fill section shows, between its + and the Stroke section's: its hex rows, whether a
-/// Detach variable button is there, and whether its header has a Styles button.
-fn fill_section(c: &[(Role, String, String, Pos2)]) -> (Vec<String>, bool, bool) {
+/// What the Fill section shows, between its + and the Stroke section's: its hex rows, and whether
+/// its header has a Styles button.
+fn fill_section(c: &[(Role, String, String, Pos2)]) -> (Vec<String>, bool) {
     let (top, bottom) = (button(c, "Add fill"), button(c, "Add stroke"));
     let inside = |p: &Pos2| p.y > top.y + 2.0 && p.y < bottom.y - 2.0;
     let rows = c.iter().filter(|(r, _, _, p)| *r == Role::TextInput && inside(p)).map(|(_, _, v, _)| v.clone()).collect();
-    let detach = c.iter().any(|(_, l, _, p)| l == "Detach variable" && inside(p));
     let styles = c.iter().any(|(r, l, _, p)| *r == Role::Button && l == "Styles" && (p.y - top.y).abs() < 2.0);
-    (rows, detach, styles)
+    (rows, styles)
 }
 
 #[test]
 fn a_selected_regions_rows_leave_out_the_layers_style_and_variable() {
     let mut u = ui();
     let red = figcraft_color::Color::from_hex("#FF0000").unwrap().to_hex();
-    let (rows, detach, styles) = fill_section(&controls(&mut u));
-    assert_eq!(rows, [red], "the region's own red, as a hex field");
-    assert!(!detach, "the layer's variable binding is not the region's");
+    let (rows, styles) = fill_section(&controls(&mut u));
+    assert_eq!(rows, [red], "the region's own red, as a hex field: the layer's variable binding is not the region's");
     assert!(!styles, "no fill style for a region's fills");
     // No region selected: the layer's row again, with its bound variable and the Styles button.
     u.app.run("vector.edit.select", json!({}));
-    let (rows, detach, styles) = fill_section(&controls(&mut u));
+    let (rows, styles) = fill_section(&controls(&mut u));
     assert!(rows.is_empty(), "the layer's paint shows as its variable, not a hex field: {rows:?}");
-    assert!(detach && styles);
+    assert!(styles);
 }
