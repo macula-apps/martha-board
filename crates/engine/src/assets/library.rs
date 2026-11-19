@@ -1524,7 +1524,9 @@ pub fn read_libraries<'a>(cache: &'a Cache, doc: &'a Document) -> impl Iterator<
     })
 }
 
-/// The variable collections library `lib` offers.
+/// The variable collections library `lib` offers. Only the tests' fixtures read it since the
+/// variables editor left (#16).
+#[cfg(test)]
 pub fn published_collections(lib: &PublishedLibrary) -> impl Iterator<Item = &Collection> {
     let m = &lib.manifest;
     lib.doc.variables.collections.iter().filter(|c| m.collection(&c.id).is_some_and(|x| x.published))
