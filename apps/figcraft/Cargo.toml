@@ -14,6 +14,12 @@ workspace = true
 figcraft-engine = { workspace = true }
 figcraft-ui-egui = { workspace = true }
 figcraft-collab-net = { workspace = true }
+macula-craft-seam = { workspace = true }
+macula-craft-collab = { workspace = true }
+macula-rust = { workspace = true }
+figcraft-collab = { workspace = true }
+figcraft-doc = { workspace = true }
+serde = { workspace = true }
 figcraft-format = { workspace = true }
 figcraft-text = { workspace = true }
 # Shared decision of who draws the window frame on Linux (compositor vs. app), replacing the

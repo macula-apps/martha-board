@@ -30,6 +30,14 @@ figcraft-ui-egui = { path = "crates/ui-egui" }
 figcraft-mcp = { path = "crates/mcp" }
 figcraft-collab-net = { path = "crates/collab-net" }
 
+# Live collaboration over the Macula mesh (martha-board#2 P2): the seam (sessions, grants, invites, the
+# snapshot lane) and its mesh transport (sealed groups, the frame ceiling). One seam version in the
+# build: craft-collab 0.11 is built on seam 0.8.
+macula-craft-seam = "0.8"
+macula-craft-collab = "0.11"
+# The signing profile a share's ceilings are measured for (the version craft-collab 0.11 is built on).
+macula-rust = "0.15"
+
 # Keep coupled craft-libs crates on one rev. craft-update has no sibling-crate
 # dependencies and is pinned separately for the suite updater rollout.
 # Which paths stored in a document may be followed (craft-libs).

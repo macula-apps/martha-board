@@ -26,6 +26,7 @@ mod args;
 mod control_server;
 mod graphics;
 mod recovery;
+mod seam_link;
 mod services;
 mod startup;
 mod window_frame;
@@ -38,6 +39,10 @@ mod args_tests;
 mod graphics_tests;
 #[cfg(test)]
 mod recovery_tests;
+#[cfg(test)]
+mod seam_link_harness;
+#[cfg(test)]
+mod seam_link_tests;
 #[cfg(test)]
 mod services_tests;
 #[cfg(test)]
