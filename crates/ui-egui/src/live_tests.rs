@@ -109,7 +109,7 @@ impl Harness {
 
     /// Joined as Ada, with Hana (the host) already here.
     pub(crate) fn joined(&mut self) {
-        self.app.session.execute("collab.join", &json!({"link": "figcraft://join?host=127.0.0.1:47900&file=f&token=t"})).unwrap();
+        self.app.session.execute("collab.join", &json!({"link": "invite://board?host=127.0.0.1:47900&file=f&token=t"})).unwrap();
         self.welcome();
     }
 
@@ -122,12 +122,11 @@ impl Harness {
             color: "#14AE5C".into(),
             file_name: "Shared".into(),
             pages: vec![],
-            link: "figcraft://join?host=127.0.0.1:47900&file=f&token=t".into(),
+            link: "invite://board?host=127.0.0.1:47900&file=f&token=t".into(),
             url: String::new(),
             address: "127.0.0.1:47900".into(),
             network: false,
             access: figcraft_engine::live::Access::Edit,
-            view: None,
         };
         self.send(vec![LiveEvent::Welcome { info, peers: vec![Peer { client_id: 1, name: "Hana".into(), color: "#9747FF".into() }] }]);
     }
@@ -337,7 +336,7 @@ fn share_popover_and_join_dialog() {
     let share = text_center(&shapes, "Share");
     h.click(share);
     let shapes = h.frames(2);
-    for t in ["Share this file", "Start sharing", "Join with a code", "Export…"] {
+    for t in ["Share this file", "Start sharing", "Join with an invite link", "Export…"] {
         assert!(has_text(&shapes, t), "the popover shows {t:?}");
     }
     // Starting fails with this link: the error shows, nothing else changes.
@@ -348,7 +347,7 @@ fn share_popover_and_join_dialog() {
     h.frame(vec![Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }]);
     crate::menus::invoke(&mut h.app, "collab.join");
     let shapes = h.frames(2);
-    assert!(has_text(&shapes, "Join live session") && has_text(&shapes, "Type the join code you were given, or paste an invite link."));
+    assert!(has_text(&shapes, "Join live session") && has_text(&shapes, "Paste the invite link you were given."));
     assert_eq!(h.app.inspect()["live"]["joinDialog"], true);
     h.click(text_center(&shapes, "Cancel"));
     h.frames(1);

@@ -12,15 +12,13 @@ use crate::menus;
 fn preference_actions_open_preferences_without_changing_values() {
     let mut ui = Ui::new(Session::new());
     ui.app.session.prefs.language = "en".into();
-    ui.app.session.prefs.publish_server = "wss://example.test/".into();
     let before = ui.app.session.prefs.clone();
-    for id in ["pref.userName", "pref.publishServer", "pref.nudge"] {
+    for id in ["pref.userName", "pref.nudge"] {
         ui.app.ui.preferences = false;
         menus::invoke(&mut ui.app, id);
         assert!(ui.app.ui.preferences, "{id} did not open Preferences");
         assert!(ui.app.ui.last_error.is_none(), "{id} showed an error");
         assert_eq!(ui.app.session.prefs.language, before.language);
-        assert_eq!(ui.app.session.prefs.publish_server, before.publish_server);
         assert_eq!(ui.app.session.prefs.nudge_small, before.nudge_small);
         assert_eq!(ui.app.session.prefs.nudge_big, before.nudge_big);
     }

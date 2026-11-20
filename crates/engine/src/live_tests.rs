@@ -1,5 +1,5 @@
 //! Live session state and the `collab.*` commands against a scripted link (the real one, over
-//! the network, is tested in `figcraft-collab-net`).
+//! the mesh, is tested in the app: `seam_link_tests`).
 
 use std::sync::{Arc, Mutex};
 
@@ -45,7 +45,7 @@ impl LiveLink for Mock {
         // Each session listens on its own port (47900 for the first).
         let mut i = info(Role::Host, 1);
         i.address = format!("127.0.0.1:{}", 47_899 + session);
-        i.link = format!("figcraft://join?host={}&file=f&token=t", i.address);
+        i.link = format!("invite://board?host={}&file=f&token=t", i.address);
         i.url = format!("ws://{}/?file=f&token=t", i.address);
         Ok(i)
     }
@@ -59,7 +59,7 @@ impl LiveLink for Mock {
     }
 
     fn join(&mut self, session: u64, link: &str, _: &str) -> Result<(), String> {
-        if !link.starts_with("figcraft://") {
+        if !link.starts_with("invite://") {
             return Err("not an invite".into());
         }
         let mut s = self.0.lock().unwrap();
@@ -102,12 +102,11 @@ pub(crate) fn info(role: Role, me: u32) -> SessionInfo {
         color: "#0D99FF".into(),
         file_name: "Shared".into(),
         pages: vec![],
-        link: "figcraft://join?host=127.0.0.1:47900&file=f&token=t".into(),
+        link: "invite://board?host=127.0.0.1:47900&file=f&token=t".into(),
         url: "ws://127.0.0.1:47900/?file=f&token=t".into(),
         address: "127.0.0.1:47900".into(),
         network: false,
         access: crate::live::Access::Edit,
-        view: None,
     }
 }
 
@@ -163,7 +162,7 @@ fn viewport(page: NodeId, x: f64, y: f64, w: f64, h: f64) -> Presence {
 #[test]
 fn without_a_link_live_sessions_are_unavailable() {
     let mut s = Session::new();
-    for (cmd, p) in [("collab.host", json!({})), ("collab.join", json!({"link": "figcraft://join?host=a:1&file=f&token=t"}))] {
+    for (cmd, p) in [("collab.host", json!({})), ("collab.join", json!({"link": "invite://board?host=a:1&file=f&token=t"}))] {
         let e = s.execute(cmd, &p).unwrap_err();
         assert!(matches!(e, EngineError::Disabled(..)), "{cmd}: {e}");
     }
@@ -176,26 +175,20 @@ fn without_a_link_live_sessions_are_unavailable() {
 #[test]
 fn hosting_and_joining_drive_the_link() {
     let (mut s, script) = session();
-    let r = s.execute("collab.host", &json!({"bind": "lan", "port": 50000})).unwrap();
+    let r = s.execute("collab.host", &json!({})).unwrap();
     assert_eq!(r["status"], "live");
     assert_eq!(r["role"], "host");
-    assert_eq!(r["link"], "figcraft://join?host=127.0.0.1:47900&file=f&token=t");
+    assert_eq!(r["link"], "invite://board?host=127.0.0.1:47900&file=f&token=t");
     {
         let sc = script.lock().unwrap();
         assert_eq!(sc.hosted.len(), 1);
-        assert_eq!(sc.hosted[0].port, Some(50000));
-        assert_eq!(sc.hosted[0].bind, crate::live::Bind::Lan);
         assert_eq!(sc.hosted[0].doc.name, "Untitled");
         assert_eq!(sc.hosted[0].name, "", "the default name lets the host pick one");
     }
-    for bad in [json!({"bind": "everywhere"}), json!({"port": 70000}), json!({"port": -1}), json!({"port": "x"})] {
-        assert!(matches!(s.execute("collab.host", &bad), Err(EngineError::BadParams { .. })), "{bad}");
-    }
-    assert!(s.execute("collab.host", &json!({"bind": "10.1.2.3"})).is_ok());
     assert!(matches!(s.execute("collab.join", &json!({"link": "http://x"})), Err(EngineError::BadParams { .. })));
-    let r = s.execute("collab.join", &json!({"link": " figcraft://join?host=a:1&file=f&token=t "})).unwrap();
+    let r = s.execute("collab.join", &json!({"link": " invite://board?host=a:1&file=f&token=t "})).unwrap();
     assert_eq!(r["status"], "connecting");
-    assert_eq!(script.lock().unwrap().joined, ["figcraft://join?host=a:1&file=f&token=t"]);
+    assert_eq!(script.lock().unwrap().joined, ["invite://board?host=a:1&file=f&token=t"]);
     // The join is a session of its own: this file's goes on until it is stopped, and then the
     // join still on its way shows here.
     assert_eq!(s.live().role(), Some(Role::Host));
@@ -210,7 +203,7 @@ fn hosting_and_joining_drive_the_link() {
 #[test]
 fn events_build_who_is_here() {
     let (mut s, script) = session();
-    s.execute("collab.join", &json!({"link": "figcraft://join?host=a:1&file=f&token=t"})).unwrap();
+    s.execute("collab.join", &json!({"link": "invite://board?host=a:1&file=f&token=t"})).unwrap();
     push(&script, vec![Event::Welcome { info: info(Role::Guest, 2), peers: vec![peer(1, "Hana")] }, Event::PeerJoined(peer(3, "Bo"))]);
     assert!(s.live_poll());
     assert_eq!(s.live().status, Status::Live);
@@ -314,7 +307,7 @@ fn following_shows_their_viewport_and_page() {
 #[test]
 fn the_host_ending_resets_everything() {
     let (mut s, script) = session();
-    s.execute("collab.join", &json!({"link": "figcraft://join?host=a:1&file=f&token=t"})).unwrap();
+    s.execute("collab.join", &json!({"link": "invite://board?host=a:1&file=f&token=t"})).unwrap();
     push(&script, vec![Event::Welcome { info: info(Role::Guest, 2), peers: vec![peer(1, "Hana")] }]);
     s.live_poll();
     s.execute("collab.follow", &json!({"client": 1})).unwrap();
@@ -353,7 +346,7 @@ fn the_host_removes_people_and_guests_cant() {
 
     // A guest in someone else's session can't remove anyone.
     let (mut s, script) = session();
-    s.execute("collab.join", &json!({"link": "figcraft://join?host=a:1&file=f&token=t"})).unwrap();
+    s.execute("collab.join", &json!({"link": "invite://board?host=a:1&file=f&token=t"})).unwrap();
     push(&script, vec![Event::Welcome { info: info(Role::Guest, 2), peers: vec![peer(1, "Hana"), peer(3, "Bo")] }]);
     s.live_poll();
     assert!(!crate::live::can_remove_people(&s));
@@ -471,7 +464,7 @@ fn a_guest_opens_the_hosts_file_as_a_new_tab() {
     let ClientMsg::Hello(h) = Client::hello("f", "", "Ada", "") else { panic!("no hello") };
     let (ada, outs) = server.join(h).unwrap();
     let Some(Outgoing::To(_, w)) = outs.into_iter().find(|o| matches!(o, Outgoing::To(_, ServerMsg::Welcome { .. }))) else { panic!("no welcome") };
-    s.execute("collab.join", &json!({"link": "figcraft://join?host=a:1&file=f&token=t"})).unwrap();
+    s.execute("collab.join", &json!({"link": "invite://board?host=a:1&file=f&token=t"})).unwrap();
     push(&script, vec![Event::Welcome { info: info(Role::Guest, ada), peers: vec![peer(1, "Hana")] }, Event::Sync(w)]);
     s.live_poll();
     assert_eq!(s.docs.len(), 2, "your own file stays open");
@@ -493,19 +486,6 @@ fn a_guest_opens_the_hosts_file_as_a_new_tab() {
 }
 
 #[test]
-fn hosting_commands_check_what_they_are_given() {
-    let mut s = Session::new();
-    // The publish server preference: a WebSocket address without a key, or nothing.
-    assert_eq!(s.execute("pref.publishServer", &json!({"url": " wss://figcraft.example.com/ "})).unwrap()["url"], "wss://figcraft.example.com/");
-    for bad in ["https://figcraft.example.com/", "wss://host/?key=secret", "wss://a b/"] {
-        assert!(s.execute("pref.publishServer", &json!({"url": bad})).is_err(), "{bad}");
-    }
-    assert_eq!(s.prefs.publish_server, "wss://figcraft.example.com/", "a refused address changes nothing");
-    s.execute("pref.publishServer", &json!({"url": ""})).unwrap();
-    assert!(s.prefs.publish_server.is_empty());
-}
-
-#[test]
 fn parse_color_rejects_signs_and_non_hex() {
     use crate::live::parse_color;
     assert_eq!(parse_color("#+1+2+3"), None);
@@ -513,7 +493,7 @@ fn parse_color_rejects_signs_and_non_hex() {
     assert_eq!(parse_color("#0D99FF"), Some((13, 153, 255)));
 }
 
-/// Commands confined to automation roots reach no network: hosting, sharing and joining are refused
+/// Commands confined to automation roots reach no network: hosting and joining are refused
 /// by name and no session starts; unconfined, the link is asked. (This lived with the background
 /// server requests until they left with martha-board#41.)
 #[test]
@@ -528,8 +508,7 @@ fn commands_confined_to_automation_roots_reach_no_network() {
     };
     crate::file_access::confined(Some(&roots), || {
         refused(s.execute("collab.host", &json!({})));
-        refused(s.execute("collab.share", &json!({"via": "local"})));
-        refused(s.execute("collab.join", &json!({"link": "figcraft://join?host=a:1&file=f&token=t"})));
+        refused(s.execute("collab.join", &json!({"link": "invite://board?host=a:1&file=f&token=t"})));
     });
     {
         let sc = script.lock().unwrap();
@@ -539,4 +518,28 @@ fn commands_confined_to_automation_roots_reach_no_network() {
     let _ = std::fs::remove_dir_all(&dir);
     s.execute("collab.host", &json!({})).unwrap();
     assert_eq!(script.lock().unwrap().hosted.len(), 1, "unconfined, the link is asked");
+}
+
+/// What happens in a file that isn't in front names the file.
+#[test]
+fn what_happens_in_a_file_that_isnt_in_front_names_the_file() {
+    let (mut s, script) = session();
+    s.execute("file.rename", &json!({"name": "Homepage"})).unwrap();
+    s.execute("collab.host", &json!({})).unwrap();
+    // In front: as before.
+    push(&script, vec![Event::PeerJoined(peer(2, "Ada"))]);
+    s.live_poll();
+    assert_eq!(s.message.take().as_deref(), Some("Ada joined"));
+    // Another file in front.
+    s.execute("file.new", &json!({})).unwrap();
+    push(&script, vec![Event::PeerJoined(peer(3, "Hana"))]);
+    s.live_poll();
+    assert_eq!(s.message.take().as_deref(), Some("Hana joined Homepage"));
+    push(&script, vec![Event::PeerLeft(2)]);
+    s.live_poll();
+    assert_eq!(s.message.take().as_deref(), Some("Ada left Homepage"));
+    push(&script, vec![Event::Ended { reason: "The host stopped".into() }]);
+    s.live_poll();
+    assert_eq!(s.message.take().as_deref(), Some("Homepage: The host stopped"));
+    assert_eq!(s.live.iter().filter(|l| l.status == Status::Live).count(), 0);
 }

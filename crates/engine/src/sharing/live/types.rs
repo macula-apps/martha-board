@@ -1,15 +1,4 @@
-use super::{Access, Arc, ClientMsg, Code, Document, IpAddr, Peer, Presence, Resume, Serialize, ServerMsg, Signal, code};
-
-/// The server a join code from a server is asked about unless Preferences name another: the only
-/// place its address is written.
-///
-/// A build can ship another one, or none: set `FIGCRAFT_DEFAULT_SERVER` when compiling to a
-/// server's address (`wss://host/`), or to nothing (`FIGCRAFT_DEFAULT_SERVER=`) for a build whose
-/// server join codes stay off until the user enters a server in Preferences.
-pub const DEFAULT_SERVER: &str = match option_env!("FIGCRAFT_DEFAULT_SERVER") {
-    Some(server) => server,
-    None => "wss://collab.craftapps.dev/",
-};
+use super::{Access, Arc, ClientMsg, Document, Peer, Presence, Resume, Serialize, ServerMsg, Signal};
 
 /// Most selected ids one presence update carries (the rest aren't shown to others).
 pub const MAX_SELECTION: usize = 10_000;
@@ -106,8 +95,8 @@ pub struct SessionInfo {
     /// The shared file's name and pages (the host's).
     pub file_name: String,
     pub pages: Vec<PageInfo>,
-    /// The invite link (`figcraft://join?host=…&file=…&token=…`) and the same as a plain
-    /// WebSocket URL. Both carry the session's secret token: share them only with people you
+    /// The invite link (what `collab.join {link}` takes, passed to [`LiveLink::join`] as it is)
+    /// and the URL the link gives for it. Both carry the session's secret token: share them only with people you
     /// invite.
     pub link: String,
     pub url: String,
@@ -116,117 +105,10 @@ pub struct SessionInfo {
     pub address: String,
     /// Reachable from other machines (the host listens on a network address, not loopback).
     pub network: bool,
-    /// What you may do: edit, only view (a view link or code), or view and comment (a server's
+    /// What you may do: edit, only view (a view link), or view and comment (a server's
     /// comment link).
     pub access: Access,
-    /// A session this app hosts with a way in for looking only ([`HostOptions::view`]): its
-    /// invite link and WebSocket URL, which carry the view secret (`None`: everyone who joins
-    /// edits, or you joined).
-    pub view: Option<WayIn>,
 }
-
-impl SessionInfo {
-    /// The invite link and WebSocket URL that let people into a session this app hosts with
-    /// `access` (its own link and URL edit). `None`: no way in gives that.
-    pub fn way_in(&self, access: Access) -> Option<(&str, &str)> {
-        match access {
-            Access::Edit => Some((&self.link, &self.url)),
-            Access::View => self.view.as_ref().map(|v| (v.link.as_str(), v.url.as_str())),
-            Access::Comment => None,
-        }
-    }
-}
-
-/// A way into a session this app hosts: an invite link and the WebSocket URL it connects to,
-/// which carry the same secret.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-pub struct WayIn {
-    pub link: String,
-    pub url: String,
-}
-
-/// How a file is shared with a join code: from this app, to people on the same network (sharing
-/// through a server left with martha-board#41).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum Via {
-    Local,
-}
-
-/// One way into a shared file: an invite link, and the join code that stands for it.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
-pub struct SharedLink {
-    /// The invite link (it carries its secret).
-    pub link: String,
-    /// Its join code's symbols. `None`: there is none (a host without an IPv4 address): the link
-    /// is shared instead.
-    pub code: Option<String>,
-}
-
-/// What others join a shared file with: to edit it and, when the share has one, to only view it.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
-pub struct Shared {
-    pub edit: SharedLink,
-    pub view: Option<SharedLink>,
-    /// `None` for a share on the local network (comment links came from a server).
-    pub comment: Option<SharedLink>,
-}
-
-impl Shared {
-    /// The way in that gives `access`, if there is one.
-    pub fn of(&self, access: Access) -> Option<&SharedLink> {
-        match access {
-            Access::Edit => Some(&self.edit),
-            Access::View => self.view.as_ref(),
-            Access::Comment => self.comment.as_ref(),
-        }
-    }
-}
-
-/// A file shared with a join code (`collab.share`): the session this app hosts for it, and the
-/// codes others join with.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Share {
-    pub via: Via,
-    /// What the code shown lets people do.
-    pub access: Access,
-    /// What others join with now. `None`: on its way.
-    pub links: Option<Shared>,
-}
-
-impl Share {
-    /// The way in to show: the one for [`access`](Self::access).
-    fn shown(&self) -> Option<&SharedLink> {
-        self.links.as_ref()?.of(self.access)
-    }
-
-    /// The code to show, grouped (`K7M-2QX-9TD`).
-    pub fn code(&self) -> Option<String> {
-        self.shown()?.code.as_deref().map(code::grouped)
-    }
-
-    /// The invite link to give with (or in place of) the code.
-    pub fn link(&self) -> Option<&str> {
-        self.shown().map(|l| l.link.as_str())
-    }
-}
-
-/// What someone typed to join, as what the link joins: an invite link as it is, a local network
-/// code as the link it stands for, a server's code with `server` to ask about it.
-pub fn join_target(server: &str, typed: &str) -> std::result::Result<String, String> {
-    let typed = typed.trim();
-    if typed.contains("://") || typed.contains('?') {
-        return Ok(typed.to_string());
-    }
-    match code::parse(typed)? {
-        Code::Local(local) => Ok(local.link()),
-        Code::Online(_) if server.trim().is_empty() => Err(format!("that is an online join code, and {ONLINE_OFF}")),
-        Code::Online(code) => Ok(format!("figcraft://join?server={}&code={code}", server.trim())),
-    }
-}
-
-/// Why a server's join code can't be used.
-pub const ONLINE_OFF: &str = "online sharing is off: choose a server in Preferences (or share on the local network)";
 
 /// A session's number on the link: the engine picks it (from 1) when it starts the session.
 pub type SessionId = u64;
@@ -257,32 +139,13 @@ pub enum Event {
     },
 }
 
-/// Which network interface a hosted session listens on.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Bind {
-    /// This machine only (127.0.0.1): the default.
-    Local,
-    /// The machine's address on the local network (only when the user chooses to share there).
-    Lan,
-    /// A given interface address (e.g. a VPN's).
-    Addr(IpAddr),
-}
-
 /// What [`LiveLink::host`] needs to start a session for the open file.
 #[derive(Clone, Debug)]
 pub struct HostOptions {
-    /// `None`: the default port, or any free one when it's taken.
-    pub port: Option<u16>,
-    pub bind: Bind,
     /// Your name (empty: the host picks one).
     pub name: String,
     /// The shared file (the session's authoritative copy starts from it).
     pub doc: Arc<Document>,
-    /// Shared with a join code (`collab.share`): the session's secret is short enough to type.
-    pub short: bool,
-    /// Also make a second secret whose holders only look: they see every change, and the session
-    /// refuses theirs ([`SessionInfo::view`]).
-    pub view: bool,
 }
 
 /// The networking behind live sessions, installed by the app ([`Lives::install`]). It carries

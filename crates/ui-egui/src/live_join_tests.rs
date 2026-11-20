@@ -1,5 +1,5 @@
 //! The Join dialog's keyboard (its field takes the keys when it opens; Escape closes it without
-//! reaching the canvas), opening the app with an invite link, and the browser's Share popover
+//! reaching the canvas), a link that can't be used, and the browser's Share popover
 //! (it joins but can't host).
 
 use egui::{Event, Key};
@@ -34,7 +34,7 @@ fn escape_closes_the_join_dialog_and_keeps_the_selection() {
     // Escape with the field not focused (after clicking the dialog's text).
     crate::menus::invoke(&mut h.app, "collab.join");
     let shapes = h.frames(2);
-    h.click(text_center(&shapes, "Type the join code you were given, or paste an invite link."));
+    h.click(text_center(&shapes, "Paste the invite link you were given."));
     h.frames(1);
     assert!(!link_focused(&h));
     escape(&mut h);
@@ -45,17 +45,6 @@ fn escape_closes_the_join_dialog_and_keeps_the_selection() {
     h.app.session.execute("select.set", &json!({"ids": [rect.0]})).unwrap();
     escape(&mut h);
     assert!(h.app.session.ds().unwrap().selection.is_empty());
-}
-
-#[test]
-fn opening_the_app_with_an_invite_link_asks_before_joining() {
-    let (mut h, _) = Harness::new();
-    let link = "figcraft://join?host=127.0.0.1:47900&file=abc&token=AbCdEfGhIjKlMnOpQrStUv";
-    crate::live::open_invite(&mut h.app, &format!(" {link} "));
-    // The system hands the app whatever `figcraft://` link was followed, which may come from a
-    // page or a message, so the link is shown and confirmed rather than acted on.
-    assert_eq!(h.app.ui.live.join.as_deref(), Some(link), "the dialog opens with the link filled in");
-    assert_eq!(h.app.session.live().status, Status::Off, "nothing is joined until the person confirms");
 }
 
 /// The browser's link: joins, can't host; joining fails here to show the dialog path.
@@ -83,32 +72,28 @@ impl LiveLink for Browser {
 fn a_link_that_cant_be_used_opens_the_dialog_with_it() {
     let (mut h, _) = Harness::new();
     h.app.session.live.install(Box::new(Browser));
-    crate::live::open_invite(&mut h.app, "figcraft://nope");
-    assert_eq!(h.app.ui.live.join.as_deref(), Some("figcraft://nope"), "the link stays in the field to fix");
+    crate::live::open_join(&mut h.app, "invite://nope");
+    assert_eq!(h.app.ui.live.join.as_deref(), Some("invite://nope"), "the link stays in the field to fix");
     // The link is not tried until the person presses Join, so its reason shows then, not now.
     assert!(h.app.ui.last_error.is_none());
     assert_eq!(h.app.session.live().status, Status::Off);
 }
 
 /// The browser joins and doesn't host: its Share popover has the join field and what the browser
-/// can reach, with or without a server in Preferences. (It shared through a server until that
-/// left with martha-board#41.)
+/// can reach. (It shared through a server until that left with martha-board#41.)
 #[test]
 fn the_browser_joins_but_does_not_host() {
-    for server in ["", "ws://127.0.0.1:47910/"] {
-        let (mut h, _) = Harness::new();
-        h.app.session.live.install(Box::new(Browser));
-        assert!(!h.app.session.live.can_host());
-        assert_eq!(h.app.session.execute("collab.peers", &json!({})).unwrap()["canHost"], false);
-        h.app.session.execute("pref.publishServer", &json!({"url": server})).unwrap();
-        let shapes = h.frames(3);
-        h.click(text_center(&shapes, "Share"));
-        let shapes = h.frames(2);
-        assert!(!has_text(&shapes, "Start sharing") && !has_text(&shapes, "Local network") && !has_text(&shapes, "Online"), "{server:?}");
-        assert!(has_text(&shapes, "Join with a code") && has_text(&shapes, "Join"), "{server:?}");
-        assert!(has_text(
-            &shapes,
-            "In the browser you can join sessions the desktop app hosts and files on a FigCraft server. A page opened over https reaches other computers only through wss:// links (a server behind TLS)."
-        ));
-    }
+    let (mut h, _) = Harness::new();
+    h.app.session.live.install(Box::new(Browser));
+    assert!(!h.app.session.live.can_host());
+    assert_eq!(h.app.session.execute("collab.peers", &json!({})).unwrap()["canHost"], false);
+    let shapes = h.frames(3);
+    h.click(text_center(&shapes, "Share"));
+    let shapes = h.frames(2);
+    assert!(!has_text(&shapes, "Start sharing") && !has_text(&shapes, "Local network") && !has_text(&shapes, "Online"));
+    assert!(has_text(&shapes, "Join with an invite link") && has_text(&shapes, "Join"));
+    assert!(has_text(
+        &shapes,
+        "In the browser you can join sessions the desktop app hosts and files on a FigCraft server. A page opened over https reaches other computers only through wss:// links (a server behind TLS)."
+    ));
 }

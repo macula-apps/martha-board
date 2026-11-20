@@ -1,4 +1,4 @@
-//! Opening invite links from the system: a `figcraft://join?…` link clicked in a browser, a chat
+//! Opening invite links from the system: a `figcraft://` link clicked in a browser, a chat
 //! or an email opens FigCraft, which joins the session (milestone M9).
 //!
 //! The app makes itself the opener of the `figcraft` URL scheme. Where the app registers it at run

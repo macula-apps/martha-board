@@ -230,7 +230,7 @@ fn the_home_screen_draws_no_frames_once_settled() {
 fn home_shows_recents_and_getting_started_and_no_templates() {
     let mut u = first_run();
     let s = settle(&mut u);
-    for shown in ["Recents", "New design file", "New board", "Open file", "Join with a code", "Getting started"] {
+    for shown in ["Recents", "New design file", "New board", "Open file", "Join with an invite link", "Getting started"] {
         assert!(has_text(&s, shown), "{shown}");
     }
     for gone in ["Online", "Online files", "Templates", "Start from a template", "See all templates", "Search templates", "Show all templates"] {
@@ -289,7 +289,7 @@ fn the_getting_started_card_closes_stays_closed_and_comes_back_from_help() {
     let mut u = first_run();
     let s = settle(&mut u);
     assert!(has_text(&s, "Getting started"));
-    for tip in ["Draw a frame", "Add auto layout", "Share with a code", "Export"] {
+    for tip in ["Draw a frame", "Add auto layout", "Share a board", "Export"] {
         assert!(has_text(&s, tip), "{tip}");
     }
     // Shortcuts come from the keymap.
@@ -305,7 +305,7 @@ fn the_getting_started_card_closes_stays_closed_and_comes_back_from_help() {
     assert!(u.app.session.prefs.getting_started_dismissed);
     let s = settle(&mut u);
     assert!(!has_text(&s, "Getting started") && !has_text(&s, "Draw a frame"));
-    assert!(has_text(&s, "Join with a code"), "the rest of the screen stays");
+    assert!(has_text(&s, "Join with an invite link"), "the rest of the screen stays");
     // The preference is kept with the others, so it stays closed next time.
     let kept: figcraft_engine::Prefs = serde_json::from_value(serde_json::to_value(&u.app.session.prefs).unwrap()).unwrap();
     assert!(kept.getting_started_dismissed);

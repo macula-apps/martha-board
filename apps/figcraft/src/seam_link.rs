@@ -150,7 +150,6 @@ impl LiveLink for SeamLink {
             address: String::new(),
             network: true,
             access: figcraft_collab::Access::Edit,
-            view: None,
         };
         self.boards.insert(session, Board::Host(Box::new(host)));
         Ok(info)

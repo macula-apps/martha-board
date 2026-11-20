@@ -7,11 +7,11 @@ use serde_json::json;
 
 use crate::live_tests::{Harness, has_text, text_center};
 
-const LINK: &str = "figcraft://join?host=127.0.0.1:47900&file=f&token=t";
+const LINK: &str = "invite://board?host=127.0.0.1:47900&file=f&token=t";
 
 /// Join from the Join dialog with the invite link: the session it started.
 fn join(h: &mut Harness) -> u64 {
-    crate::live::open_invite(&mut h.app, LINK);
+    crate::live::open_join(&mut h.app, LINK);
     // A new window measures itself first.
     let shapes = h.frames(3);
     h.click(text_center(&shapes, "Join"));

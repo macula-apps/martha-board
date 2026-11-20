@@ -44,9 +44,8 @@ fn documented_alternatives_and_empty_params_are_taken() {
     assert_eq!(param_names("text.setFeatures").map(|n| n.contains(&"id") && n.contains(&"ids")), Some(true));
     assert_eq!(param_names("file.import").map(|n| n.contains(&"path") && n.contains(&"data") && n.contains(&"name")), Some(true));
     assert_eq!(param_names("file.export").map(|n| n.contains(&"scale") && n.contains(&"size")), Some(true));
-    assert_eq!(param_names("collab.share").map(|n| n.contains(&"via") && !n.contains(&"local")), Some(true));
     // Docs whose shape used to hide names: a stray brace, a comma in an example, a second object.
-    assert_eq!(param_names("collab.join"), Some(&["code", "link"][..]));
+    assert_eq!(param_names("collab.join"), Some(&["link"][..]));
     // Commands that run another command's code take its names too.
     assert_eq!(param_names("file.placeImage").map(|n| ["width", "height", "target", "mode"].iter().all(|k| n.contains(k))), Some(true));
     assert_eq!(param_names("file.exportSvg").map(|n| ["scale", "size", "contentsOnly", "svgOutlineText"].iter().all(|k| n.contains(k))), Some(true));

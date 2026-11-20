@@ -25,7 +25,7 @@ fn refused(s: &mut Session, cmd: &str, params: serde_json::Value, why: &str) {
 fn a_view_link_makes_the_file_read_only() {
     let (mut s, script) = session();
     s.execute("tool.set", &json!({"tool": "rectangle"})).unwrap();
-    s.execute("collab.join", &json!({"link": "figcraft://join?host=a:1&file=f&token=t"})).unwrap();
+    s.execute("collab.join", &json!({"link": "invite://board?host=a:1&file=f&token=t"})).unwrap();
     let mut doc = figcraft_doc::Document::new("Shared");
     let page = doc.first_page().unwrap();
     let card = doc.create(page, figcraft_doc::NodeKind::Rectangle, "Card", 0.0, 0.0, 10.0, 10.0).unwrap();
@@ -125,7 +125,7 @@ fn revert_refuses_live_documents_without_losing_access_or_sync() {
             let (server, me, welcome) = serve_as(s.doc().unwrap(), access);
             (path, server, me, Some(welcome))
         } else {
-            s.execute("collab.join", &json!({"link": "figcraft://join?host=a:1&file=f&token=t"})).unwrap();
+            s.execute("collab.join", &json!({"link": "invite://board?host=a:1&file=f&token=t"})).unwrap();
             let (server, me, welcome) = serve_as(&figcraft_doc::Document::new("Shared"), access);
             let mut i = info(Role::Guest, me);
             i.access = access;

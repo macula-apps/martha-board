@@ -22,7 +22,7 @@ const REMOVED: [&str; 8] = [
 ];
 
 /// Commands of live sessions that stay.
-const KEPT: [&str; 7] = ["collab.host", "collab.join", "collab.leave", "collab.stop", "collab.peers", "collab.diff", "collab.share"];
+const KEPT: [&str; 6] = ["collab.host", "collab.join", "collab.leave", "collab.stop", "collab.peers", "collab.diff"];
 
 #[test]
 fn no_server_only_command_is_registered_listed_or_bound() {

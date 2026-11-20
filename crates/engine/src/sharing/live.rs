@@ -2,8 +2,8 @@
 //! together and see each other's cursors, selections and viewports, and can follow one another.
 //!
 //! The engine holds what everyone sees ([`Live`]: status, peers and their presence, who you
-//! follow) and the `collab.*` commands. The networking lives in a higher layer
-//! (`figcraft-collab-net`), which the app installs as a [`LiveLink`]: the engine never opens a
+//! follow) and the `collab.*` commands. The networking lives in the app (a share over the mesh),
+//! which installs a [`LiveLink`]: the engine never opens a
 //! socket, so nothing below the UI layer depends on networking. Without a link (the CLI, tests)
 //! the commands say live sessions aren't available.
 //!
@@ -26,20 +26,17 @@
 //! closing a document ends its session only. One link carries them all, each under its
 //! [`SessionId`].
 //!
-//! Sharing with a join code (`collab.share`): the app hosts on the local network and the code
-//! carries the host's address and the session's secret ([`figcraft_collab::code`]). `collab.join`
-//! takes such a code, a server's code (asked at the server in Preferences), or an invite link.
+//! `collab.host` shares the open file; `collab.join {link}` takes an invite line and hands it to
+//! the link as it is.
 //!
 //! Cursor chat (`collab.cursorChat`) and spotlights (`collab.spotlight`) travel as signals:
 //! short-lived presence the host passes on to everyone, never stored. A spotlight makes everyone
 //! follow the person who started it; moving your own view stops following, as with any follow.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::net::IpAddr;
 use std::sync::Arc;
 
 use figcraft_collab::Client;
-use figcraft_collab::code::{self, Code};
 pub use figcraft_collab::message::Signal;
 use figcraft_collab::message::{ClientMsg, EditingText, ServerMsg};
 
@@ -73,8 +70,8 @@ pub fn specs() -> Vec<CommandSpec> {
     all
 }
 pub use types::{
-    Bind, DEFAULT_SERVER, Event, HostOptions, LiveLink, MAX_NAME, MAX_PEERS, MAX_SELECTION, NO_SESSION, ONLINE_OFF, PEOPLE, PageInfo, Role,
-    SessionId, SessionInfo, Share, Shared, SharedLink, Status, TOO_LARGE_TO_JOIN, Via, WayIn, join_target, parse_color,
+    Event, HostOptions, LiveLink, MAX_NAME, MAX_PEERS, MAX_SELECTION, NO_SESSION, PEOPLE, PageInfo, Role, SessionId, SessionInfo, Status,
+    TOO_LARGE_TO_JOIN, parse_color,
 };
 
 /// The view a follow last applied: any other view means the user moved.
@@ -117,8 +114,6 @@ pub struct Live {
     deferred: Vec<ServerMsg>,
     /// Nesting of [`Session::grouped`] on the session document: its edits sync once, at the end.
     hold: u32,
-    /// The session was started by sharing with a join code (`collab.share`): how, and its codes.
-    pub share: Option<Share>,
     /// The host passes cursor chat and spotlights on (it said so after the welcome).
     pub signals: bool,
     /// Others' open cursor chat messages.
@@ -153,16 +148,10 @@ impl Live {
         self.info.as_ref().map(|i| i.role)
     }
 
-    /// The session's invite link and WebSocket URL as `collab.peers` gives them. A file shared
-    /// on the local network gives the ones that go with the code shown: the session's own link
-    /// and URL are the edit way in, and a view-only share must not hand them out. Otherwise the
-    /// session's own.
+    /// The session's invite link and URL as `collab.peers` gives them.
     pub fn invite(&self) -> (Option<&str>, Option<&str>) {
         let info = self.info.as_ref();
-        match &self.share {
-            Some(sh) => info.and_then(|i| i.way_in(sh.access)).unzip(),
-            None => (info.map(|i| i.link.as_str()), info.map(|i| i.url.as_str())),
-        }
+        (info.map(|i| i.link.as_str()), info.map(|i| i.url.as_str()))
     }
 
     /// Stop following. False when you weren't following anyone.
@@ -189,15 +178,7 @@ impl Live {
     fn strand(&mut self) {
         self.hold();
         let Some(held) = self.stranded.take() else { return self.reset() };
-        *self = Live {
-            id: self.id,
-            tab: self.tab,
-            doc_uid: self.doc_uid,
-            info: self.info.take(),
-            share: self.share.take(),
-            stranded: Some(held),
-            ..Live::default()
-        };
+        *self = Live { id: self.id, tab: self.tab, doc_uid: self.doc_uid, info: self.info.take(), stranded: Some(held), ..Live::default() };
     }
 
     /// You were in this session and aren't now: the connection dropped and it is trying again, or
@@ -223,11 +204,9 @@ impl Live {
     }
 
     /// What the file's tab says about its session: `Some(true)` others get in (a session this app
-    /// hosts, one you joined, a file shared with a code), `Some(false)` a share whose ways in
-    /// aren't there, `None` no session (or one still on its way).
+    /// hosts, or one you joined), `None` no session (or one still on its way).
     pub fn shared(&self) -> Option<bool> {
-        let there = matches!(self.status, Status::Live | Status::Reconnecting { .. });
-        there.then(|| self.share.as_ref().is_none_or(|s| s.links.is_some()))
+        matches!(self.status, Status::Live | Status::Reconnecting { .. }).then_some(true)
     }
 
     /// The name of the session's file, once known.

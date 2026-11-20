@@ -57,7 +57,8 @@ fn preferences_kept_at_once_are_kept_when_the_app_is_killed() {
 
 /// A settings file written before the plugins left (martha-board#31), with the installed plugins,
 /// their settings and the plugin directory browsed last: it still loads, keeps every other
-/// preference, and is written back without the plugin fields.
+/// preference, and is written back without the plugin fields (or the server in Preferences, which
+/// left with martha-board#43).
 #[test]
 fn settings_from_before_the_plugins_left_still_load() {
     let dir = root("before-31");
@@ -78,11 +79,11 @@ fn settings_from_before_the_plugins_left_still_load() {
     std::fs::write(dir.join("state.json"), old).unwrap();
     let prefs = Desktop::load_from(Some(dir.clone()), Arc::new(Mutex::new(None))).prefs.expect("the old settings load");
     assert_eq!((prefs.nudge_small, prefs.nudge_big), (2.0, 20.0));
-    assert_eq!((prefs.theme.as_str(), prefs.user_name.as_str(), prefs.publish_server.as_str()), ("dark", "Ada", "wss://boards.example/"));
+    assert_eq!((prefs.theme.as_str(), prefs.user_name.as_str()), ("dark", "Ada"));
     assert_eq!(prefs.recent_files, ["/home/ada/wall.figcraft"]);
     assert_eq!(prefs.recent_actions, ["plugin:org.example.tiny/run", "command:view.zoomIn"]);
     let saved = serde_json::to_value(&prefs).unwrap();
-    for gone in ["plugins", "plugin_settings", "plugin_directory"] {
+    for gone in ["plugins", "plugin_settings", "plugin_directory", "publish_server"] {
         assert!(saved.get(gone).is_none(), "{gone} is written back: {saved}");
     }
     let _ = std::fs::remove_dir_all(&dir);
@@ -90,8 +91,8 @@ fn settings_from_before_the_plugins_left_still_load() {
 
 /// A settings file written before online files left (martha-board#41), with your online files
 /// (their owner tokens), the team list's and the hosting fields some builds kept, and the server in
-/// Preferences: it still loads, keeps every other preference (the server too: a server's join
-/// codes are still asked there), and is written back without the online files. The fixture is the
+/// Preferences: it still loads, keeps every other preference, and is written back without the
+/// online files or the server (which left with martha-board#43). The fixture is the
 /// file's own text, not built from the types that left.
 #[test]
 fn settings_from_before_the_online_files_left_still_load() {
@@ -115,11 +116,11 @@ fn settings_from_before_the_online_files_left_still_load() {
     std::fs::write(dir.join("state.json"), old).unwrap();
     let prefs = Desktop::load_from(Some(dir.clone()), Arc::new(Mutex::new(None))).prefs.expect("the old settings load");
     assert_eq!(prefs.nudge_small, 3.0);
-    assert_eq!((prefs.theme.as_str(), prefs.user_name.as_str(), prefs.publish_server.as_str()), ("light", "Hana", "wss://boards.example/"));
+    assert_eq!((prefs.theme.as_str(), prefs.user_name.as_str()), ("light", "Hana"));
     assert_eq!(prefs.recent_files, ["/home/hana/roadmap.figcraft"]);
     assert_eq!(prefs.recent_actions, ["command:collab.files", "command:view.zoomIn"]);
     let saved = serde_json::to_value(&prefs).unwrap();
-    for gone in ["online_files", "team", "server_info"] {
+    for gone in ["online_files", "team", "server_info", "publish_server"] {
         assert!(saved.get(gone).is_none(), "{gone} is written back: {saved}");
     }
     assert!(!saved.to_string().contains("OwnerTokenOwnerToken01"), "no owner token is written back: {saved}");

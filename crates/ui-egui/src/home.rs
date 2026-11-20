@@ -54,7 +54,7 @@ const GAP: f32 = 20.0;
 const TIPS: [(&str, &str, &str); 4] = [
     (tr_noop("Draw a frame"), tr_noop("Pick the Frame tool, then drag on the canvas or choose a device size"), "tool.frame"),
     (tr_noop("Add auto layout"), tr_noop("Select layers and they space themselves as their content changes"), "layout.add"),
-    (tr_noop("Share with a code"), tr_noop("Start sharing with the Share button, then pass on the code it gives"), "collab.share"),
+    (tr_noop("Share a board"), tr_noop("Start sharing with the Share button, then pass on the invite link it gives"), "collab.host"),
     (tr_noop("Export"), tr_noop("Export frames and layers as PNG, JPG, SVG or PDF"), "file.export"),
 ];
 
@@ -288,7 +288,7 @@ fn recents(app: &mut FigApp, ui: &mut Ui, t: &Tokens) {
         app.open_dialog();
     }
     // Join a file someone shared (the Join dialog shows what the join is doing).
-    subheading(ui, t, tr("Join with a code"));
+    subheading(ui, t, tr("Join with an invite link"));
     ui.scope(|ui| {
         ui.set_max_width(540.0);
         crate::live::join_row(app, ui, 260.0);

@@ -1,4 +1,4 @@
-use super::{Arc, BTreeMap, Deserialize, Document, NodeId, Serialize, Value, cmd, live};
+use super::{Arc, BTreeMap, Deserialize, Document, NodeId, Serialize, Value, cmd};
 
 /// The smallest and largest interface size, relative to the system's display scale (1.0 is the
 /// system's own size).
@@ -69,10 +69,6 @@ pub struct Prefs {
     /// `figcraft://` invite links open this app (`collab.registerLinks`); `None`: on for installed
     /// builds, off for development builds.
     pub invite_links: Option<bool>,
-    /// The server a join code from a server is asked about (`collab.join {code}`): `wss://host/`,
-    /// never with a key. [`live::DEFAULT_SERVER`] unless the user chose another; empty: such codes
-    /// can't be used (saved as empty, so it stays off).
-    pub publish_server: String,
     /// Recently opened or saved files, newest first (File ▸ Open recent; at most
     /// [`cmd::file::MAX_RECENT`]).
     pub recent_files: Vec<String>,
@@ -126,7 +122,6 @@ impl Default for Prefs {
             auto_save: false,
             start_on_home: false,
             invite_links: None,
-            publish_server: live::DEFAULT_SERVER.into(),
             recent_files: Vec::new(),
             getting_started_dismissed: false,
             home_views: BTreeMap::new(),

@@ -27,12 +27,11 @@ impl LiveLink for Hosting {
             color: "#14AE5C".into(),
             file_name: "Shared".into(),
             pages: vec![],
-            link: format!("figcraft://join?host={address}&file=f&token=t"),
+            link: format!("invite://board?host={address}&file=f&token=t"),
             url: format!("ws://{address}/?file=f&token=t"),
             address,
             network: false,
             access: Access::Edit,
-            view: None,
         })
     }
     fn join(&mut self, _: u64, _: &str, _: &str) -> Result<(), String> {
@@ -54,7 +53,7 @@ fn harness() -> (Harness, Queue) {
     (h, queue)
 }
 
-/// Share the file in front on the local network from its popover (which is open).
+/// Share the file in front from its popover (which is open).
 fn start_sharing(h: &mut Harness, shapes: &[egui::Shape]) -> Vec<egui::Shape> {
     h.click(text_center(shapes, "Start sharing"));
     h.frames(2)
@@ -82,7 +81,7 @@ fn the_share_popover_is_the_session_of_the_tab_in_front() {
     let shapes = h.frames(2);
     assert!(has_text(&shapes, "Share this file"));
     let shapes = start_sharing(&mut h, &shapes);
-    for t in ["Sharing on your network · nobody else here yet", "Invite link", "Stop sharing"] {
+    for t in ["Live · nobody else here yet", "Invite link", "Stop session"] {
         assert!(has_text(&shapes, t), "hosting shows {t:?}");
     }
     queue.lock().unwrap().push((1, LiveEvent::PeerJoined(hana())));
@@ -99,15 +98,15 @@ fn the_share_popover_is_the_session_of_the_tab_in_front() {
         (&json!("off"), &Value::Null, &Value::Null, &json!(0), &json!(1))
     );
     let shapes = h.frames(1);
-    for t in ["Share this file", "Start sharing", "Join with a code", "Advanced"] {
+    for t in ["Share this file", "Start sharing", "Join with an invite link"] {
         assert!(has_text(&shapes, t), "the new file's popover shows {t:?}");
     }
-    for t in ["Invite link", "Stop sharing", "Sharing on your network · 1 person joined", "Hana"] {
+    for t in ["Stop session", "Live · 1 person joined", "Hana"] {
         assert!(!has_text(&shapes, t), "nothing of the other file's session: {t:?}");
     }
     // Start one here too: both run, each tab shows its own.
     let shapes = start_sharing(&mut h, &shapes);
-    assert!(has_text(&shapes, "Sharing on your network · nobody else here yet") && has_text(&shapes, "Stop sharing"));
+    assert!(has_text(&shapes, "Live · nobody else here yet") && has_text(&shapes, "Stop session"));
     assert_eq!((&live(&h)["session"], &live(&h)["peers"], &live(&h)["sessions"]), (&json!(2), &json!(0), &json!(2)));
     assert_eq!(h.app.session.live().info.as_ref().unwrap().address, "127.0.0.1:47901");
     run(&mut h, "doc.switch", json!({"index": 0}));
@@ -115,7 +114,7 @@ fn the_share_popover_is_the_session_of_the_tab_in_front() {
     assert_eq!(h.app.session.live().info.as_ref().unwrap().address, "127.0.0.1:47900");
     // Stopping the first leaves the second running.
     let shapes = h.frames(1);
-    h.click(text_center(&shapes, "Stop sharing"));
+    h.click(text_center(&shapes, "Stop session"));
     let shapes = h.frames(2);
     assert!(has_text(&shapes, "Start sharing"));
     assert_eq!((&live(&h)["status"], &live(&h)["sessions"]), (&json!("off"), &json!(1)));

@@ -1,7 +1,7 @@
 //! Live sessions in the window: other people's cursors (smoothly following their pointer, with a
 //! name tag) and selections on the canvas (their edits arrive through the engine's sync), their avatars at the top of the right panel (click one
-//! to follow their view), the Share popover (share the file on the local network and show its
-//! join code; join with a code; the address and access of a session you joined), and the join
+//! to follow their view), the Share popover (start a session and copy its invite link; join with
+//! an invite link; the address and access of a session you joined), and the join
 //! field (one component: the popover, the home screen and the Join dialog). Everything acts
 //! through the `collab.*` commands; the state is the engine's:
 //! sessions are per document, and a window shows the session of the file in front
@@ -17,7 +17,7 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 
 use egui::{Align2, Color32, CornerRadius, Pos2, Rect, Sense, Shape, Stroke, Ui, pos2, vec2};
-use figcraft_engine::live::{Access, PEOPLE, Role, SessionId, Share, Signal, Status, TOO_LARGE_TO_JOIN, initials, parse_color, presence_page};
+use figcraft_engine::live::{Access, PEOPLE, Role, SessionId, Signal, Status, TOO_LARGE_TO_JOIN, initials, parse_color, presence_page};
 use serde_json::json;
 
 use crate::FigApp;
@@ -44,10 +44,6 @@ const VIEW_NOTE: &str = tr_noop("View only: you see every change as it happens b
 /// What a comment link means for you.
 const COMMENT_NOTE: &str =
     tr_noop("Can comment: you see every change as it happens and can comment, but can't edit. Leave to keep a copy you can edit.");
-
-/// What a share code can let people do, most first, as the Share popover offers it.
-const LEVELS: [(Access, &str); 3] =
-    [(Access::Edit, tr_noop("Can edit")), (Access::Comment, tr_noop("Can comment")), (Access::View, tr_noop("Can view"))];
 
 /// How fast a remote cursor closes in on where it was last reported (per second).
 const GLIDE: f64 = 20.0;
@@ -88,15 +84,7 @@ pub struct LiveUi {
     pub join: Option<String>,
     /// Put the keyboard in the Join dialog's field on its next frame.
     focus_join: bool,
-    /// What the code a local network share starts with lets people do: edit, or only look (the
-    /// edit code then doesn't show until it is picked).
-    pub local_access: Access,
-    /// The Share popover's Advanced part shows; what it sets for a local network share: only
-    /// this computer can join, and the port (empty: the usual one).
-    pub advanced: bool,
-    pub this_computer: bool,
-    pub port: String,
-    /// What is typed in the join field of the Share popover and the home screen.
+    /// What is typed in the join field of the Share popover and the home screen (an invite link).
     pub code: String,
     /// A join started from a join field, with what was typed for it: the Join dialog shows it
     /// from the click until its file is ready, or why it failed, to try again.
@@ -618,13 +606,10 @@ pub fn share_popover(app: &mut FigApp, anchor: &egui::Response) {
             let status = app.session.live().status.clone();
             let role = app.session.live().role();
             let others = app.session.live().peers.len();
-            let share = app.session.live().share.clone().filter(|_| status.active());
             let title = if status.active() { tr("Live session") } else { tr("Share this file") };
             ui.label(egui::RichText::new(title).font(semibold(12.0)));
             let (line, col) = match (&status, role) {
                 (Status::Off, _) => (String::new(), t.text_secondary),
-                (Status::Live, _) if share.is_some() => (trf("Sharing on your network · {people}", &[("people", &people_count(others))]), t.success),
-                (Status::Connecting, _) if share.is_some() => (tr("Starting to share…").to_string(), t.text_secondary),
                 (Status::Live, Some(Role::Host)) => (trf("Live · {people}", &[("people", &people_count(others))]), t.success),
                 (Status::Live, _) => {
                     let file = app.session.live().info.as_ref().map(|i| i.file_name.clone()).unwrap_or_default();
@@ -639,10 +624,9 @@ pub fn share_popover(app: &mut FigApp, anchor: &egui::Response) {
             if !line.is_empty() {
                 widgets::label(ui, &line, col);
             }
-            match (&status, role, &share) {
-                (Status::Off | Status::Failed { .. }, ..) => start_ui(app, ui, &t),
-                (_, _, Some(share)) => share_ui(app, ui, &t, share),
-                (Status::Live, Some(Role::Host), _) => host_ui(app, ui),
+            match (&status, role) {
+                (Status::Off | Status::Failed { .. }, _) => start_ui(app, ui, &t),
+                (Status::Live, Some(Role::Host)) => host_ui(app, ui),
                 _ => guest_ui(app, ui, &t),
             }
         });
@@ -670,13 +654,12 @@ pub fn join_row(app: &mut FigApp, ui: &mut Ui, width: f32) -> Option<SessionId> 
     joined
 }
 
-/// The one way to join: a field for a join code or an invite link (pasted or typed; spaces,
-/// dashes and case don't matter in a code) and a Join button; Enter joins too. The session of the
+/// The one way to join: a field for an invite link (pasted) and a Join button; Enter joins too. The session of the
 /// join that started (the field is cleared); what can't be joined says why and stays to be fixed.
 pub fn join_field(app: &mut FigApp, ui: &mut Ui, typed: &mut String, id: egui::Id, width: f32, focus: bool) -> Option<SessionId> {
-    let resp = widgets::text_input(ui, id, typed, width, tr("Code or invite link"));
+    let resp = widgets::text_input(ui, id, typed, width, tr("Invite link"));
     // It may hold a link with its secret: it isn't read out.
-    a11y::text(&resp, tr("Join code or invite link"), "");
+    a11y::text(&resp, tr("Invite link"), "");
     if focus {
         resp.request_focus();
     }
@@ -691,10 +674,10 @@ pub fn join_field(app: &mut FigApp, ui: &mut Ui, typed: &mut String, id: egui::I
     session
 }
 
-/// Join with `typed` (a code or an invite link); the Join dialog follows the join. Its session, if
+/// Join with `typed` (an invite link); the Join dialog follows the join. Its session, if
 /// it started.
 fn start_join(app: &mut FigApp, typed: &str) -> Option<SessionId> {
-    let session = app.run("collab.join", json!({"code": typed})).and_then(|j| j["session"].as_u64())?;
+    let session = app.run("collab.join", json!({"link": typed})).and_then(|j| j["session"].as_u64())?;
     app.ui.live.joining = Some((session, typed.to_string()));
     Some(session)
 }
@@ -732,7 +715,7 @@ fn join_progress(app: &mut FigApp) -> Option<Option<String>> {
 }
 
 /// The join started from a join field, from the click until its file is ready: joining (Cancel
-/// calls it off), or why it failed (Try again joins with the same code). Whether it showed.
+/// calls it off), or why it failed (Try again joins with the same link). Whether it showed.
 fn joining_dialog(app: &mut FigApp, ctx: &egui::Context) -> bool {
     let Some(failed) = join_progress(app) else { return false };
     let t = Tokens::get(ctx);
@@ -777,59 +760,22 @@ pub(crate) fn failure_text(reason: &str) -> Cow<'_, str> {
     mb.map_or(Cow::Borrowed(reason), |mb| Cow::Owned(trf(TOO_LARGE_TO_JOIN, &[("mb", &mb)])))
 }
 
-/// Not in a session: your name, how to share on the local network, start; or join one with a
-/// code. Everything else is under Advanced. The browser only joins (a page can't host a session).
+/// Not in a session: your name and start a session (others join with its invite link); or join
+/// one with an invite link. The browser only joins (a page can't host a session).
 fn start_ui(app: &mut FigApp, ui: &mut Ui, t: &Tokens) {
     name_row(app, ui, t, egui::Id::unique("live_name"));
     if !app.session.live.can_host() {
-        widgets::label(ui, tr("Join with a code"), t.text);
+        widgets::label(ui, tr("Join with an invite link"), t.text);
         join_row(app, ui, JOIN_WIDTH);
         widgets::label(ui, tr(BROWSER_NOTE), t.text_secondary);
         return;
     }
-    widgets::label(ui, tr("People on your network join with a code. Nothing goes through a server."), t.text_secondary);
-    local_access_choice(app, ui);
     if widgets::button(ui, tr("Start sharing"), true, true).clicked() {
-        start_sharing(app);
+        app.run("collab.host", json!({}));
     }
-    join_and_advanced(app, ui, t, share_advanced);
-}
-
-/// What the code of a local network share lets people do, picked before it starts: edit the file
-/// or only look at it.
-fn local_access_choice(app: &mut FigApp, ui: &mut Ui) {
-    let levels: Vec<(Access, &str)> = LEVELS.into_iter().filter(|(a, _)| *a != Access::Comment).collect();
-    let labels: Vec<&str> = levels.iter().map(|(_, l)| tr(l)).collect();
-    let at = levels.iter().position(|(a, _)| *a == app.ui.live.local_access).unwrap_or_default();
-    if let Some((a, _)) = widgets::segmented_text(ui, &labels, at).and_then(|i| levels.get(i)) {
-        app.ui.live.local_access = *a;
-    }
-}
-
-/// Start sharing the open file on the local network.
-fn start_sharing(app: &mut FigApp) {
-    let mut params = json!({"via": "local", "access": app.ui.live.local_access.id()});
-    if app.ui.live.this_computer {
-        params["bind"] = json!("local");
-    }
-    if let Ok(port) = app.ui.live.port.trim().parse::<u16>() {
-        params["port"] = json!(port);
-    }
-    app.run("collab.share", params);
-}
-
-/// The Advanced part of starting a share: where on this computer it listens.
-fn share_advanced(app: &mut FigApp, ui: &mut Ui, t: &Tokens) {
-    if widgets::checkbox(ui, app.ui.live.this_computer, tr("This computer only")) {
-        app.ui.live.this_computer = !app.ui.live.this_computer;
-    }
-    ui.horizontal(|ui| {
-        widgets::label(ui, tr("Port"), t.text);
-        if let Some(port) = widgets::text_field_named(ui, egui::Id::unique("live_port"), &app.ui.live.port, 70.0, tr("Port")) {
-            // Digits only; empty: the usual port, or any free one.
-            app.ui.live.port = port.trim().parse::<u16>().map(|p| p.to_string()).unwrap_or_default();
-        }
-    });
+    ui.separator();
+    widgets::label(ui, tr("Join with an invite link"), t.text);
+    join_row(app, ui, JOIN_WIDTH);
 }
 
 /// "Your name" and its field (the Share popover, the Join dialog).
@@ -851,90 +797,8 @@ pub fn name_field(app: &mut FigApp, ui: &mut Ui, id: egui::Id, width: f32) {
     }
 }
 
-/// Under what starts a share: the join field, then the Advanced part (`advanced` draws it while
-/// it is open).
-fn join_and_advanced(app: &mut FigApp, ui: &mut Ui, t: &Tokens, advanced: impl FnOnce(&mut FigApp, &mut Ui, &Tokens)) {
-    ui.separator();
-    widgets::label(ui, tr("Join with a code"), t.text);
-    join_row(app, ui, JOIN_WIDTH);
-    if widgets::disclosure(ui, tr("Advanced"), app.ui.live.advanced) {
-        app.ui.live.advanced = !app.ui.live.advanced;
-    }
-    if app.ui.live.advanced {
-        advanced(app, ui, t);
-    }
-}
-
-const STOP: &str = "collab.stop";
-
 /// The join field's width in the Share popover (the Join button fits beside it).
 const JOIN_WIDTH: f32 = 196.0;
-
-/// What sharing without a join code falls back to.
-const NO_CODE_NOTE: &str = tr_noop("No join code here (this address can't be put in one): share the link instead.");
-
-/// Sharing with a join code: the code, large; copying it or the link; what it lets people do;
-/// who is here; and stop.
-fn share_ui(app: &mut FigApp, ui: &mut Ui, t: &Tokens, share: &Share) {
-    let live = app.session.live();
-    let stop = |app: &mut FigApp, ui: &mut Ui| {
-        if widgets::button(ui, tr("Stop sharing"), false, true).on_hover_text(tr("Ends the session; everyone keeps their copy")).clicked() {
-            app.run(STOP, json!({}));
-        }
-    };
-    if live.status != Status::Live {
-        return stop(app, ui);
-    }
-    let link = share.link().unwrap_or_default().to_string();
-    let me = live.info.as_ref().map(|i| i.name.clone()).unwrap_or_default();
-    let names: Vec<String> = std::iter::once(trf("{name} (you)", &[("name", &me)])).chain(live.peers.values().map(|p| p.name.clone())).collect();
-    match share.code() {
-        Some(code) => {
-            ui.vertical_centered(|ui| {
-                ui.add_space(2.0);
-                ui.label(egui::RichText::new(&code).font(egui::FontId::monospace(15.0)).color(t.text))
-                    .on_hover_text(tr("Others type this under Share ▸ Join with a code"));
-            });
-            ui.horizontal(|ui| {
-                if widgets::button(ui, tr("Copy code"), true, true).clicked() {
-                    app.clipboard_set_text(&code);
-                    app.toast(tr("Join code copied"));
-                }
-                if widgets::button(ui, tr("Copy link"), false, true).on_hover_text(tr("An invite link that opens FigCraft and joins")).clicked() {
-                    app.clipboard_set_text(&link);
-                    app.toast(tr("Invite link copied"));
-                }
-            });
-        }
-        None => {
-            widgets::label(ui, tr(NO_CODE_NOTE), t.text_secondary);
-            link_rows(app, ui, &[(tr("Invite link"), &link, tr("Invite link copied"))]);
-        }
-    }
-    access_choice(app, ui, share);
-    let who = match share.access {
-        Access::View => tr("Anyone on your network with this code can look at the file, not change it, while this app stays open."),
-        _ => tr("Anyone on your network with this code can edit the file, while this app stays open."),
-    };
-    widgets::label(ui, who, t.text_secondary);
-    let here = trf("Here: {names}", &[("names", &names.join(", "))]);
-    ui.label(egui::RichText::new(widgets::elide(ui, &here, ui.available_width())).font(regular(11.0)).color(t.text_secondary)).on_hover_text(here);
-    stop(app, ui);
-}
-
-/// What the code shown lets people do, to pick from the levels the share has links for: a session
-/// this app hosts on the local network has one for looking only.
-fn access_choice(app: &mut FigApp, ui: &mut Ui, share: &Share) {
-    let levels: Vec<(Access, &str)> = LEVELS.into_iter().filter(|(a, _)| share.links.as_ref().is_some_and(|l| l.of(*a).is_some())).collect();
-    if levels.len() < 2 {
-        return;
-    }
-    let labels: Vec<&str> = levels.iter().map(|(_, l)| tr(l)).collect();
-    let at = levels.iter().position(|(a, _)| *a == share.access).unwrap_or_default();
-    if let Some((a, _)) = widgets::segmented_text(ui, &labels, at).filter(|i| *i != at).and_then(|i| levels.get(i)) {
-        app.run("collab.share", json!({"access": a.id()}));
-    }
-}
 
 /// Hosting: the invite link and URL to copy, and stop.
 fn host_ui(app: &mut FigApp, ui: &mut Ui) {
@@ -995,16 +859,6 @@ pub fn open_join(app: &mut FigApp, link: &str) {
     app.ui.live.focus_join = true;
 }
 
-/// An invite link the app was opened with (`figcraft figcraft://join?…`): the Join dialog opens
-/// with the link filled in, so joining is the person's own choice.
-///
-/// The system hands the app any `figcraft://` link that is followed, which may be a page, a
-/// message or a document rather than something the person meant to act on, so the link is shown
-/// and confirmed rather than acted on.
-pub fn open_invite(app: &mut FigApp, link: &str) {
-    open_join(app, link.trim());
-}
-
 /// Escape closes the Join dialog, and calls off the join the Join dialog follows (before the
 /// canvas's shortcuts see it: it doesn't deselect).
 pub fn dialog_keys(app: &mut FigApp, ctx: &egui::Context) {
@@ -1015,7 +869,7 @@ pub fn dialog_keys(app: &mut FigApp, ctx: &egui::Context) {
     }
 }
 
-/// File ▸ Join live session: type a join code or paste an invite link; then the join, until its
+/// File ▸ Join live session: paste an invite link; then the join, until its
 /// file is ready.
 pub fn join_dialog(app: &mut FigApp, ctx: &egui::Context) {
     // The editor takes Escape before its shortcuts; the home screen has none.
@@ -1031,7 +885,7 @@ pub fn join_dialog(app: &mut FigApp, ctx: &egui::Context) {
     let focus = std::mem::take(&mut app.ui.live.focus_join);
     crate::dialogs::window(tr("Join live session"), ctx).id(egui::Id::unique("Join live session")).open(&mut open).show(ctx, |ui| {
         ui.set_width(380.0);
-        widgets::label(ui, tr("Type the join code you were given, or paste an invite link."), t.text);
+        widgets::label(ui, tr("Paste the invite link you were given."), t.text);
         ui.horizontal(|ui| {
             go = join_field(app, ui, &mut link, egui::Id::unique("live_join_link"), 300.0, focus).is_some();
             cancel = widgets::button(ui, tr("Cancel"), false, true).clicked();
@@ -1069,9 +923,6 @@ pub fn inspect(app: &FigApp) -> serde_json::Value {
         "cursorsShown": app.ui.live.shown(),
         "joinDialog": app.ui.live.join.is_some(),
         "joinField": app.ui.live.code,
-        "code": l.share.as_ref().and_then(Share::code),
-        "share": l.share.as_ref().map(|s| json!({"via": s.via, "access": s.access.id(), "shared": s.links.is_some()})),
-        "advanced": app.ui.live.advanced,
         "readOnly": app.session.active_read_only(),
     })
 }

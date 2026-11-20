@@ -23,7 +23,7 @@ fn refused(s: &mut Session, cmd: &str, params: serde_json::Value) {
 fn a_comment_link_lets_you_comment_and_nothing_else() {
     let (mut s, script) = session();
     s.execute("tool.set", &json!({"tool": "rectangle"})).unwrap();
-    s.execute("collab.join", &json!({"link": "figcraft://join?host=a:1&file=f&token=t"})).unwrap();
+    s.execute("collab.join", &json!({"link": "invite://board?host=a:1&file=f&token=t"})).unwrap();
     let mut doc = Document::new("Shared");
     let page = doc.first_page().unwrap();
     let card = doc.create(page, NodeKind::Rectangle, "Card", 0.0, 0.0, 10.0, 10.0).unwrap();
@@ -78,14 +78,4 @@ fn only_a_comment_link_leaves_the_comment_tool() {
     }
     assert!(!tool_left(COMMENT_ONLY, ToolId::Rectangle));
     assert!(!tool_left(crate::live::VIEW_ONLY, ToolId::Comment) && tool_left(crate::live::VIEW_ONLY, ToolId::Hand));
-}
-
-/// A local network share has edit and view-only codes, not a comment code, and says so.
-#[test]
-fn a_local_share_has_no_comment_code() {
-    let (mut s, _) = session();
-    let e = s.execute("collab.share", &json!({"via": "local", "access": "comment"})).unwrap_err().to_string();
-    assert!(e.contains("not a comment code"), "{e}");
-    let e = s.execute("collab.share", &json!({"access": "owner"})).unwrap_err().to_string();
-    assert!(e.contains("\"comment\""), "{e}");
 }

@@ -1,7 +1,7 @@
-use super::types::{NO_SESSION, SessionId, Share, SharedLink, Status};
+use super::types::{NO_SESSION, SessionId, Status};
 use super::{
-    Access, Arc, Client, EditingText, EngineError, EngineRecompute, FollowedView, Live, Result, ServerMsg, Session, Value, ViewState, bad, busy,
-    close, code, editing_of, json,
+    Arc, Client, EditingText, EngineError, EngineRecompute, FollowedView, Live, Result, ServerMsg, Session, Value, ViewState, bad, busy, close,
+    editing_of, json,
 };
 
 impl Session {
@@ -351,23 +351,6 @@ impl Session {
             "network": info.map(|i| i.network),
             "access": l.client.as_ref().map(Client::access).or(info.map(|i| i.access)),
             "readOnly": l.doc_uid.is_some_and(|u| self.live_read_only(u).is_some()),
-            "code": l.share.as_ref().and_then(Share::code),
-            "share": l.share.as_ref().map(|sh| {
-                let of = |a| sh.links.as_ref().and_then(|s| s.of(a));
-                let (edit, view, comment) = (of(Access::Edit), of(Access::View), of(Access::Comment));
-                let code = |l: Option<&SharedLink>| l.and_then(|l| l.code.as_deref()).map(code::grouped);
-                json!({
-                    "via": sh.via,
-                    "access": sh.access.id(),
-                    "shared": sh.links.is_some(),
-                    "editCode": code(edit),
-                    "viewCode": code(view),
-                    "commentCode": code(comment),
-                    "editLink": edit.map(|l| l.link.as_str()),
-                    "viewLink": view.map(|l| l.link.as_str()),
-                    "commentLink": comment.map(|l| l.link.as_str()),
-                })
-            }),
             "follow": l.follow,
             "signals": l.signals,
             "chat": l.chat,

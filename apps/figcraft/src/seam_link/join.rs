@@ -137,7 +137,6 @@ impl JoinBoard {
             address: String::new(),
             network: true,
             access: seat.access,
-            view: None,
         };
         if again {
             // A resync: the client goes offline and takes the welcome back as after a reconnect.

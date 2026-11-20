@@ -33,12 +33,11 @@ impl LiveLink for Link {
             color: "#14AE5C".into(),
             file_name: "Untitled".into(),
             pages: vec![],
-            link: "figcraft://join?host=192.168.1.20:47900&file=f&token=AbCdEfGhIjKlMnOpQrStUv".into(),
+            link: "invite://board?host=192.168.1.20:47900&file=f&token=AbCdEfGhIjKlMnOpQrStUv".into(),
             url: String::new(),
             address: "192.168.1.20:47900".into(),
             network: true,
             access: Access::Edit,
-            view: None,
         })
     }
     fn join(&mut self, _: u64, _: &str, _: &str) -> Result<(), String> {
@@ -67,19 +66,11 @@ fn tabs_mark_files_in_a_live_session_and_toasts_name_a_file_that_isnt_in_front()
     h.frames(3);
     h.app.session.execute("file.rename", &json!({"name": "Homepage"})).unwrap();
     assert_eq!(h.app.inspect()["tabs"], json!([{"name": "Homepage", "live": null}]));
-    // Hosting on the local network: others get in.
-    h.app.session.execute("collab.share", &json!({"via": "local"})).unwrap();
+    // Hosting: others get in.
+    h.app.session.execute("collab.host", &json!({})).unwrap();
     h.frames(2);
     assert_eq!(script.lock().unwrap().hosted, 1);
     assert_eq!(crate::tabs::live_mark(&h.app, h.app.session.docs[0].uid), Some(true));
-    // A share without ways in for others: marked apart.
-    if let Some(sh) = h.app.session.live_mut().and_then(|l| l.share.as_mut()) {
-        sh.links = None;
-    }
-    h.frames(1);
-    assert_eq!(h.app.inspect()["tabs"], json!([{"name": "Homepage", "live": "private"}]));
-    h.app.session.execute("collab.leave", &json!({})).unwrap();
-    h.app.session.execute("collab.share", &json!({"via": "local"})).unwrap();
     // Someone joins while the file is in front, then while another is.
     let peer = |id, name: &str| Peer { client_id: id, name: name.into(), color: "#9747FF".into() };
     script.lock().unwrap().events.push(LiveEvent::PeerJoined(peer(2, "Hana")));
