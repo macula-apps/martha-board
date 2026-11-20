@@ -17,9 +17,10 @@ use crate::seam_link::{Ceilings, Opened, Opener, SeamLink};
 /// The share's document id on the seam.
 pub const DOC: &str = "board";
 
-/// A node id: 64 hex digits of `c`.
+/// A node id named by `c`: its two hex digits (its code point, low byte), 32 times: 64 hex digits
+/// for any letter, so the host can invite it.
 pub fn node(c: char) -> String {
-    std::iter::repeat_n(c, 64).collect()
+    format!("{:02x}", u32::from(c) & 0xff).repeat(32)
 }
 
 /// Accepts every grant as it is (the mesh signs them; the seam's own tests do the same).
@@ -257,7 +258,14 @@ impl Room {
         session
     }
 
+    /// The host invites `node` as an editor, with no name of its own (it shows as its short id):
+    /// what a real holder has before it joins.
+    fn invite(&mut self, node: &str) {
+        self.people[0].s.execute("collab.invite", &json!({"forNode": node, "role": "editor"})).unwrap();
+    }
+
     fn join_on(&mut self, (me, t): (String, Tapped)) -> usize {
+        self.invite(&me);
         let tap = t.1.clone();
         let session = self.granted(&me, t, &format!("Person {}", self.people.len()));
         let mut s = session_with(Opened { session, ceilings: self.ceilings, host_node: self.host.clone() });
@@ -274,6 +282,14 @@ impl Room {
 
     /// The next spare node, admitted by hand with no board behind it, named `name`.
     pub fn rogue(&mut self, name: &str) -> Rogue {
+        let (me, t) = self.spares.pop_front().expect("a spare node");
+        self.invite(&me);
+        let session = self.granted(&me, t, name);
+        Rogue { session, node: me }
+    }
+
+    /// The next spare node, granted by the seam but never invited by the host (`collab.invite`).
+    pub fn uninvited(&mut self, name: &str) -> Rogue {
         let (me, t) = self.spares.pop_front().expect("a spare node");
         let session = self.granted(&me, t, name);
         Rogue { session, node: me }

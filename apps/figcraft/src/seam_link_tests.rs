@@ -475,3 +475,27 @@ fn every_snapshot_sent_fits_its_ceiling() {
         assert!(data.len() <= room.ceilings.welcome, "{} over {}", data.len(), room.ceilings.welcome);
     }
 }
+
+/// What a holder's renaming of the board does on the host: the name the board has afterwards and
+/// the refusals sent back to it.
+fn renames_board(uninvited: bool) -> (String, usize) {
+    let mut room = room(1, &[node('s')]);
+    let mut rogue = if uninvited { room.uninvited("Mallory") } else { room.rogue("Mallory") };
+    let client = seated(&mut room, &mut rogue);
+    rogue_sends(&mut rogue, vec![Change::SetDoc { prop: DocProp::Name, value: Json(json!("Renamed")) }]);
+    room.churn(&mut rogue, 10);
+    let rejects =
+        from_host(&room).into_iter().filter(|m| matches!(m, FromHost::Msg { to, msg: ServerMsg::Reject { .. } } if *to == To::One(client))).count();
+    (room.s(0).doc().unwrap().name.clone(), rejects)
+}
+
+/// Terra's P2 note: a node the seam admitted but the host never invited reads the board and does
+/// not write to it; an invited one does.
+#[test]
+fn an_uninvited_holder_only_reads() {
+    let (name, rejects) = renames_board(true);
+    assert_ne!(name, "Renamed", "the uninvited holder's change did not apply");
+    assert_eq!(rejects, 1, "it was told so");
+    let (name, rejects) = renames_board(false);
+    assert_eq!((name.as_str(), rejects), ("Renamed", 0), "an invited editor's same change applies");
+}

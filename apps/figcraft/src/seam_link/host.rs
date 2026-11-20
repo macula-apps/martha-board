@@ -137,7 +137,10 @@ impl HostBoard {
 
     /// Seats `node` in the server (again, under its old id when it had one); its client id.
     fn seat(&mut self, node: &str) -> Option<u32> {
-        let (name, access) = self.invited.get(node).cloned().unwrap_or_else(|| (macula_craft_seam::short(node), Access::Edit));
+        // A node the host never invited (its invite was minted elsewhere, or before a restart)
+        // reads and does not write: only an invite gives editing (Terra, P2 note).
+        let (name, access) = self.invited.get(node).cloned().unwrap_or((String::new(), Access::View));
+        let name = if name.trim().is_empty() { macula_craft_seam::short(node) } else { name };
         let old = self.seats.get(node);
         let color = old.map_or_else(|| PEOPLE[self.seats.len() % PEOPLE.len()].to_string(), |s| s.color.clone());
         let resume = old.map(|s| Resume { session: self.server_session(), client_id: s.client_id, seq: self.server.seq(), secret: s.secret });
