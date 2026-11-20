@@ -88,6 +88,44 @@ fn settings_from_before_the_plugins_left_still_load() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A settings file written before online files left (martha-board#41), with your online files
+/// (their owner tokens), the team list's and the hosting fields some builds kept, and the server in
+/// Preferences: it still loads, keeps every other preference (the server too: a server's join
+/// codes are still asked there), and is written back without the online files. The fixture is the
+/// file's own text, not built from the types that left.
+#[test]
+fn settings_from_before_the_online_files_left_still_load() {
+    let dir = root("before-41");
+    let old = r#"{"prefs": {
+        "nudge_small": 3.0,
+        "theme": "light",
+        "user_name": "Hana",
+        "publish_server": "wss://boards.example/",
+        "online_files": [{"server": "wss://boards.example/", "file": "f1", "name": "Roadmap", "owner": "OwnerTokenOwnerToken01",
+                          "edit": "figcraft://join?server=wss://boards.example/&file=f1&token=EditTokenEditToken01",
+                          "view": "figcraft://join?server=wss://boards.example/&file=f1&token=ViewTokenViewToken01",
+                          "created": 1791800000, "opened": 1791900000,
+                          "shared": {"edit": {"id": "edit0", "link": "figcraft://join?server=wss://boards.example/&file=f1&token=SharedEditSharedEdit0", "code": "K7M2QX9TD"},
+                                     "view": null, "comment": null}}],
+        "team": {"server": "wss://boards.example/", "web": "https://boards.example/app/"},
+        "server_info": {"open": true, "operator": "ops@boards.example"},
+        "recent_files": ["/home/hana/roadmap.figcraft"],
+        "recent_actions": ["command:collab.files", "command:view.zoomIn"]
+    }}"#;
+    std::fs::write(dir.join("state.json"), old).unwrap();
+    let prefs = Desktop::load_from(Some(dir.clone()), Arc::new(Mutex::new(None))).prefs.expect("the old settings load");
+    assert_eq!(prefs.nudge_small, 3.0);
+    assert_eq!((prefs.theme.as_str(), prefs.user_name.as_str(), prefs.publish_server.as_str()), ("light", "Hana", "wss://boards.example/"));
+    assert_eq!(prefs.recent_files, ["/home/hana/roadmap.figcraft"]);
+    assert_eq!(prefs.recent_actions, ["command:collab.files", "command:view.zoomIn"]);
+    let saved = serde_json::to_value(&prefs).unwrap();
+    for gone in ["online_files", "team", "server_info"] {
+        assert!(saved.get(gone).is_none(), "{gone} is written back: {saved}");
+    }
+    assert!(!saved.to_string().contains("OwnerTokenOwnerToken01"), "no owner token is written back: {saved}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[cfg(unix)]
 #[test]
 fn preferences_are_readable_by_their_owner_only() {

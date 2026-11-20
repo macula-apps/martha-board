@@ -1,23 +1,5 @@
 use super::limits::Admission;
-use super::{Access, Admin, AdminReply, ClientMsg, HostInfo, IpAddr, LibraryReply, LibraryReq, PluginReply, PluginReq, Server};
-
-/// An admin request's reply, and what the hub must do about connections it affects.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Handled {
-    pub reply: AdminReply,
-    /// Links that were revoked: `(file, link)`; whoever joined with one is disconnected.
-    pub revoked: Vec<(String, String)>,
-    /// A file was removed: whoever is in it is disconnected and it is closed without saving.
-    pub removed: Option<String>,
-    /// An address was blocked ([`ip_key`]): its connections are dropped.
-    pub blocked: Option<IpAddr>,
-}
-
-impl From<AdminReply> for Handled {
-    fn from(reply: AdminReply) -> Self {
-        Self { reply, revoked: Vec::new(), removed: None, blocked: None }
-    }
-}
+use super::{ClientMsg, IpAddr, Server};
 
 /// What everyone is told when a hub stops.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -26,15 +8,6 @@ pub enum Closing {
     Ended,
     /// The server is restarting: clients reconnect until it is back.
     Restarting,
-}
-
-/// What the hub knows of an open file (for listings).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct OpenFile {
-    /// People connected to it.
-    pub people: u32,
-    /// Its latest sequence number.
-    pub seq: u64,
 }
 
 /// Where a hub's files come from and what it keeps of them (see the module docs). The hub calls it
@@ -71,29 +44,6 @@ pub trait Backend: Send + 'static {
     /// The hub is stopping: save the open files.
     fn stop(&mut self, _open: Vec<(&str, &mut Server)>) {}
 
-    /// A managing connection's key: whether it may manage files.
-    fn manage(&mut self, _key: &str) -> Result<(), String> {
-        Err("this session is hosted by an app: it has no files to manage".into())
-    }
-
-    /// A request on a managing connection from `ip` ([`ip_key`]); `open` tells about a file that
-    /// is open.
-    fn admin(&mut self, _ip: IpAddr, _req: Admin, _open: &dyn Fn(&str) -> Option<OpenFile>) -> Handled {
-        AdminReply::Failed { reason: "nothing to manage here".into() }.into()
-    }
-
-    /// A request on a library connection to `file`, opened with a link of `access` (checked by
-    /// [`admit`](Self::admit)).
-    fn library(&mut self, _ip: IpAddr, _file: &str, _access: Access, _req: LibraryReq) -> LibraryReply {
-        LibraryReply::Failed { reason: "this session is hosted by an app: team libraries live on a figcraft-server".into() }
-    }
-
-    /// A request on a plugin directory connection; `publisher`: it was opened with the right key
-    /// (checked by [`manage`](Self::manage)).
-    fn plugins(&mut self, _ip: IpAddr, _publisher: bool, _req: PluginReq) -> PluginReply {
-        PluginReply::Failed { reason: "this session is hosted by an app: plugin directories live on a figcraft-server".into() }
-    }
-
     /// A new connection from `ip` ([`ip_key`]): whether it may go on (why not is shown to the
     /// client).
     fn connect(&mut self, _ip: IpAddr) -> Result<(), String> {
@@ -105,39 +55,10 @@ pub trait Backend: Send + 'static {
         true
     }
 
-    /// What to tell a client that reads it about the server's hosting, after its welcome to
-    /// `file` (`None`: nothing).
-    fn hosting(&mut self, _file: &str) -> Option<HostInfo> {
-        None
-    }
-
-    /// An open hosting connection from `ip`, with a file's owner token when `file` isn't empty:
-    /// what the server says about its hosting, or why the connection is refused.
-    fn open_hosting(&mut self, _ip: IpAddr, _file: &str, _owner: &str) -> Result<HostInfo, String> {
-        Err("this session is hosted by an app: it doesn't keep files for anyone".into())
-    }
-
-    /// A request on an open hosting connection from `ip`; `owns`: the file whose owner token it
-    /// was opened with.
-    fn hosted(&mut self, _ip: IpAddr, _owns: Option<&str>, _req: Admin, _open: &dyn Fn(&str) -> Option<OpenFile>) -> Handled {
-        AdminReply::Failed { reason: "nothing to manage here".into() }.into()
-    }
-
-    /// Someone in `file` (joined with `link`, from `ip`) reports it to the operator.
-    fn report(&mut self, _file: &str, _link: Option<&str>, _ip: IpAddr, _reason: &str) -> Result<(), String> {
-        Err("this session is hosted by an app: tell the person hosting it".into())
-    }
-
     /// A join code typed by someone at `ip`: the file it opens and that link's token, or why not
     /// (shown to them; wrong codes are counted against the address).
     fn resolve(&mut self, _ip: IpAddr, _code: &str) -> Result<(String, String), String> {
         Err("this session is hosted by an app: join it with its own code or invite link".into())
-    }
-
-    /// The token of the team link of `file` on the server's team list, asked from `ip`, or why not
-    /// (shown to them).
-    fn resolve_team(&mut self, _ip: IpAddr, _file: &str) -> Result<String, String> {
-        Err("this session is hosted by an app: it has no team list".into())
     }
 
     /// What everyone is told when the hub stops.

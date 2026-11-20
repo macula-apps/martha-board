@@ -10,7 +10,7 @@ use figcraft_collab::{Client, Outgoing, Server};
 use figcraft_doc::NodeId;
 use serde_json::{Value, json};
 
-use crate::live::{Event, PUBLISHING, Presence, Role, Signal, Status};
+use crate::live::{Event, Presence, Role, Signal, Status};
 use crate::live_tests::{Script, info, peer, push, relay, serve, session};
 use crate::{EngineError, Session};
 
@@ -274,23 +274,22 @@ fn a_join_outlives_the_tab_it_was_started_from() {
     assert_eq!(script.lock().unwrap().ended, [failed, failed], "told when it failed and when its tab closed; never the join on its way");
 }
 
+/// Hosting a second file leaves the first one's session as it is, and hosting that second file
+/// again replaces its own session, not the other file's. (It published the second file until
+/// publishing to a server left with martha-board#41; hosting it is the same per-file session.)
 #[test]
-fn publishing_one_file_keeps_the_others_editable() {
+fn hosting_one_file_again_replaces_only_its_own_session() {
     let (mut s, script) = session();
     let host = id_of(&run(&mut s, "collab.host", json!({})));
-    let first = uid(&s);
     run(&mut s, "file.new", json!({}));
-    let r = run(&mut s, "collab.publish", json!({"server": "ws://127.0.0.1:47900/?key=k"}));
-    assert_eq!((&r["status"], &r["readOnly"], &r["document"]), (&json!("connecting"), &json!(true), &json!(1)));
-    assert_eq!(s.active_read_only(), Some(PUBLISHING));
-    assert!(s.live_read_only(first).is_none());
+    let r = run(&mut s, "collab.host", json!({}));
+    assert_eq!((&r["status"], &r["readOnly"], &r["document"]), (&json!("live"), &json!(false), &json!(1)));
     run(&mut s, "doc.switch", json!({"index": 0}));
     let p = s.live_summary();
     assert_eq!((&p["role"], &p["readOnly"], id_of(&p)), (&json!("host"), &json!(false), host));
     assert!(s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 5, "height": 5})).is_ok());
-    // Publishing a file again replaces its own session, not the other file's.
     run(&mut s, "doc.switch", json!({"index": 1}));
-    let again = id_of(&run(&mut s, "collab.publish", json!({"server": "ws://127.0.0.1:47900/?key=k"})));
+    let again = id_of(&run(&mut s, "collab.host", json!({})));
     assert_eq!(script.lock().unwrap().ended, [id_of(&r)]);
     assert_eq!(s.live.iter().map(|l| l.id).collect::<Vec<_>>(), [host, again]);
 }
@@ -314,8 +313,6 @@ fn chat_and_spotlight_stay_in_their_session() {
     assert!(matches!(s.execute("collab.cursorChat", &json!({"text": "hi"})), Err(EngineError::Disabled(..))));
     assert_eq!(run(&mut s, "collab.cursorChat", json!({}))["open"], false);
     assert!(s.live_of(ub).spotlighting, "still spotlighting in the other file");
-    // A report goes to the session of the file in front, which here isn't a server's.
-    assert!(s.execute("collab.report", &json!({"reason": "spam"})).is_err());
 }
 
 #[test]

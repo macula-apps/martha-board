@@ -1,4 +1,4 @@
-//! Joining over `wss://`: a guest and a managing connection reach a host through a TLS terminator
+//! Joining over `wss://`: a guest and a join code's question reach a host through a TLS terminator
 //! (like the reverse proxy in front of a server) whose certificate comes from a test authority
 //! only test builds trust; a certificate for another name is refused with a clear reason.
 
@@ -12,7 +12,7 @@ use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use rustls::{ServerConfig, ServerConnection, StreamOwned};
 
 use crate::guest::{Guest, GuestConfig};
-use crate::invite::{Endpoint, Invite};
+use crate::invite::{Endpoint, Invite, Lookup};
 use crate::loopback_tests::{Probe, fast_limits, quick, start};
 use crate::manage;
 
@@ -71,7 +71,7 @@ fn secure(host: String, invite: &Invite) -> Invite {
 }
 
 #[test]
-fn guests_and_managing_connections_join_over_wss() {
+fn guests_and_join_code_questions_go_over_wss() {
     let (mut host, _hp, invite) = start();
     let front = terminator(host.addr());
     let wss = secure(format!("localhost:{}", front.port()), &invite);
@@ -79,9 +79,9 @@ fn guests_and_managing_connections_join_over_wss() {
     let mut probe = Probe::new();
     let mut g = Guest::start(quick(GuestConfig::new(wss.clone(), "Ada".into())), probe.inbox.clone()).unwrap();
     probe.wait("the welcome over TLS", |e| e.iter().any(|e| matches!(e, Event::Welcome { .. })));
-    // The managing path speaks TLS too: an app's host answers, and refuses to manage files.
-    let err = manage::request(&wss.server, "key", Vec::new(), &fast_limits(), Duration::from_secs(5)).unwrap_err();
-    assert!(err.contains("hosted by an app"), "{err}");
+    // A join code's question speaks TLS too: an app's host answers, and knows no server codes.
+    let err = manage::resolve(&wss, &Lookup::Code("K7M2QX9TD".into()), &fast_limits(), Duration::from_secs(5)).unwrap_err();
+    assert!(err.starts_with(manage::REFUSED) && err.contains("hosted by an app"), "{err}");
     g.leave();
     host.stop();
 }

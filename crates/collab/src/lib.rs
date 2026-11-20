@@ -65,6 +65,9 @@ pub enum Error {
     Encode(String),
     #[error("can't decode: {0}")]
     Decode(String),
+    /// A message whose tag this build no longer has ([`message::Retired`]).
+    #[error("message tag {0} is retired: this build no longer reads it")]
+    Retired(u32),
     /// A packed document that would grow past this many bytes ([`message::unpack`]).
     #[error("the document is over the {0}-byte limit")]
     TooLarge(usize),
@@ -153,8 +156,6 @@ mod keyed_list_tests;
 mod merge_list_tests;
 #[cfg(test)]
 mod merge_tests;
-#[cfg(test)]
-mod owned_tests;
 #[cfg(test)]
 mod packed_welcome_tests;
 #[cfg(test)]

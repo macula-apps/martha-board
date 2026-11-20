@@ -1,5 +1,5 @@
 use super::{
-    Done, FigApp, MobilePanel, NodeId, PANEL_DEFAULT, Value, comments, dialogs, home, import_report, layers, live, menus, missing_fonts, updates_ui,
+    FigApp, MobilePanel, NodeId, PANEL_DEFAULT, Value, comments, dialogs, home, import_report, layers, live, menus, missing_fonts, updates_ui,
     versions,
 };
 
@@ -64,40 +64,6 @@ impl FigApp {
     pub fn show_error(&mut self, msg: String) {
         self.toast(msg.clone());
         self.ui.last_error = Some(msg);
-    }
-
-    /// Run a command that may talk to a server without waiting for it (the engine's
-    /// [`start_background`](Session::start_background)): `done` gets the result, at once or when
-    /// the answer arrives (the network wakes the window then); errors show as with [`run`](Self::run).
-    /// [`Session::waiting_for`] tells the panels to show that it's on its way.
-    pub fn run_background(&mut self, ctx: &egui::Context, id: &str, params: Value, done: Done) {
-        self.waiting.retain(|(c, _)| c != id);
-        let r = self.session.start_background(id, params);
-        self.handle_ui_requests();
-        match r {
-            Ok(Some(v)) => done(self, ctx, v),
-            Ok(None) => self.waiting.push((id.to_string(), done)),
-            Err(e) => self.failed(id, &e),
-        }
-    }
-
-    /// Stop waiting for command `id` (Cancel, or its window closed): its answer is dropped.
-    pub fn cancel_background(&mut self, id: &str) {
-        self.session.cancel_background(id);
-        self.waiting.retain(|(c, _)| c != id);
-    }
-
-    /// Hand the results of background commands that finished to what's waiting for them.
-    fn background_done(&mut self, ctx: &egui::Context) {
-        while let Some((id, r)) = self.session.take_background_done() {
-            self.handle_ui_requests();
-            let done = self.waiting.iter().position(|(c, _)| *c == id).map(|i| self.waiting.remove(i).1);
-            match (r, done) {
-                (Ok(v), Some(done)) => done(self, ctx, v),
-                (Ok(_), None) => {}
-                (Err(e), _) => self.failed(&id, &e),
-            }
-        }
     }
 
     /// Act on UI requests queued by commands (dialogs, panels).
@@ -225,11 +191,10 @@ impl FigApp {
     pub fn background_tick(&mut self, ctx: &egui::Context) {
         crate::control::background(self, ctx);
         // What happened in a live session (the network woke us for it).
-        if self.session.live_poll() {
-            if let Some(m) = self.session.message.take() {
-                self.toast(live::failure_text(&m));
-            }
-            self.background_done(ctx);
+        if self.session.live_poll()
+            && let Some(m) = self.session.message.take()
+        {
+            self.toast(live::failure_text(&m));
         }
         // Files that arrived without a command (joined, recovered) take the kept View toggles too.
         self.session.apply_view_prefs();

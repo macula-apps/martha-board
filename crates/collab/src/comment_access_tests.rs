@@ -1,15 +1,12 @@
 //! Comment links: a commenter sees everything and may change comment threads (add, reply, react,
 //! resolve, remove, reorder), but a batch that changes anything else is refused with the reason
-//! and rolled back; a client that can't read comment links joins with one as a viewer, managing
-//! clients that can't read them get them listed as view links, and a level this build doesn't know
-//! reads as view.
+//! and rolled back; a client that can't read comment links joins with one as a viewer, and a level
+//! this build doesn't know reads as view.
 
 use figcraft_doc::{Comment, Document, Message, NodeKind};
 
 use crate::change::{Change, DocProp, Entry, Json, Prop};
-use crate::message::{
-    self, Access, AdminReply, ClientMsg, Hello, LinkInfo, NewLink, ServerMsg, WIRE_VERSION, decode, decode_json, encode, encode_json,
-};
+use crate::message::{self, Access, ClientMsg, Hello, ServerMsg, WIRE_VERSION, decode, decode_json, encode, encode_json};
 use crate::sim_tests::base;
 use crate::{COMMENT_ONLY, Client, Limits, NoRecompute, Outgoing, Server};
 
@@ -188,13 +185,6 @@ fn comment_access_reads_back_and_an_unknown_level_reads_as_view() {
 }
 
 #[test]
-fn managing_clients_that_cant_read_comment_links_get_view_links() {
-    let link = |access| LinkInfo { id: "l".into(), file: "f".into(), access, label: String::new(), created: 0 };
-    let listing = AdminReply::Links(vec![link(Access::Edit), link(Access::Comment), link(Access::View)]);
-    let AdminReply::Links(old) = listing.clone().for_reader(false) else { panic!() };
-    assert_eq!(old.iter().map(|l| l.access).collect::<Vec<_>>(), [Access::Edit, Access::View, Access::View]);
-    assert_eq!(listing.clone().for_reader(true), listing);
-    let made = AdminReply::Link(NewLink { link: link(Access::Comment), token: "t".into() });
-    assert!(matches!(made.for_reader(false), AdminReply::Link(l) if l.link.access == Access::View));
+fn this_build_announces_that_it_reads_comment_links() {
     assert!(message::reads_comments(&message::client_version()) && !message::reads_comments("0.12.1 signals hosting"));
 }

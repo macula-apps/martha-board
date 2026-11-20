@@ -1,6 +1,8 @@
 # Real-time collaboration protocol (draft)
 
 > `server.md` and `plugins.md`, which this page names, are not in MarthaBoard: the collaboration server's guide and the plugin guide left at import (macula-apps/martha-board#1). The names are kept as plain text, not links (#25).
+>
+> What only FigCraft's server served left MarthaBoard with macula-apps/martha-board#41 (team libraries and the plugin directory earlier, with #28 and #31): publishing and uploading a file to a server, your online files, the team list, a server's open hosting, its admin (managing files with the server key) and reports to its operator. Their messages are retired tags on the wire (see *Messages*); this page no longer describes them. Live sharing (hosting, joining, join codes, invite links) and branches stay.
 
 Status: milestone M9. **Step 1 (the core, no networking) is implemented** in `crates/collab`:
 identifiers, the object/property model, change sets, ordering and validation, client
@@ -10,18 +12,15 @@ embeds, invite links, document sync end to end (several apps edit one file), liv
 selections, avatars and follow. **Step 3 is implemented**: per-user undo and redo, rejection
 handling and offline queueing with reconnect (`crates/collab`, wired into the engine's live
 session and the transport). **Step 4 is implemented**: the browser build joins sessions a desktop
-app hosts and publishes files to a server, and `figcraft://` invite links open the app and join. Styles, variables, collections,
+app hosts, and `figcraft://` invite links open the app and join. Styles, variables, collections,
 modes and comments created in a session take ids from their creator's id space, and others' text
 carets, cursor chat and spotlights show live (see Presence). **Step 5 is implemented**: the
 standalone `figcraft-server` (`apps/figcraft-server`, running it: `server.md`) keeps
-many files with persistence and compaction, and share links that let people edit or only view;
-the app publishes to it, and a file's team library lives there for other files to use. Files are
-shared with **join codes** (see *Sharing with a join code*): online through a server that names
-its links with short codes, or on the local network with a code that carries the host's address.
-A file put on a server stays its owner's: the app records it with its owner token and lists
-**your online files** (see *Your online files*), which open again as their owner. Sessions
-are per document: an app hosts, joins and publishes several files at once (see Hosting and
-joining). The rest is the plan the next implementation PRs follow and update;
+many files with persistence and compaction, and share links that let people edit or only view
+(the server app left at import; the app still joins its links and codes). Files are shared with
+**join codes** (see *Sharing with a join code*) on the local network, with a code that carries the
+host's address; a server's code is still joined through the server in Preferences. Sessions are
+per document: an app hosts and joins several files at once (see Hosting and joining). The rest is the plan the next implementation PRs follow and update;
 sections say what is built.
 
 Goal: several people edit the same `.figcraft` file at the same time and see each other's edits,
@@ -188,10 +187,16 @@ As built:
 ## Messages
 
 *Built* (`figcraft_collab::message`): the types below and both encodings. Protocol version 2 (the
-`Hello`'s `protocol`): the welcome says what the client may do, and a connection can manage a
-server's files or use a file's team library instead of joining one; a client of another version is
-refused with the reason. (The library messages came later within version 2: a server from before
-them can't read them and refuses the connection.)
+`Hello`'s `protocol`): the welcome says what the client may do; a client of another version is
+refused with the reason.
+
+**Retired tags** (macula-apps/martha-board#41). The messages only FigCraft's server answered left:
+`ClientMsg` `Manage` (5), `Admin` (6), `OpenLibrary` (7), `Library` (8), `OpenPlugins` (10),
+`Plugins` (11), `OpenHosting` (12), `Report` (13) and `ResolveTeam` (15), and `ServerMsg` `Admin`
+(8), `Library` (9), `Plugins` (11), `Hosting` (12) and `Reported` (13). Their places stay as gaps
+(`message::Retired<TAG>`, which has no values), so every message that stays keeps its tag and its
+bytes; a frame with a retired tag reads as `Error::Retired(tag)`, never as another message. The
+app no longer announces `hosting` in its `client_version`.
 
 **Signals (cursor chat, spotlight)** came later within version 2 too, without breaking older apps
 in either direction. A client that reads them says so with the word `signals` in its hello's
@@ -206,36 +211,16 @@ a server that knows it keeps the new name and tells everyone with the client's `
 server drops it, so the session keeps showing the name the client joined with.
 
 **Comment links** came later within version 2 the same way. A client that reads the `comment`
-access says so with the word `comments` in its `client_version` (hello, managing and library
-connections); a server welcomes a client that doesn't with a comment link as a viewer (and enforces
-it as one), and lists comment links to such a managing client as view links, so an older app never
-gets a level it can't read. This build reads a level it doesn't know (a later one) as `view`, in
-both encodings. An older server can't read `Admin createLink` with the `comment` access: the app
-asks for the comment link on a connection of its own and shares without one when it fails.
-
-**Open hosting and reports** came later within version 2 the same way. A connection that opens
-with `OpenHosting` asks a server about its hosting, publishes without the key when the server is
-open to the public, or manages one file with its owner token; a server older than that can't read
-the message and refuses the connection, which the app reports as "takes files only with its key".
-A client that reads `Hosting` and `Reported` says so with the word `hosting` in its hello's
-`client_version` (`"0.3.1 signals hosting"`); only those clients get a `Hosting` after their
-welcome, and a client sends `Report` only to a server that sent it one. New variants only ever go
-at the end of an enum, and existing messages keep their fields, so nothing an older peer reads
-changes.
+access says so with the word `comments` in its hello's `client_version`; a server welcomes a client
+that doesn't with a comment link as a viewer (and enforces it as one), so an older app never gets a
+level it can't read. This build reads a level it doesn't know (a later one) as `view`, in both
+encodings.
 
 **Join codes** came later within version 2 the same way: a connection that opens with `Resolve`
-asks a server which file a code opens, and `Admin code` asks it for a link's code. Both are new
-variants at the end of their enums, so everything an older peer reads is unchanged. A server from
-before join codes can't read either message and refuses the connection ("that message couldn't be
-read"): the app then says the server doesn't know join codes (joining) or shows the invite links in
-place of a code (sharing). An older app never sends them and joins by link as before.
-
-**Owned files** came later within version 2 the same way: `Admin owned` on an open hosting
-connection asks what became of the files a list of `(file id, owner token)` pairs owns, in one
-request. It is a new variant at the end of `Admin`, and its answer one at the end of the replies,
-so everything an older peer reads is unchanged. A server from before it can't read the request and
-refuses the connection ("that message couldn't be read"): the app then shows the files it has
-recorded as they are, without their state on the server. An older app never sends it.
+asks a server which file a code opens. It is a new variant at the end of its enum, so everything an
+older peer reads is unchanged. A server from before join codes can't read it and refuses the
+connection ("that message couldn't be read"): the app then says the server doesn't know join
+codes. An older app never sends it and joins by link as before.
 
 **Encoding (decided):** a binary message is a 1-byte wire version followed by **postcard** (serde),
 which is compact and needs no schema files. Property values inside are compact JSON text: the
@@ -256,19 +241,9 @@ Client → server:
 | `Presence {cursor?, selection?, viewport?, editing_text? {node, caret, selection?}}` | Ephemeral; throttled to ~30 Hz, latest wins. |
 | `Ack {seq}` | Highest sequence applied (lets the server trim per-client buffers). |
 | `Ping` | Keep-alive. |
-| `Manage {protocol, key, client_version}` | Instead of `Hello`: manage a server's files with its key. |
-| `Admin {publish {name, snapshot} \| files \| links {file} \| createLink {file, access, label} \| revoke {file, link} \| remove {file}}` | A request on a managing connection; each gets one `Admin` reply, in order. |
-| `OpenLibrary {protocol, file, token, client_version}` | Instead of `Hello`: use a file's team library with one of the file's share links. |
-| `Library {fetch {have?, usage?} \| publish {archive} \| usage \| reportDetached {file, components} \| detached \| reportInserted {file, components} \| actions \| reportAssets {file, styles, variables} \| assets \| reportAssetActions {file, inserted, detached} \| assetActions}` | A request on a library connection; each gets one `Library` reply, in order. `usage` is `{file, components: [(id, instances)]}`; `reportDetached` gives the asking file's detached instances per component the same way (answered `noted`), `detached` asks for every file's. The last two are newer: a server from before them can't read them and refuses the request. |
 | `Signal {kind, text}` | Ephemeral presence, only after the server's `ready`: `chat` (the cursor chat message; empty: closed), `spotlight` (`"on"`, or empty: stopped) or `name` (your new name: the server keeps it, cleaned like a hello's, and sends everyone, you too, your `PeerJoined`; never passed on as a signal). |
-| `OpenPlugins {protocol, key, client_version}` | Instead of `Hello`: use the server's plugin directory; `key` empty to browse, the server key to publish too. |
-| `OpenHosting {protocol, client_version, file, owner}` | Instead of `Hello`: ask about the server's hosting; publish without the key (`Admin publish`) when it is open to the public; with a file's id and owner token, manage that file (`Admin links \| createLink \| revoke \| rename \| remove` of it). Answered with `Hosting` or `Refused`. |
-| `Admin {rename {file, name} \| listing \| reports \| block {ip} \| unblock {ip} \| blocked}` | Later managing requests: rename a file on the server, the files with what the operator moderates by, the reports, blocking addresses (an IPv6 address: its /64). Owner tokens may only rename their file. |
-| `Report {reason}` | On a joined connection, only to a server that sent `Hosting`: report the file to the operator (at most 500 characters kept; ten an hour per address). |
-| `Plugins {list {query} \| fetch {id, version?} \| publish {bundle} \| unpublish {id, version?}}` | A request on a plugin directory connection; each gets one `Plugins` reply, in order. `bundle` is a plugin bundle's bytes (`figcraft_plugin::bundle`). |
 | `Resolve {protocol, client_version, code}` | Instead of `Hello`: ask which file a join code opens (the code's nine symbols). Answered with `Resolved`, then the server closes the connection; a code it doesn't know, too many wrong ones from the address, or a session hosted by an app is `Refused` with the reason. |
-| `Admin {code {file, token}}` | A later managing request (with the server key, or the file's owner token on an open hosting connection): a new join code for the link of `file` whose token this is. A link has one code; asking again replaces it. |
-| `Admin {owned {files: [[file, owner]]}}` | A later request, on any open hosting connection (also one that named no file when it opened): what became of the files these `(file id, owner token)` pairs own, at most 200 a request. Answered with `Admin owned`. |
+| tags 5–8, 10–13, 15 | Retired (see *Retired tags*): read as `Error::Retired(tag)`. |
 
 Server → client:
 
@@ -280,16 +255,9 @@ Server → client:
 | `Presence {client_id, …}` / `PeerJoined` / `PeerLeft` | Other people's cursors, selections and arrivals. |
 | `Refused {reason}` | The connection is refused (protocol version, token, session full, a message out of place). |
 | `Pong` | Keep-alive. |
-| `Admin {ready \| published {file, edit, view} \| files \| links \| link \| done \| failed {reason}}` | A managing connection's answer: the key is right, a published file with its first two links (tokens shown once), listings, a new link, done, or why not. |
-| `Library {ready {access} \| library {version, archive} \| unchanged {version} \| empty \| published {version} \| usage [{usage, updated}] \| failed {reason} \| noted \| detached [{detached, updated}] \| actions [{week, component, insertions, detachments}] \| assets [{file, styles, variables}] \| assetActions [{week, component, insertions, detachments}]}` | A library connection's answer: the link is right (with its access), the library (a `.figcraft` archive holding it), no newer version, no library yet, kept, the usage reports, or why not; then (newer) a detach report kept, and the detach reports. |
 | `Signal {client_id, signal: {kind, text}}` | Someone's cursor chat or spotlight, cleaned by the server; `ready` (about the client itself, after its welcome): signals may be sent. Only to clients whose hello announced `signals`. |
-| `Hosting {open, operator, terms, idle_secs, max_file_mb, expires?}` | The answer to `OpenHosting`, and after a welcome to clients whose hello announced `hosting`: anyone may publish, how to reach the operator, the terms (a URL), how long files published without the key are kept unopened, the largest file, and this file's expiry (seconds since 1970). |
-| `Admin {hosted {file, edit, view, owner, expires?} \| listing [row] \| reports [report] \| blocked [ip]}` | A file published without the key with its links and owner token (shown once), and the answers to the later managing requests. |
-| `Reported {error?}` | The answer to `Report`: kept, or why not. |
-| `Plugins {ready {publisher} \| list [entry] \| bundle {entry, bundle} \| published entry \| removed [version] \| failed {reason}}` | A plugin directory connection's answer: opened (with the key or not), the latest version of each plugin with the versions kept, a bundle and its entry (its SHA-256 among them), kept, unpublished, or why not. |
 | `Resolved {file, token}` | The answer to `Resolve`: the file the code opens and its link's token, which the client then joins with in an ordinary `Hello` on a new connection (so reconnects, access and revocation are the link's). |
-| `Admin {code {code}}` | The answer to `Admin code`: the link's new join code, shown this once (the server keeps only what it needs to recognise it). |
-| `Admin {owned [{name, links, expires?} \| null]}` | The answer to `Admin owned`, one entry per pair asked about, in order: the file's name on the server, the ids of its share links (the owner's own and the ones made for others) and its expiry; `null` when that token manages no file of that id (removed, expired, never there, or a wrong token: they read the same). |
+| tags 8, 9, 11–13 | Retired (see *Retired tags*): read as `Error::Retired(tag)`. |
 
 `Change` is one of: `Create {id, type, props}`, `Set {id, prop, value}`, `Delete {id}` (deleting a
 node deletes its subtree; ids are never allocated twice), plus the document-level `SetDoc`, `Put`
@@ -424,13 +392,12 @@ resuming with its offline edits, and leaving the session going back to snapshot 
   Share; click an avatar to **follow** that person's viewport (`collab.follow {client}`), click
   again, press Escape or pan/zoom yourself to stop. The chevron lists everyone.
 - **Removing someone.** Right-click their avatar ▸ "Remove <name> from session"
-  (`collab.removePerson {client}`), when you host the session or own the file on a server. The
+  (`collab.removePerson {client}`), when you host the session. The
   hub closes their connection with "You were removed from this session" (close code 1001: the
   session is over for them, no reconnecting) and bars their address (its `ip_key`) from that file
-  while it runs, so the invite they hold no longer gets them in; everyone else stays connected. On
-  a server the owner asks on an open hosting connection with the file's owner token
-  (`Admin::RemovePeer {file, client}`; the operator may too, with the server key). Addresses are
-  the only identity a session has: someone behind the same address (one NAT) is barred too.
+  while it runs, so the invite they hold no longer gets them in; everyone else stays connected.
+  Addresses are the only identity a session has: someone behind the same address (one NAT) is
+  barred too.
 - **Text carets.** While someone types in a text layer of the shared document on your page, their
   caret and selected characters show on it in their colour (the text layout's own caret and
   selection geometry, so they sit at the right glyphs of your copy), with their name in a tag above
@@ -495,29 +462,28 @@ resuming with its offline edits, and leaving the session going back to snapshot 
   persists them (a snapshot plus an append-only log of accepted batches, compacted into new
   snapshots), and survives restarts. TLS comes from a reverse proxy (`wss://`). *Built*, below.
 - **Auth**: an unguessable per-session token in the invite link (hosting from the app); per-file
-  share links that let people edit or only view, and a server key that manages files (the
-  standalone server). User accounts come later.
+  share links that let people edit or only view (the standalone server). User accounts come later.
 
 *Built* (hosting from the app and joining):
 
-- "Share" in the right panel opens a popover: your name, a choice between **Online** and **Local
-  network**, and **Start sharing**; while sharing, the join code (large), **Copy code** and **Copy
-  link**, what the code lets people do (online: can edit, can comment or can view), who is here, and **Stop
-  sharing**; while joined, **Leave session**. **Join with a code** is one field in the popover, on
-  the home screen and in "File ▸ Join live session…": it takes a code of either kind or an invite
-  link. Another server, a server key, the port and "this computer only" are under **Advanced**;
-  the server for online sharing is in Preferences (see *Sharing with a join code*). Commands:
-  `collab.share {via?: "online" | "local", access?, …}`,
+- "Share" in the right panel opens a popover: your name, what the code lets people do (Can edit /
+  Can view) and **Start sharing**, on the local network; while sharing, the join code, **Copy
+  code** and **Copy link**, what the code lets people do, who is here, and **Stop sharing**; while
+  joined, **Leave session**. **Join with a code** is one field in the popover, on the home screen
+  and in "File ▸ Join live session…": it takes a code of either kind or an invite link. The port
+  and "this computer only" are under **Advanced**; the server a server's code is asked at is in
+  Preferences (see *Sharing with a join code*). Commands:
+  `collab.share {via?: "local", access?, …}`,
   `collab.host {port?, bind?: "local" | "lan" | <ip>}`, `collab.stop`, `collab.join {code | link}`,
   `collab.leave`, `collab.peers`, `collab.follow {client?}`, `collab.cursor {x?, y?}` (an agent's
   pointer), `collab.cursorChat {text?}`, `collab.spotlight {on?}`, `collab.removePerson {client}`.
 - **Sessions are per document.** Every open file has its own session or none: hosting, joined,
-  being published, reconnecting or failed. Several run at once (host one file, join another,
-  publish a third), each with its own people, links, undo history, cursor chat, spotlight and
+  reconnecting or failed. Several run at once (host one file, join another), each with its own
+  people, links, undo history, cursor chat, spotlight and
   follow, and all of them keep syncing while another tab is in front (others' edits apply to the
   files behind; your presence there is empty: no cursor, selection or view). The window shows the
   session of the tab in front, so a new or other file says "Not in a live session" and offers
-  Start, Join and Publish for itself; each window shows its own file's. The commands act on the
+  Start and Join for itself; each window shows its own file's. The commands act on the
   active file's session, and `collab.peers` also lists every session (`sessions`). Joining never
   touches another file's session: the session's file opens in a tab of its own, and until it
   does the join shows on the tab it was started from (a failure too, unless that tab has a
@@ -557,8 +523,7 @@ resuming with its offline edits, and leaving the session going back to snapshot 
   reconnect resumes as the same
   client: the guest's connection keeps the session id, client id and last sequence number from
   the messages it read and sends them in its next `Hello` (see Offline and reconnect).
-- The browser build joins and publishes to a server (see *Built (the browser client)*); hosting
-  needs the desktop app.
+- The browser build joins (see *Built (the browser client)*); hosting needs the desktop app.
 
 *Built* (sharing with a join code; `figcraft_collab::code`, `collab.share`, `collab.join {code}`):
 
@@ -566,29 +531,12 @@ resuming with its offline edits, and leaving the session going back to snapshot 
   reads to another. Both kinds use Crockford's base32 alphabet (digits and capitals without `I`,
   `L`, `O`, `U`); reading one ignores case, spaces and dashes and takes `O` as `0` and `I` or `L`
   as `1`. The join field tells the kinds apart by length (anything with `://` is a link).
-- **Online** (`collab.share {via: "online"}`, the default): the open file is published to the
-  server in Preferences (`pref.publishServer`; built in: `wss://collab.craftapps.dev/`, written
-  once, as `figcraft_engine::live::DEFAULT_SERVER`; empty turns online sharing off) exactly as
-  `collab.publish` does on a server open to the public, owner token included; the app then asks
-  for a code for the edit link and one for the view link (`Admin code`, as the file's owner) and
-  shows the edit code, `K7M-2QX-9TD`: **nine symbols, 45 random bits**, a different code per link.
-  A joiner's app sends `Resolve {code}` to its own server in Preferences, gets the file and the
-  link's token, and joins with them as with the link.
-- **The file is its owner's.** Publishing gives the file its first edit and view link and its
-  owner token; those stay with the owner, whose app joins with that edit link. Sharing makes three
-  more links for others (`Admin createLink`, labelled "Shared (edit)", "Shared (view)" and
-  "Shared (comment)") and
-  asks for their codes; those are what the popover shows and copies. **Stop sharing**
-  (`collab.stop`) revokes these links (`Admin revoke`, as the owner): their codes stop
-  resolving ("That code has expired or its sharing was stopped"), the links stop joining, and
-  everyone who joined with them is disconnected at once with close code 1001 and "Sharing was
-  stopped: the link you joined with no longer works. Your copy stays open", which apps take as
-  the session's end (no retries; older apps too). The owner stays connected, the file stays on
-  the server, open only to its owner, and the popover offers Start sharing again: new links and
-  codes for the same file, nothing published twice. If the server can't be reached, nothing is
-  stopped and the app says so. Taking the file off the server is a separate, confirmed step
-  (Share ▸ Advanced ▸ Remove from server…, or `collab.manageFile {action: "remove"}`). Closing
-  the tab, quitting or `collab.leave` leave the file and its sharing as they are.
+- **A server's code**: `K7M-2QX-9TD`, **nine symbols, 45 random bits**, which a server gave a link
+  of one of its files. A joiner's app sends `Resolve {code}` to the server in Preferences
+  (`pref.publishServer`; built in: `wss://collab.craftapps.dev/`, written once, as
+  `figcraft_engine::live::DEFAULT_SERVER`; empty turns such codes off), gets the file and the
+  link's token, and joins with them as with the link. Sharing through a server left with
+  macula-apps/martha-board#41: this app makes codes only on the local network.
 - **What the server keeps of a code.** Never the code. It is stretched (SHA-256 of the code under
   a fixed label, then 10,000 more rounds); a hash of the result finds the link, and another is the
   pad the link's token is wrapped with (XOR), so only the code gives the token back. Lookups
@@ -625,92 +573,7 @@ resuming with its offline edits, and leaving the session going back to snapshot 
   nothing for who already joined. There is no comment code on the local network. A host without an IPv4
   address gets no codes and shares its links.
 - **In the browser** a code joins like a link (the page asks the server over its own WebSocket,
-  then opens the session's); it shares online through the server in Preferences as the desktop
-  app does, and not on the local network (a page can't listen).
-
-*Built* (your online files; `figcraft_engine::online`, `collab.files`, `collab.openFile`,
-`collab.forgetFile`, `collab.manageFile`):
-
-- **What is recorded, and where.** When a file reaches a server without the server's key
-  (`collab.share` online, `collab.publish` on a server open to the public), the server's `hosted`
-  answer carries its owner token, once. The app records the file with the preferences, per user
-  and never in a document: the server's address (without a query), the file's id and name, the
-  owner token, the owner's own edit and view links, when it was put there and last opened here,
-  and the links and codes others join with while it is shared. At most 200 files, most recently
-  opened first; recording another drops the one opened longest ago. The preferences are saved at
-  once when the list changes, so a crash doesn't lose a token. A file published with the server's
-  key has no owner token and is the operator's to manage: it isn't recorded.
-- **The token is a password.** It is stored on this computer only (the desktop app's preferences
-  file; the browser build keeps only your name across reloads, so a token it gets lasts as long as the page), is never logged, and no
-  command result, summary or `ui.inspect` carries it or the owner's own links: `collab.files`
-  says `hasOwnerToken: true`. The record's debug output leaves the secrets out. A session opened
-  from a record holds no token either (`published.owner` is null there): requests that need it
-  read it from the record. What is read back from the preferences file is validated entry by
-  entry (addresses, ids, links, lengths, control characters); junk is dropped without costing
-  the other preferences.
-- **Opening one again** (`collab.openFile {file, server?}`): the app joins with the owner's edit
-  link in an ordinary `Hello`, so reconnects and sync are a guest's, and the session is marked as
-  the owner's of that server file: `collab.stop` and `collab.share` there stop and start its
-  sharing with the recorded token, exactly as in the session that published it. A file that is
-  open already comes to the front instead.
-- **After a crash, nothing is lost** (`collab.recoverFile`, the desktop app's recovery). The
-  recovery copy of a recorded file has a note written after it: the server, the file, and the
-  app's `resume` there when the copy was made (session, client id, the last sequence number it
-  had); so the copy is that confirmed state plus the app's own unconfirmed changes. The next start
-  joins the file as its owner with that `resume`, its `seq` set past any real one so the welcome
-  carries the whole document, and keeps the copy until the file arrives. A server that still
-  knows the client gives it its id back, and the new sync client numbers its batches after the
-  last one the server processed for that id (`Welcome.processed`), so they aren't taken for
-  repeats. Then the copy is compared with the server's document (the same diff an edit syncs as):
-  nothing differs: the copy goes; it differs, the app is the same client and the server's
-  sequence number is the one in the note (nothing else changed there, so the difference is exactly
-  what never arrived): it is applied on top as one edit, "Recovered changes", sent to everyone and
-  undoable; anything else (others changed the file meanwhile, the server no longer knows the
-  client and would refuse its layer ids, a view link): the copy opens beside the file as
-  "<name> (recovered copy)", untouched, and a message says so. A file that can't be joined
-  (offline, refused) opens its copy as an unsaved document, as any recovery copy; the record
-  stays. The old copy is removed only after the outcome, once the new run has made its own copy
-  of what it became. Recovery copies are written at most every ten seconds, so the last seconds
-  before a crash are covered only when the server confirmed them.
-- **What became of them** (`collab.files {refresh: true}`): one `OpenHosting` connection per
-  server that names no file, then one `Admin owned` with every file recorded on that server.
-  A file the server answers `null` for shows as gone (removed or expired) and can be cleared; a
-  name changed elsewhere is taken over; share links that are no longer among the file's links
-  mark it as not shared. Nothing is asked until the list is opened (Home ▸ Online) or refreshed
-  by a command. A server that can't be reached, or is older than the request, leaves the records
-  as they are and is reported beside them (`problems`).
-- **Managing from the list.** `collab.manageFile {file, action}` takes the server and the token
-  from the record when they aren't given: `share` makes new links and codes for others, `unshare`
-  revokes the recorded ones (as `collab.stop` does in a session), `rename` renames the file on the
-  server and in the record, `remove` deletes it from the server, drops the record and ends a
-  session open on it (the copy stays open). `collab.forgetFile` drops the record only: the file
-  stays on its server until it expires, and can't be managed from this computer again.
-- **Asking opens nothing.** `Admin owned` reads the files' descriptions only: it doesn't count as
-  opening a file, so looking at the list never postpones a file's expiry. Each pair is checked
-  like an owner token on `OpenHosting` (its SHA-256 against the stored hash, in constant time).
-
-*Built* (the team list; `figcraft_engine::team`, running it: `server.md`):
-
-- **Listing.** On a server whose operator set `team_files`, `Admin team` on an `OpenHosting`
-  connection that names no file (or a managing one) answers `AdminReply::Team {web, files}`: the
-  files that have a link with a join code now (a link of their own, not a team link), each as a
-  `FileInfo` with the list's access, most recently changed first, at most 500, and the address of
-  the browser build (`web_url`). A server without a list answers `Failed`; one older than the
-  request can't read it. `collab.files {refresh: true}` asks the server in Preferences (not the
-  public server the app ships with), after the owned files.
-- **Joining.** A team list link names the server and the file, `figcraft://join?server=…&file=<id>&team=1`
-  (`Lookup::Team` in `Invite::parse_join`). The guest's first connection sends `ResolveTeam
-  {file}` instead of a hello; the server makes the file's team link the first time (access from
-  `team_files`, label `Team (<access>)`, its token kept in `links.json`) and answers `Resolved
-  {file, token}` as for a join code, then the join goes on with that token on a new connection,
-  in the desktop app and the browser alike. A file that isn't listed, or a server without a list,
-  is `Refused` with the reason; an answer naming another file than the one asked about is taken
-  for none.
-- **Revoking.** Revoking a link (`Admin revoke`) that leaves the file without a coded link revokes
-  its team links too, in the same answer (`Handled::revoked` names every link revoked), so whoever
-  joined with one is disconnected. Admission refuses a team link while the list is off, gives
-  another access, or the file isn't shared, whatever `links.json` still holds, and the server
-  removes such team links when it starts.
+  then opens the session's); it doesn't share (a page can't listen).
 
 *Built* (document sync between apps):
 
@@ -729,7 +592,7 @@ resuming with its offline edits, and leaving the session going back to snapshot 
   `Session::apply_remote`, which keeps your selection, page and view and never adds an undo step.
   Batches that arrive during a gesture wait for it to end. New layers take ids in the client's
   space (`client_id << 32 | counter`). Closing the session's document leaves the session. Revert to
-  saved (`file.revert`) is refused while the document belongs to a session, including publishing,
+  saved (`file.revert`) is refused while the document belongs to a session, including
   reconnecting and hosting before the welcome. Refusal keeps the document, previews and session
   unchanged; leave the session first to revert the local file.
 - Each applied batch wakes the window (the inbox calls `request_repaint`); nothing runs while
@@ -770,7 +633,7 @@ resuming with its offline edits, and leaving the session going back to snapshot 
   (`crates/collab-net/src/hub.rs`): the listener, a reader and a writer thread per connection,
   and one thread owning a core `Server` per open file. What differs sits behind a `Backend`: which
   hellos it admits and with what access, where a file that isn't open comes from, what it keeps
-  of the changes, and the managing connections. The app's backend has one file and its session
+  of the changes, and which join codes it knows. The app's backend has one file and its session
   token; the server's is its data directory. Hellos carry the token to the backend, which checks
   it; the sessions themselves keep no secret.
 - **Files and share links.** Each file has links, each with an access (`edit` or `view`), a label
@@ -787,17 +650,6 @@ resuming with its offline edits, and leaving the session going back to snapshot 
   `figcraft-cli` and the browser all open `wss://`: natively through rustls (ring, Mozilla's root
   certificates compiled in, plus any authority in the PEM file `FIGCRAFT_CA_FILE` names), always
   verifying the certificate; the browser through its own WebSocket.
-- **Managing files.** A connection that opens with `Manage {key}` instead of `Hello` sends
-  `Admin` requests: publish a document (its snapshot) as a new file, which returns an edit link
-  and a view link; list files and links; make and revoke links; remove a file. The server key is
-  128 bits in the data directory. The server's command line (`figcraft-server files|links|key`)
-  uses the same requests when a server is running on the directory, else it changes the directory
-  itself (one process holds it at a time: an OS file lock).
-- **Publishing from the app.** `collab.publish {server, name?}` (File ▸ Publish to server…)
-  uploads the open document over a managing connection, then joins the new file with its edit
-  link on the same connection thread; the tab becomes the session's synced document (read-only
-  until the welcome arrives, its undo history per person after) and `collab.peers` reports
-  `published {server, file, name, edit, view}`.
 - **Persistence.** Each open file's server keeps a journal of what changes its lasting state
   (`Server::journaling`: client ids handed out, accepted batches, refused batch ids); the store
   appends it to the file's log and syncs it once per burst of messages, before the hub sends what
@@ -814,94 +666,21 @@ resuming with its offline edits, and leaving the session going back to snapshot 
   same clients (the session id, client ids and log come back with the file), sending what they
   made meanwhile. The app's session ending (code 1001) stays final.
 
-*Built* (team libraries on the server; using them: `server.md`):
-
-- **A library connection.** A connection that opens with `OpenLibrary {file, token}` (checked like a
-  hello's token, so any share link of the file opens it with that link's access) sends `Library`
-  requests: fetch the file's library unless the client has that version (`have`), publish a new
-  version (edit links only), or read the usage reports. Requests are one-shot: the app opens a
-  connection, asks and closes it.
-- **What is kept.** The published library a library file holds (manifest and snapshot with
-  per-asset versions) travels as a small `.figcraft` archive holding only it. The server reads it
-  in full with the limits a library file is read with, requires the file's library id once one is
-  kept and a newer version, then writes it beside the file in a file of its own
-  (`library-<version>.bin`, atomically) and only then records id, name and version in the file's
-  description, so a failed write or a crash in between leaves the previous version served whole;
-  the previous version's file is deleted after. Publishing from the app first fetches the
-  server's version and publishes the next one from it, so per-asset versions continue whoever
-  published last; a race is refused and the next publish follows.
-- **Using it.** A file enables the library with the link in place of a library file's path
-  (`LibraryLink::path`), so placing, styles, variables and updates work as for library files. The
-  engine never opens a socket: commands ask the app's network link and wait (a few seconds at most
-  when the server can't be reached); the Assets panel asks in the background (`have` set, so an
-  unchanged library costs a few bytes) when it opens and every 30 seconds, and the answers arrive
-  like other session events. The last library fetched stays in use while the server can't be
-  reached.
-- **Usage.** Each fetch carries the asking file's name and its instances of each library component;
-  the server keeps the latest report per file name (`usage.json`, rewritten only when it changes,
-  capped) and answers `usage` with them. `library.usage` adds them up with the components' names.
-  After the fetch, a file that has detached instances of the library's components sends
-  `reportDetached` with its counts; the server keeps them beside the file's usage report (in the
-  same `usage.json` entry, capped the same way) and answers `detached` with them. It sends
-  `reportInserted` the same way with the instances it has inserted (placed, pasted or duplicated;
-  not those nested in another instance). What either total grows past that file's highest counts
-  in the current week, a Monday at 00:00 UTC, over all files (`actions.json`, a year of weeks,
-  capped), and `actions` answers with those weeks. A file that holds copies of the library's
-  styles or variables sends `reportAssets` with how many of its layers use each (at most 250 of
-  each kind, the most used first; none is a report too, so a file that stops using them stops
-  counting); the server keeps the latest in the same `usage.json` entry and answers `assets` with
-  them. It sends `reportAssetActions` with its totals of inserted and detached styles and variables,
-  counted over the weeks as for components (`asset-actions.json`), and `assetActions` answers with
-  those weeks (`component` is the style's or variable's id). The variants are appended to the enums, so the older messages keep their bytes; an older server refuses the new
-  requests, and the app ignores that.
-
-*Built* (the plugin directory; operating it: `server.md`, publishing and
-installing: `plugins.md`):
-
-- **A plugin directory connection.** A connection that opens with `OpenPlugins {key}` lists and
-  fetches plugins with no credential at all, and publishes or unpublishes them when `key` is the
-  server's (a wrong key is refused like a managing connection's). Requests are one-shot, like a
-  library connection's. A server older than the directory can't read `OpenPlugins` and refuses the
-  connection; the app says the server has no plugin directory.
-- **What travels.** A plugin bundle: a magic number, then length-prefixed parts (the manifest's
-  JSON, the module, up to 32 named assets), uncompressed, so nothing expands beyond the bytes sent.
-  Its SHA-256 names it on the server (`plugins/<sha256>.bin`) and in every entry; the app checks a
-  download against it before decoding anything.
-- **Checks.** The server decodes a published bundle within its size cap, parses the manifest
-  (refusing a plugin API it doesn't run), requires a version of 1 to 4 numbers that is newer than
-  the one kept, compiles the module without running it (only the sandbox's imports allowed) and
-  checks the asset names; the app checks the same again after the hash. Fetches share a budget of
-  bytes per second on the server, so many downloads at once are turned away instead of queued.
-
-*Built* (open hosting: a server open to the public; running one: `server.md`):
+*Built* (the hub's limits on clients):
 
 - **Who the client is.** The hub knows each connection by its client's address: the socket's peer,
   or behind the configured reverse proxy (`trusted_proxy`) the last address of its
   `X-Forwarded-For`; an IPv6 address counts by its /64. The transport caps connections per address
   (counted once the WebSocket handshake names the client); the server's backend refuses blocked
-  addresses and limits new connections, messages and publishes per address with token buckets in a
-  table of at most 10,000 addresses. A connection opened with the server key is exempt.
-- **Publishing without the key.** `OpenHosting` then `Admin publish`: the server checks the
-  per-address and global caps, keeps the file with a new owner token (128 bits; only its SHA-256 is
-  stored, beside the address it came from) and answers `hosted` with the links, the token and the
-  expiry. The app publishes this way when the address has no key and joins the file with its edit
-  link as for a keyed publish (`collab.publish`); `collab.serverInfo` asks first and
-  `collab.manageFile` uses the token later.
-- **Expiry.** A file published without the key expires once nobody opened it for the idle time:
-  its description records when it was last opened (on open and when everyone leaves), the server
-  deletes expired files at startup and every ten minutes (never one that is open), and `Hosting`
-  tells everyone in a file its date.
-- **Reports and blocks.** `Report` from anyone in a file is kept in `reports.json` (the last 1,000)
-  with the file, the link the reporter joined with and their address; blocking an address
-  disconnects its connections and is kept in `blocked.json`. Both are the operator's to read with
-  the server's command line.
-- **Resources.** Open to the public, a message is at most a file's size (checked while it is read),
+  addresses and limits new connections and messages per address with token buckets in a table of
+  at most 10,000 addresses.
+- **Resources.** A message is at most a file's size (checked while it is read),
   a batch a file has no room for is answered with a `Reject` carrying the reason (no fixes: the
   client rolls it back), the bytes queued for a client and for all of them and the bytes waiting
   for the hub thread are capped (past them a connection is dropped), one-shot request connections
-  leave an eighth of the connections to sessions, and when a file's log can't be written nothing
-  of it is confirmed: everyone in it reconnects with close code 1012 and sends again what wasn't
-  confirmed. Revoking a link or removing a file also cuts library connections that used it.
+  (a join code's question) leave an eighth of the connections to sessions, and when a file's log
+  can't be written nothing of it is confirmed: everyone in it reconnects with close code 1012 and
+  sends again what wasn't confirmed.
 - **Uptime checks.** A plain `GET` of a path ending in `/healthz` on the session port is answered
   `200 ok` (the request line is peeked at before the WebSocket handshake, which goes on untouched
   otherwise).
@@ -978,10 +757,9 @@ saved state.
 
 ## Agents, MCP and the CLI
 
-Everything stays a command: `collab.share`, `collab.host`, `collab.join`, `collab.publish`,
-`collab.leave`, `collab.peers`, `collab.follow`, `collab.files`, `collab.openFile`,
-`collab.forgetFile` and `collab.manageFile` are ordinary commands, so the CLI, the control channel and MCP can
-host, publish and join sessions and manage the files they put online; an agent can be a participant with its own cursor.
+Everything stays a command: `collab.share`, `collab.host`, `collab.join`, `collab.leave`,
+`collab.peers` and `collab.follow` are ordinary commands, so the CLI, the control channel and MCP
+can host and join sessions; an agent can be a participant with its own cursor.
 
 *Built*: the desktop app (control channel) and the MCP server's headless session (`figcraft-cli
 mcp`) both have the network link installed; `collab.join` returns at once with status
@@ -1037,30 +815,19 @@ chooses to share on the network; the default is the invite link with a random to
 *Built* (the standalone server), and what it adds to the threat model:
 
 - **Who can connect.** Whoever can reach the server's port (127.0.0.1 by default; the operator
-  chooses an interface or a reverse proxy). Joining a file needs one of its link tokens; managing
-  files needs the server key. There are no accounts: a link is a bearer secret for one file and
-  one access level, so share it like a password and revoke it when it leaks; the server key is
-  the administrator's and should stay with trusted people.
+  chooses an interface or a reverse proxy). Joining a file needs one of its link tokens. There are
+  no accounts: a link is a bearer secret for one file and one access level, so share it like a
+  password and revoke it when it leaks.
 - **Secrets at rest.** Link tokens are kept only as SHA-256 hashes, so a copy of the data
   directory can't be used to join (the documents themselves are in it, unencrypted). The server
   key is plain text in the data directory (owner-only on Unix): reading the directory already
   gives every file. A lost link can't be shown again; revoke it and make a new one.
 - **View access is enforced by the server**, not by the app: a viewer's batches are refused
   whatever client sends them; the app's read-only state is for clarity.
-- **Abuse limits.** On top of the transport's: at most `max_files` files, `max_file_mb` per file
-  (a publish over it is refused), `max_links` links per file, `max_people` per file and
-  `max_connections` sockets. Open to the public, per address too: connections at once and a
-  minute, messages a second, publishes an hour, files and MiB kept, and `max_total_mb` for
-  everyone; refusals say which. Spoofing `X-Forwarded-For` does nothing unless the connection comes
+- **Abuse limits.** On top of the transport's: at most `max_files` files, `max_file_mb` per file,
+  `max_links` links per file, `max_people` per file and `max_connections` sockets; per address
+  too: connections at once and a minute and messages a second; refusals say which. Spoofing `X-Forwarded-For` does nothing unless the connection comes
   from the trusted proxy.
-- **Open hosting** gives anyone who reaches the server the right to publish (within those limits),
-  to report a file they are in, and with an owner token to manage that one file and to ask what
-  became of it (`Admin owned`: a wrong token and a missing file are answered alike, so the request
-  tells nothing about files someone doesn't own; it counts against the address's message limit
-  like any other). Everything else
-  (listing files, other files' links, reports, blocks, the plugin directory's publishing) needs the
-  server key. Files are not end-to-end encrypted: the server reads what it keeps, and so can its
-  operator.
 - **Join codes** are weaker secrets than links by design (45 bits online, 44 on the local
   network): online they stand on the server's limits on wrong codes, locally on how fast a host
   takes connections (see *Sharing with a join code*). A code is never stored, logged or sent back
@@ -1092,11 +859,10 @@ chooses to share on the network; the default is the invite link with a random to
    resuming connection), followed by client-scoped ids for document-level objects and remote text
    carets on the canvas.
 4. **Browser client** (WebSocket through `web-sys`). **Done** (the web build joins
-   desktop-hosted sessions and publishes files to a server, #917; `figcraft://` links open the desktop app and join).
+   desktop-hosted sessions, #917; `figcraft://` links open the desktop app and join).
 5. **Standalone `figcraft-server`** with persistence, compaction, share links and permissions.
-   **Done** (`apps/figcraft-server` on the shared hub; edit and view links, the server key,
-   publishing from the app; see `server.md`), followed by open hosting for a public
-   server (owner tokens, limits per address, idle expiry, reports and blocks), by sharing with
-   join codes (online through the server, or carrying the host's address on the local network)
-   and by your online files (the app remembers what it owns and opens it again as its owner).
+   **Done** (`apps/figcraft-server` on the shared hub; edit and view links; see `server.md`),
+   followed by sharing with join codes (carrying the host's address on the local network).
+   Publishing to a server, open hosting, the server's admin and reports, and your online files
+   were built too, and left MarthaBoard with macula-apps/martha-board#41.
 6. **Accounts**: people signing in, per-person permissions, teams and projects.

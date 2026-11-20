@@ -12,7 +12,7 @@ use std::sync::mpsc::{Receiver, sync_channel};
 
 use tungstenite::Bytes;
 
-use super::{BlockUse, Blocks, Charges, Conn, Kind, Line, Out, Push, deliver};
+use super::{BlockUse, Blocks, Charges, Conn, Line, Out, Push, deliver};
 
 /// A line with its own queue counter, the given block counter and the server's.
 fn line(block: &Arc<AtomicUsize>, all: &Arc<AtomicUsize>, max_block: usize, max_all: usize) -> (Line, Receiver<Out>) {
@@ -79,7 +79,7 @@ fn the_biggest_consumer_is_shed_when_the_budget_runs_out() {
     for id in 1..=3u64 {
         let (l, rx) = line(&Arc::default(), &all, usize::MAX, 10_000);
         receivers.push(rx);
-        conns.insert(id, Conn { out: l, sock: socket(), kind: Kind::Managing { comments: true }, ip });
+        conns.insert(id, Conn { out: l, sock: socket(), file: "f".into(), id: u32::try_from(id).unwrap(), ip });
     }
     // Connection 1 doesn't read: it holds most of the budget.
     let big = Bytes::from(vec![0u8; 9_000]);

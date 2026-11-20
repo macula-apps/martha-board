@@ -1,11 +1,10 @@
-use super::host::{clean_hosting, clean_shared};
 use figcraft_collab::Change;
 use figcraft_collab::merge::{self, Side};
 
 use super::types::{Event, MAX_PEERS, PageInfo, Role, SessionId, SessionInfo, Status};
 use super::{
-    Access, Arc, Client, ClientMsg, DocState, Document, EngineError, Live, NodeId, PUBLISHING, Peer, Presence, Result, Resume, ServerMsg, Session,
-    Signal, ToolId, display_name, editing_hint, editing_of, limited_by, sanitize, tool_left,
+    Access, Arc, Client, ClientMsg, DocState, Document, EngineError, Live, NodeId, Peer, Presence, Result, Resume, ServerMsg, Session, Signal,
+    ToolId, display_name, editing_hint, editing_of, limited_by, sanitize, tool_left,
 };
 
 /// A session that starts reconnecting forgets who's here (that comes again with the next welcome;
@@ -139,17 +138,10 @@ impl Session {
             self.live_deferred(id);
             self.live_follow_apply(id);
         }
-        self.online_recoveries();
         true
     }
 
     fn live_event(&mut self, id: SessionId, e: Event) {
-        let e = match e {
-            // Team libraries left the board: a late answer about one is dropped.
-            Event::Library { .. } => return,
-            Event::Net { job, reply } => return self.background_answer(job, *reply),
-            e => e,
-        };
         // A session left meanwhile: what was still on its way is dropped.
         let front = self.tab();
         let Some(live) = self.live.sessions.get_mut(&id) else { return };
@@ -213,34 +205,6 @@ impl Session {
                 }
                 self.message = Some(text);
             }
-            Event::Published(p) => {
-                // Shared with a code: the popover shows it, nothing more to say.
-                if live.share.is_none() {
-                    self.message = Some(format!("Published {} to the server", p.name));
-                }
-                let server = live.server.clone();
-                live.published = Some(p.clone());
-                self.online_published(&server, &p);
-            }
-            Event::Shared(Ok(links)) => {
-                let links = clean_shared(links);
-                match live.server_file() {
-                    Some((server, file)) => self.online_shared(&server, &file, Some(links)),
-                    None => {
-                        if let Some(share) = live.share.as_mut() {
-                            share.links = Some(links);
-                        }
-                    }
-                }
-            }
-            Event::Shared(Err(why)) => self.message = Some(format!("The file is on the server, but couldn't be shared: {why}")),
-            Event::Hosting(info) => live.hosting = Some(clean_hosting(info)),
-            Event::Reported(error) => {
-                self.message =
-                    Some(error.map_or_else(|| "Your report was sent to the server's operator".into(), |e| format!("The report wasn't sent: {e}")));
-            }
-            // Answered above.
-            Event::Library { .. } | Event::Net { .. } => {}
         }
     }
 
@@ -385,7 +349,7 @@ impl Session {
                 (uid, None)
             }
             (Some(Role::Guest), Some(uid)) => {
-                // Joining again in this tab, or the file you published arriving from the server.
+                // Joining again in this tab.
                 merged = self.live_merge_offline_work(id, uid, &mut client);
                 let doc = Arc::new(client.document().clone());
                 let was_dirty = self.docs.iter().find(|d| d.uid == uid).is_some_and(DocState::is_dirty);
@@ -504,15 +468,9 @@ impl Session {
     }
 
     /// Why document `uid` can't be edited now, if it can't: you may only view it (or view and
-    /// comment on it: see [`live_comment_edit`](Self::live_comment_edit)) in its session, or it is
-    /// on its way to a server.
+    /// comment on it: see [`live_comment_edit`](Self::live_comment_edit)) in its session.
     pub fn live_read_only(&self, uid: u64) -> Option<&'static str> {
-        let live = self.live.doc(uid)?;
-        match &live.client {
-            Some(c) => limited_by(c.access()),
-            None if live.status.active() && live.role() != Some(Role::Host) && !live.disconnected() => Some(PUBLISHING),
-            None => None,
-        }
+        self.live.doc(uid)?.client.as_ref().and_then(|c| limited_by(c.access()))
     }
 
     /// Whether `doc` is session document `uid` with nothing but comment threads changed, and the

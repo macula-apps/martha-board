@@ -435,7 +435,7 @@ pub fn network_refused() -> Option<String> {
 }
 
 /// What a confined command that would reach the network says.
-pub const NETWORK_REFUSED: &str = "automation roots are set: commands don't reach the network (publishing, live sessions and team libraries are off)";
+pub const NETWORK_REFUSED: &str = "automation roots are set: commands don't reach the network (live sessions are off)";
 
 /// The path to use for `access` to `path`: resolved when confined, else as given.
 pub fn allow(path: impl AsRef<Path>, access: Access) -> Result<PathBuf> {

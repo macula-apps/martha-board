@@ -1,11 +1,10 @@
-//! The home screen, drawn headless: its sections (Recents and Online, and no Templates), the
+//! The home screen, drawn headless: its one section (Recents: no Online, no Templates), the
 //! search, the first run (no recent files, and nothing offered in their place), no frames once
 //! settled and the Getting started card (closed, kept closed, and brought back from the Help menu).
 
 use egui::accesskit::Role;
 use egui::{Event, Key, Modifiers, PointerButton, Pos2, Rect, Shape};
 use figcraft_engine::Session;
-use figcraft_engine::online::OnlineFile;
 use serde_json::json;
 
 use crate::home::Section;
@@ -53,12 +52,16 @@ fn press(u: &mut Ui, key: Key) {
     }
 }
 
+/// The sidebar's tabs are exactly Recents: Home ▸ Online left with online files
+/// (martha-board#41), and there are no Templates or placeholders.
 #[test]
-fn the_sidebar_has_recents_and_online_and_no_templates_or_placeholders() {
+fn the_sidebar_has_recents_only_and_no_online_templates_or_placeholders() {
     let mut u = first_run();
     let s = shapes(&mut u);
-    assert!(has_text(&s, "Recents") && has_text(&s, "Online"));
-    assert!(!has_text(&s, "Templates") && !has_text(&s, "Drafts") && !has_text(&s, "Community"));
+    assert!(has_text(&s, "Recents"));
+    for gone in ["Online", "Templates", "Drafts", "Community"] {
+        assert!(!has_text(&s, gone), "{gone}");
+    }
     u.ctx.enable_accesskit();
     u.frame(vec![]);
     let nodes: Vec<_> = u.frame_output(vec![]).platform_output.accesskit_update.unwrap().nodes.into_iter().map(|(_, n)| n).collect();
@@ -69,28 +72,22 @@ fn the_sidebar_has_recents_and_online_and_no_templates_or_placeholders() {
     let mut sidebar: Vec<_> =
         nodes.iter().filter(|n| n.role() == Role::Tab && n.bounds().is_some_and(|b| b.x0 == first.x0 && b.y0 >= first.y0)).collect();
     sidebar.sort_by(|a, b| a.bounds().unwrap().y0.total_cmp(&b.bounds().unwrap().y0));
-    assert_eq!(sidebar.iter().filter_map(|n| n.label()).collect::<Vec<_>>(), ["Recents", "Online"], "the sidebar's tabs");
-    assert!(!nodes.iter().any(|n| n.role() == Role::Tab && n.label() == Some("Templates")), "no Templates tab anywhere");
-    assert_eq!((tab("Recents").is_selected(), tab("Online").is_selected()), (Some(true), Some(false)));
-    // In reading order: Recents, Online.
-    let top = |label: &str| tab(label).bounds().unwrap().y0;
-    assert!(top("Recents") < top("Online"));
-    // Each is clicked into, and `ui.inspect` and `ui.set {homeSection}` name them the same way.
-    for (label, section) in [("Online", Section::Online), ("Recents", Section::Recents)] {
-        let s = shapes(&mut u);
-        click(&mut u, text_center(&s, label));
-        assert_eq!(u.app.ui.home_view.section, section);
-        let inspect = u.app.inspect();
-        assert_eq!(inspect["homeSection"], section.id());
-        assert_eq!(inspect["online"]["open"], section == Section::Online);
-        assert_eq!(Section::parse(section.id()), Some(section));
+    assert_eq!(sidebar.iter().filter_map(|n| n.label()).collect::<Vec<_>>(), ["Recents"], "the sidebar's tabs");
+    for gone in ["Online", "Templates"] {
+        assert!(!nodes.iter().any(|n| n.role() == Role::Tab && n.label() == Some(gone)), "no {gone} tab anywhere");
     }
+    assert_eq!(tab("Recents").is_selected(), Some(true));
+    // Clicked into, and `ui.inspect` and `ui.set {homeSection}` name it the same way.
+    let s = shapes(&mut u);
+    click(&mut u, text_center(&s, "Recents"));
+    assert_eq!(u.app.ui.home_view.section, Section::Recents);
+    let inspect = u.app.inspect();
+    assert_eq!(inspect["homeSection"], Section::Recents.id());
+    assert!(inspect.get("online").is_none(), "no Online section to inspect: {inspect}");
+    assert_eq!(Section::parse(Section::Recents.id()), Some(Section::Recents));
     assert_eq!(Section::parse("drafts"), None);
     assert_eq!(Section::parse("templates"), None, "the starter templates' section is gone");
-    // The Online section is the online files' own.
-    u.app.ui.home_view.section = Section::Online;
-    let s = settle(&mut u);
-    assert!(has_text(&s, "Online files") && !has_text(&s, "Getting started"));
+    assert_eq!(Section::parse("online"), None, "the online files' section is gone");
 }
 
 #[test]
@@ -100,27 +97,20 @@ fn home_search_finds_known_files_and_opens_an_existing_tab() {
     session.docs[0].path = Some("C:/designs/North Trail.figcraft".into());
     session.prefs.recent_files =
         vec!["C:/designs/North Trail.figcraft".into(), "C:/designs/South Trail.figcraft".into(), "C:/designs/Other.figcraft".into()];
-    session.prefs.online_files.push(OnlineFile {
-        server: "wss://share.example/".into(),
-        file: "trail".into(),
-        name: "Trail Live".into(),
-        owner: "test-only-secret".into(),
-        ..OnlineFile::default()
-    });
     let mut u = Ui::new(session);
     u.app.ui.home = true;
     u.app.ui.home_view.file_query = "  TRAIL  ".into();
     let s = settle(&mut u);
     assert!(has_text(&s, "Search results"));
-    assert!(has_text(&s, "North Trail") && has_text(&s, "South Trail") && has_text(&s, "Trail Live"));
-    assert!(!has_text(&s, "Other") && !has_text(&s, "test-only-secret"));
+    assert!(has_text(&s, "North Trail") && has_text(&s, "South Trail"));
+    assert!(!has_text(&s, "Other") && !has_text(&s, "Online files"));
     assert_eq!(texts(&s).iter().filter(|(name, pos, _)| name == "North Trail" && pos.y > 90.0).count(), 1, "an open file is not repeated in recents");
     assert_eq!(u.app.inspect()["homeSearch"], "  TRAIL  ");
 
     u.app.ui.home_view.file_query = "nothing matches".into();
     let s = shapes(&mut u);
     assert!(has_text(&s, "No files match your search"));
-    assert!(!has_text(&s, "Trail Live") && !has_text(&s, "South Trail"));
+    assert!(!has_text(&s, "South Trail"));
     assert!(!texts(&s).iter().any(|(name, pos, _)| name == "North Trail" && pos.y > 90.0));
 
     u.app.ui.home_view.file_query = "north".into();
@@ -228,24 +218,22 @@ fn a_search_keeps_the_other_recent_files_pictures_and_the_selection() {
 fn the_home_screen_draws_no_frames_once_settled() {
     let (mut h, _) = crate::live_tests::Harness::new();
     h.app.ui.home = true;
-    for tab in [Section::Online, Section::Recents] {
-        h.app.ui.home_view.section = tab;
-        h.frames(60);
-        let (_, delay) = h.frame(vec![]);
-        assert!(delay >= std::time::Duration::from_secs(1), "{tab:?} asks for a frame in {delay:?}: {:?}", h.ctx.repaint_causes());
-    }
+    h.frames(60);
+    let (_, delay) = h.frame(vec![]);
+    assert!(delay >= std::time::Duration::from_secs(1), "Recents asks for a frame in {delay:?}: {:?}", h.ctx.repaint_causes());
 }
 
 /// What Home shows, pinned by the headings and labels on screen: Recents with its Getting started
-/// card, and no starter templates (no Templates section, no first-run offer of them).
+/// card; no Online section or online files (martha-board#41), and no starter templates (no
+/// Templates section, no first-run offer of them).
 #[test]
 fn home_shows_recents_and_getting_started_and_no_templates() {
     let mut u = first_run();
     let s = settle(&mut u);
-    for shown in ["Recents", "Online", "New design file", "New board", "Open file", "Join with a code", "Getting started"] {
+    for shown in ["Recents", "New design file", "New board", "Open file", "Join with a code", "Getting started"] {
         assert!(has_text(&s, shown), "{shown}");
     }
-    for gone in ["Templates", "Start from a template", "See all templates", "Search templates", "Show all templates"] {
+    for gone in ["Online", "Online files", "Templates", "Start from a template", "See all templates", "Search templates", "Show all templates"] {
         assert!(!has_text(&s, gone), "{gone}");
     }
     assert!(!has_text(&s, "Recent files") && !has_text(&s, "Open files"), "a first run has nothing to list");
@@ -256,6 +244,7 @@ fn home_shows_recents_and_getting_started_and_no_templates() {
     let s = settle(&mut u);
     assert!(has_text(&s, "Recent files") && has_text(&s, "ridgeline") && has_text(&s, "Open files"));
     assert!(has_text(&s, "Getting started"));
+    assert!(!has_text(&s, "Online") && !has_text(&s, "Online files"));
     assert!(!has_text(&s, "Templates") && !has_text(&s, "Start from a template"));
 }
 
@@ -323,7 +312,6 @@ fn the_getting_started_card_closes_stays_closed_and_comes_back_from_help() {
     // Help ▸ Getting started: back on the home screen, from wherever.
     u.app.run("file.new", json!({}));
     u.app.ui.home = false;
-    u.app.ui.home_view.section = Section::Online;
     crate::menus::invoke(&mut u.app, "help.gettingStarted");
     assert!(u.app.ui.home && u.app.ui.home_view.section == Section::Recents && !u.app.session.prefs.getting_started_dismissed);
     assert!(has_text(&settle(&mut u), "Getting started"));
@@ -341,7 +329,8 @@ fn tab_walks_the_sidebar_in_order_before_a_sections_controls() {
         }
     }
     let at = |name: &str| names.iter().position(|n| n == name).unwrap_or_else(|| panic!("Tab never reached {name:?}: {names:?}"));
-    assert!(at("Recents") < at("Online") && at("Online") < at("Open file"), "{names:?}");
+    assert!(at("Recents") < at("Open file"), "{names:?}");
+    assert!(!names.iter().any(|n| n == "Online"), "no Online tab to reach: {names:?}");
 }
 
 /// A temporary directory of its own for a test's files, removed with them when dropped.

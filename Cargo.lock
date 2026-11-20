@@ -1838,7 +1838,6 @@ name = "figcraft-collab"
 version = "0.18.1"
 dependencies = [
  "base64 0.22.1",
- "chrono",
  "figcraft-color",
  "figcraft-doc",
  "figcraft-geom",

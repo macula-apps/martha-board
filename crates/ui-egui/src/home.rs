@@ -1,5 +1,6 @@
 //! The home screen: Recents (new file, open, join with a code, the Getting started tips, open and
-//! recent files: [`crate::home_recents`]) and Online (your online files: [`crate::online`]).
+//! recent files: [`crate::home_recents`]). Its sidebar has the one section, Recents (Home ▸ Online
+//! left with online files, martha-board#41).
 
 use egui::{Align2, Color32, CornerRadius, Id, Rect, Response, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::json;
@@ -11,25 +12,22 @@ use crate::icons::{self, Icon};
 use crate::theme::{ACCENT, Tokens, regular, semibold};
 use crate::widgets;
 pub mod home_recents;
-pub mod online;
 
 /// The section the home screen shows.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Section {
     #[default]
     Recents,
-    Online,
 }
 
 impl Section {
     /// The sidebar, top to bottom.
-    const ALL: [(Section, Icon, &str); 2] = [(Section::Recents, Icon::Home, tr_noop("Recents")), (Section::Online, Icon::Online, tr_noop("Online"))];
+    const ALL: [(Section, Icon, &str); 1] = [(Section::Recents, Icon::Home, tr_noop("Recents"))];
 
     /// The id `ui.set {homeSection}` and `ui.inspect` use.
     pub fn id(self) -> &'static str {
         match self {
             Section::Recents => "recents",
-            Section::Online => "online",
         }
     }
 
@@ -127,13 +125,6 @@ pub fn show(app: &mut FigApp, ui: &mut Ui) {
         let left = Rect::from_min_size(rect.min, vec2(SIDEBAR, rect.height()));
         ui.painter().line_segment([left.right_top(), left.right_bottom()], Stroke::new(1.0, t.border));
         sidebar(app, ui, &t, left);
-        if app.ui.home_view.file_query.trim().is_empty() && app.ui.home_view.section == Section::Online {
-            // Your online files lay themselves out in the area (and scroll their own list).
-            let area = Rect::from_min_max(pos2(left.max.x + 40.0, rect.min.y + 24.0), rect.max - vec2(40.0, 24.0));
-            crate::online::section(app, ui, area, &t);
-            opened_join(app);
-            return;
-        }
         let main = Rect::from_min_max(pos2(left.max.x, rect.min.y), rect.max);
         ui.scope_builder(egui::UiBuilder::new().max_rect(main), |ui| {
             egui::ScrollArea::vertical().id_salt("home").auto_shrink([false, false]).show(ui, |ui| {
@@ -143,7 +134,6 @@ pub fn show(app: &mut FigApp, ui: &mut Ui) {
                         recents(app, ui, &t);
                     } else {
                         search_results(app, ui, &t);
-                        opened_join(app);
                     }
                 });
             });
@@ -226,42 +216,15 @@ fn file_matches(name: &str, location: &str, query: &str) -> bool {
     name.to_lowercase().contains(query) || location.to_lowercase().contains(query)
 }
 
-/// One search over known files. It never sends a query or owner token to a
-/// server; online files are opened through their existing owner-token command only on click.
+/// One search over known files (the open ones and the recent ones), on this computer only.
 fn search_results(app: &mut FigApp, ui: &mut Ui, t: &Tokens) {
     heading(ui, t, tr("Search results"));
     let query = app.ui.home_view.file_query.trim().to_lowercase();
-    let mut count = open_files(app, ui, t, &query);
-    count += crate::home_recents::section(app, ui, t, &query);
-
-    let online: Vec<_> = app.session.prefs.online_files.iter().filter(|f| file_matches(&f.name, &f.server, &query)).cloned().collect();
-    let mut open_online = None;
-    if !online.is_empty() {
-        subheading(ui, t, tr("Online files"));
-        for f in &online {
-            count += 1;
-            let host = figcraft_engine::online::server_host(&f.server);
-            let icon = crate::online::mark(f.shared.is_some());
-            let row = FileRow {
-                mark: Some((icon, if f.shared.is_some() { t.success } else { t.icon_secondary })),
-                name: &f.name,
-                ink: t.text,
-                detail: host,
-                detail_size: 11.0,
-                detail_ink: t.text_secondary,
-            };
-            if listed(ui, t, ui.scope_id().with(("search_online", &f.server, &f.file)), 36.0, &row) {
-                open_online = Some(f.clone());
-            }
-        }
-    }
+    let count = open_files(app, ui, t, &query) + crate::home_recents::section(app, ui, t, &query);
     if count == 0 {
         ui.label(egui::RichText::new(tr("No files match your search")).font(semibold(13.0)).color(t.text));
         ui.add_space(6.0);
         widgets::label(ui, tr("Try another search."), t.text_secondary);
-    }
-    if let Some(file) = open_online {
-        crate::online::open(app, &file);
     }
 }
 
@@ -330,7 +293,6 @@ fn recents(app: &mut FigApp, ui: &mut Ui, t: &Tokens) {
         ui.set_max_width(540.0);
         crate::live::join_row(app, ui, 260.0);
     });
-    opened_join(app);
     if !app.session.prefs.getting_started_dismissed {
         ui.add_space(28.0);
         getting_started(app, ui, t);
@@ -371,19 +333,6 @@ fn open_files(app: &mut FigApp, ui: &mut Ui, t: &Tokens, query: &str) -> usize {
         app.ui.home = false;
     }
     count
-}
-
-/// The file joined from the home screen (a code, or one of your online files) opened in a tab of
-/// its own: show it. (A join that was left is forgotten.)
-fn opened_join(app: &mut FigApp) {
-    match app.ui.live.home_join.map(|id| app.session.live.get(id).map(figcraft_engine::live::Live::syncing)) {
-        Some(Some(true)) => {
-            app.ui.live.home_join = None;
-            app.ui.home = false;
-        }
-        Some(None) => app.ui.live.home_join = None,
-        _ => {}
-    }
 }
 
 /// The Getting started card: short tips with their shortcuts as the keymap has them now, and a

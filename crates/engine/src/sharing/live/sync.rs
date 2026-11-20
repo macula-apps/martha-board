@@ -1,4 +1,3 @@
-use super::host::hosting_json;
 use super::types::{NO_SESSION, SessionId, Share, SharedLink, Status};
 use super::{
     Access, Arc, Client, EditingText, EngineError, EngineRecompute, FollowedView, Live, Result, ServerMsg, Session, Value, ViewState, bad, busy,
@@ -214,10 +213,6 @@ impl Session {
     /// `mine` picks: a window calls it every frame it draws, after input, for the documents it
     /// holds.
     pub fn live_sync_in(&mut self, mine: impl Fn(Option<u64>) -> bool) {
-        // A recovery copy whose session was left has its outcome too.
-        if !self.live.recovering.is_empty() {
-            self.online_recoveries();
-        }
         if self.live.sessions.is_empty() {
             return;
         }
@@ -343,7 +338,6 @@ impl Session {
             "network": info.map(|i| i.network),
             "access": l.client.as_ref().map(Client::access).or(info.map(|i| i.access)),
             "readOnly": l.doc_uid.is_some_and(|u| self.live_read_only(u).is_some()),
-            "published": l.published,
             "code": l.share.as_ref().and_then(Share::code),
             "share": l.share.as_ref().map(|sh| {
                 let of = |a| sh.links.as_ref().and_then(|s| s.of(a));
@@ -361,7 +355,6 @@ impl Session {
                     "commentLink": comment.map(|l| l.link.as_str()),
                 })
             }),
-            "hosting": l.hosting.as_ref().map(hosting_json),
             "follow": l.follow,
             "signals": l.signals,
             "chat": l.chat,

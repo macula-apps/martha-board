@@ -24,11 +24,10 @@ pub struct NetLimits {
     pub hello_timeout: Duration,
     /// A connection with no traffic for this long is dead.
     pub idle_timeout: Duration,
-    /// How long a one-shot request connection (hosting, a library, a plugin directory — and, most
-    /// importantly, publishing a file) waits for the server's reply before giving up. Publishing
-    /// uploads a whole file and a large one on a slow link takes the server a while to receive and
-    /// answer, so this is longer than `idle_timeout` (a large project on a slow connection can
-    /// easily need several minutes).
+    /// How long a client waits for an answer that may be large or slow before giving up: a
+    /// welcome carrying the whole document, a join code's answer. A large file on a slow link
+    /// takes a while to arrive, so this is longer than `idle_timeout` (a large project on a slow
+    /// connection can easily need several minutes).
     pub request_reply_timeout: Duration,
     /// A client pings this often, whatever else it sends (keeps it under `idle_timeout`).
     pub keepalive: Duration,
@@ -54,12 +53,11 @@ pub struct NetLimits {
     /// Bytes of messages handed to the hub and not handled yet, all connections together: past it
     /// a connection is dropped as busy instead of piling more on.
     pub max_in_flight: usize,
-    /// Largest message on a connection that only asks small things (browsing a plugin directory).
-    pub max_request: usize,
-    /// Connections only sessions (`Hello`) and the operator may take: one-shot requests leave them.
+    /// Connections only sessions (`Hello`) may take: one-shot requests (a join code's question)
+    /// leave them.
     pub reserve_for_sessions: usize,
-    /// A one-shot request connection (hosting, a library, a plugin directory) with no traffic for
-    /// this long is dropped.
+    /// A one-shot request connection (a join code's question) with no traffic for this long is
+    /// dropped.
     pub request_idle: Duration,
 }
 
@@ -86,7 +84,6 @@ impl Default for NetLimits {
             max_reading_block: usize::MAX,
             max_reading_total: usize::MAX,
             max_in_flight: usize::MAX,
-            max_request: 64 << 10,
             reserve_for_sessions: 0,
             request_idle: Duration::from_secs(45),
         }
@@ -100,7 +97,7 @@ mod tests {
     #[test]
     fn request_reply_wait_is_longer_than_idle() {
         let d = NetLimits::default();
-        // Publishing uploads a whole file; a slow link must not cut it off at the session idle
+        // A welcome carries the whole file; a slow link must not cut it off at the session idle
         // timeout. Keep the reply wait comfortably above it.
         assert!(d.request_reply_timeout > d.idle_timeout);
     }

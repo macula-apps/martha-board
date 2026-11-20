@@ -451,7 +451,8 @@ fn paint_tab(ui: &Ui, t: &Tokens, tab: &TabPaint) {
     if lost {
         icons::paint(&painter, at, Icon::LiveDisconnected, t.danger.linear_multiply(progress));
     } else if let Some(shared) = live {
-        icons::paint(&painter, at, crate::online::mark(shared), if shared { t.success } else { t.icon_secondary }.linear_multiply(progress));
+        let icon = if shared { Icon::LiveShared } else { Icon::LivePrivate };
+        icons::paint(&painter, at, icon, if shared { t.success } else { t.icon_secondary }.linear_multiply(progress));
     }
     if dirty {
         painter.text(pos2(shown.max.x + 4.0, paint_r.center().y), Align2::LEFT_CENTER, "•", regular(12.0), t.text.linear_multiply(progress));
@@ -467,8 +468,8 @@ fn paint_tab(ui: &Ui, t: &Tokens, tab: &TabPaint) {
 }
 
 /// What the tab of document `uid` says about its live session: others get in (`true`: a session
-/// this app hosts or joined, a file shared online), only you do (`false`: a file of yours on a
-/// server, not shared now), or it has none.
+/// this app hosts or joined, a file shared with a code), only you do (`false`: a share without
+/// ways in for others), or it has none.
 pub fn live_mark(app: &FigApp, uid: u64) -> Option<bool> {
     let live = app.session.live_of(uid);
     live.shared().filter(|_| live.doc_uid == Some(uid))

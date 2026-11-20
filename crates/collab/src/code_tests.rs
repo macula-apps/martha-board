@@ -115,21 +115,15 @@ fn only_local_session_links_have_a_code() {
 
 #[test]
 fn the_new_messages_go_last_on_the_wire() {
-    use crate::message::{Admin, AdminReply, ClientMsg, Resolve, ServerMsg, encode};
+    use crate::message::{ClientMsg, Resolve, ServerMsg, encode};
     // postcard writes a variant's index: an older peer reads everything it knew unchanged, and
     // fails only on the variants added for join codes (which is how the app tells).
     let tag = |bytes: Vec<u8>| bytes[1];
     let ask = Resolve { protocol: 2, client_version: String::new(), code: "K7M2QX9TD".into() };
     assert_eq!(tag(encode(&ClientMsg::Ping).unwrap()), 4);
-    assert_eq!(tag(encode(&ClientMsg::Report { reason: String::new() }).unwrap()), 13);
     assert_eq!(tag(encode(&ClientMsg::Resolve(ask)).unwrap()), 14);
     assert_eq!(tag(encode(&ServerMsg::Pong).unwrap()), 7);
-    assert_eq!(tag(encode(&ServerMsg::Reported { error: None }).unwrap()), 13);
     assert_eq!(tag(encode(&ServerMsg::Resolved { file: String::new(), token: String::new() }).unwrap()), 14);
-    assert_eq!(tag(encode(&Admin::Blocked).unwrap()), 11);
-    assert_eq!(tag(encode(&Admin::Code { file: String::new(), token: String::new() }).unwrap()), 12);
-    assert_eq!(tag(encode(&AdminReply::Blocked(Vec::new())).unwrap()), 10);
-    assert_eq!(tag(encode(&AdminReply::Code { code: String::new() }).unwrap()), 11);
 }
 
 #[test]

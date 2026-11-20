@@ -462,11 +462,8 @@ impl Client {
                 self.presence.remove(&client_id);
                 Ok(Vec::new())
             }
-            // Cursor chat, spotlights and what a server says about its hosting are the app's (the
-            // transport hands them over).
-            ServerMsg::Pong | ServerMsg::Signal { .. } | ServerMsg::Hosting(_) | ServerMsg::Reported { .. } | ServerMsg::Resolved { .. } => {
-                Ok(Vec::new())
-            }
+            // Cursor chat and spotlights are the app's (the transport hands them over).
+            ServerMsg::Pong | ServerMsg::Signal { .. } | ServerMsg::Resolved { .. } => Ok(Vec::new()),
             ServerMsg::Welcome { .. } if self.online => Err(Error::Protocol("already joined".into())),
             ServerMsg::Welcome { session, client_id, seq, catch_up, processed, peers, access, secret } => {
                 if session != self.session || client_id != self.id {
@@ -477,9 +474,6 @@ impl Client {
                 self.rejoin(seq, catch_up, &processed, peers, recompute)
             }
             ServerMsg::Refused { reason } => Err(Error::Protocol(reason)),
-            ServerMsg::Admin(_) | ServerMsg::Library(_) | ServerMsg::Plugins(_) => {
-                Err(Error::Protocol("an answer meant for a managing, library or plugin directory connection".into()))
-            }
         }
     }
 

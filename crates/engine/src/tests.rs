@@ -373,14 +373,15 @@ fn every_command_survives_junk_params() {
         // Keyboard steps (view.pan) and toggles as junk.
         json!({"dx": 1e308, "dy": "NaN", "big": "yes", "on": 3}),
         json!({"dx": -1e308, "dy": [1], "big": null, "on": null}),
-        // Open hosting: servers, owner tokens, actions, reports and the publish server as junk.
+        // Servers, owner tokens, actions, reports and the server preference as junk (what the
+        // server-only commands took before martha-board#41; any command may still be handed it).
         json!({"server": "wss://\u{0}", "file": [1], "owner": {"x": 1}, "action": "remove", "reason": 5, "link": -1, "access": "admin", "url": 7}),
         json!({"server": "ws://127.0.0.1:1/", "file": "../x", "owner": "", "action": "createLink", "reason": "\u{7}\u{0}", "name": "", "url": "ws://x/?key=k"}),
         // Sharing with a join code: ways, access, codes, servers, ports and interfaces as junk.
         json!({"via": 7, "access": [1], "code": {"x": 1}, "link": -1, "server": 5, "port": -1, "bind": 3, "name": [1]}),
         json!({"via": "carrier pigeon", "access": "admin", "code": "K7M-2QX-9T\u{0}", "server": "wss://\u{0}", "port": 1e308, "bind": "::::"}),
         json!({"via": "local", "access": "view", "code": "\u{1F4A5}".repeat(64), "port": 70000, "bind": "lan"}),
-        // Online files: ids, servers, refreshes, actions and names as junk.
+        // File ids, servers, refreshes, actions and names as junk.
         json!({"file": [1], "server": 7, "refresh": "maybe", "action": "share", "name": {"x": 1}}),
         json!({"file": "../x", "server": "wss://\u{0}", "refresh": true, "action": "unshare", "name": 5}),
         // Files as base64 data: a damaged `.sketch` (zip magic, then junk) and an old one (SQLite).

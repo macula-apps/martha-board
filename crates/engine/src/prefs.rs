@@ -1,4 +1,4 @@
-use super::{Arc, BTreeMap, Deserialize, Document, NodeId, Serialize, Value, cmd, live, online};
+use super::{Arc, BTreeMap, Deserialize, Document, NodeId, Serialize, Value, cmd, live};
 
 /// The smallest and largest interface size, relative to the system's display scale (1.0 is the
 /// system's own size).
@@ -69,17 +69,13 @@ pub struct Prefs {
     /// `figcraft://` invite links open this app (`collab.registerLinks`); `None`: on for installed
     /// builds, off for development builds.
     pub invite_links: Option<bool>,
-    /// The server files are shared through online (Share ▸ Online, join codes; Publish to server
-    /// suggests it too): `wss://host/`, never with a key. [`live::DEFAULT_SERVER`] unless the user
-    /// chose another; empty: online sharing is off (saved as empty, so it stays off).
+    /// The server a join code from a server is asked about (`collab.join {code}`): `wss://host/`,
+    /// never with a key. [`live::DEFAULT_SERVER`] unless the user chose another; empty: such codes
+    /// can't be used (saved as empty, so it stays off).
     pub publish_server: String,
     /// Recently opened or saved files, newest first (File ▸ Open recent; at most
     /// [`cmd::file::MAX_RECENT`]).
     pub recent_files: Vec<String>,
-    /// The files you put on a server without its key, with their owner tokens (passwords: see
-    /// [`online`]), most recently opened first, at most [`online::MAX_ONLINE_FILES`].
-    #[serde(skip_serializing_if = "Vec::is_empty", deserialize_with = "online::read")]
-    pub online_files: Vec<online::OnlineFile>,
     /// The Getting started tips on the home screen were closed (Help ▸ Getting started shows them
     /// again).
     pub getting_started_dismissed: bool,
@@ -132,7 +128,6 @@ impl Default for Prefs {
             invite_links: None,
             publish_server: live::DEFAULT_SERVER.into(),
             recent_files: Vec::new(),
-            online_files: Vec::new(),
             getting_started_dismissed: false,
             home_views: BTreeMap::new(),
             home_sort: "modified".into(),

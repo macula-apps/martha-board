@@ -17,21 +17,18 @@
 //! history. After a dropped connection the client resumes with its id and catches up; what it
 //! made meanwhile goes out then.
 //!
-//! A file can also live on a `figcraft-server`: `collab.publish` uploads the open document and
-//! syncs that tab through the server, whose share links let others edit or only view. A view link
-//! makes the synced document read-only here (every edit is refused before it is sent; the server
-//! refuses it too).
+//! A view link (or a comment link) makes the synced document read-only here (every edit is refused
+//! before it is sent; the host refuses it too).
 //!
 //! Sessions are per document ([`Lives`]): each open document has its own session or none, several
-//! run at once (host one file, join another, publish a third), and they keep syncing while their
+//! run at once (host one file, join another), and they keep syncing while their
 //! tab isn't in front. The commands act on the active document's session ([`Session::live`]);
 //! closing a document ends its session only. One link carries them all, each under its
 //! [`SessionId`].
 //!
-//! Sharing with a join code (`collab.share`): online, the open document is published to the
-//! server in Preferences and the server names its links with short codes; on the local network
-//! the app hosts and the code carries the host's address and the session's secret
-//! ([`figcraft_collab::code`]). `collab.join` takes a code of either kind, or an invite link.
+//! Sharing with a join code (`collab.share`): the app hosts on the local network and the code
+//! carries the host's address and the session's secret ([`figcraft_collab::code`]). `collab.join`
+//! takes such a code, a server's code (asked at the server in Preferences), or an invite link.
 //!
 //! Cursor chat (`collab.cursorChat`) and spotlights (`collab.spotlight`) travel as signals:
 //! short-lived presence the host passes on to everyone, never stored. A spotlight makes everyone
@@ -44,9 +41,9 @@ use std::sync::Arc;
 use figcraft_collab::Client;
 use figcraft_collab::code::{self, Code};
 pub use figcraft_collab::message::Signal;
-use figcraft_collab::message::{Admin, AdminReply, ClientMsg, EditingText, LibraryReply, LibraryReq, PluginReply, PluginReq, ServerMsg};
+use figcraft_collab::message::{ClientMsg, EditingText, ServerMsg};
 
-pub use figcraft_collab::message::{Access, HostInfo, Resume, utc_date};
+pub use figcraft_collab::message::{Access, Resume};
 use figcraft_doc::{Document, NodeId};
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -66,14 +63,10 @@ mod sync;
 mod types;
 
 use host::unavailable;
-pub use host::{MAX_REPORT, hosting_json};
-pub(crate) use host::{clean_shared, share_answer};
-pub(crate) use join::start_join;
 pub use join::{can_remove_people, specs};
 pub use types::{
-    Bind, DEFAULT_SERVER, Event, HostOptions, LiveLink, MAX_NAME, MAX_PEERS, MAX_SELECTION, NO_HOSTING, NO_SESSION, NetReply, NetRequest, ONLINE_OFF,
-    PEOPLE, PageInfo, PublishOptions, Published, Role, SessionId, SessionInfo, Share, Shared, SharedLink, Status, TOO_LARGE_TO_JOIN, Via, WayIn,
-    join_target, parse_color,
+    Bind, DEFAULT_SERVER, Event, HostOptions, LiveLink, MAX_NAME, MAX_PEERS, MAX_SELECTION, NO_SESSION, ONLINE_OFF, PEOPLE, PageInfo, Role,
+    SessionId, SessionInfo, Share, Shared, SharedLink, Status, TOO_LARGE_TO_JOIN, Via, WayIn, join_target, parse_color,
 };
 
 /// The view a follow last applied: any other view means the user moved.
@@ -116,17 +109,8 @@ pub struct Live {
     deferred: Vec<ServerMsg>,
     /// Nesting of [`Session::grouped`] on the session document: its edits sync once, at the end.
     hold: u32,
-    /// The address of the server this session's file was published to, or is yours on (empty
-    /// otherwise; it may carry the server's key: never shown).
-    pub server: String,
-    /// The file you published to a server in this session, or one of yours you opened again
-    /// (`collab.openFile`: without its owner token, which stays in the record), with its links.
-    pub published: Option<Published>,
     /// The session was started by sharing with a join code (`collab.share`): how, and its codes.
     pub share: Option<Share>,
-    /// What the server of the file you're in says about its hosting (operator, terms, expiry);
-    /// a server that says it takes reports (`collab.report`).
-    pub hosting: Option<HostInfo>,
     /// The host passes cursor chat and spotlights on (it said so after the welcome).
     pub signals: bool,
     /// Others' open cursor chat messages.
@@ -164,12 +148,12 @@ impl Live {
     /// The session's invite link and WebSocket URL as `collab.peers` gives them. A file shared
     /// on the local network gives the ones that go with the code shown: the session's own link
     /// and URL are the edit way in, and a view-only share must not hand them out. Otherwise the
-    /// session's own (online, the owner's: `share` has the links for others).
+    /// session's own.
     pub fn invite(&self) -> (Option<&str>, Option<&str>) {
         let info = self.info.as_ref();
         match &self.share {
-            Some(sh) if sh.via == Via::Local => info.and_then(|i| i.way_in(sh.access)).unzip(),
-            _ => (info.map(|i| i.link.as_str()), info.map(|i| i.url.as_str())),
+            Some(sh) => info.and_then(|i| i.way_in(sh.access)).unzip(),
+            None => (info.map(|i| i.link.as_str()), info.map(|i| i.url.as_str())),
         }
     }
 
@@ -202,8 +186,6 @@ impl Live {
             tab: self.tab,
             doc_uid: self.doc_uid,
             info: self.info.take(),
-            server: std::mem::take(&mut self.server),
-            published: self.published.take(),
             share: self.share.take(),
             stranded: Some(held),
             ..Live::default()
@@ -233,8 +215,8 @@ impl Live {
     }
 
     /// What the file's tab says about its session: `Some(true)` others get in (a session this app
-    /// hosts, one you joined, a file of yours shared with a code or links), `Some(false)` a file of
-    /// yours on a server that only you get into now, `None` no session (or one still on its way).
+    /// hosts, one you joined, a file shared with a code), `Some(false)` a share whose ways in
+    /// aren't there, `None` no session (or one still on its way).
     pub fn shared(&self) -> Option<bool> {
         let there = matches!(self.status, Status::Live | Status::Reconnecting { .. });
         there.then(|| self.share.as_ref().is_none_or(|s| s.links.is_some()))
@@ -242,7 +224,7 @@ impl Live {
 
     /// The name of the session's file, once known.
     fn file_name(&self) -> Option<&str> {
-        self.info.as_ref().map(|i| i.file_name.as_str()).or(self.published.as_ref().map(|p| p.name.as_str())).filter(|n| !n.is_empty())
+        self.info.as_ref().map(|i| i.file_name.as_str()).filter(|n| !n.is_empty())
     }
 }
 
@@ -259,17 +241,6 @@ pub struct Lives {
     /// Registers the app as the opener of `figcraft://` invite links (the desktop app on Windows
     /// installs one; see [`crate::invite_links`]).
     pub links: Option<Box<dyn crate::invite_links::LinkRegistrar>>,
-    /// The recorded online files or your team libraries changed since the app last saved the
-    /// preferences (it saves them at once: a crash must not lose an owner token).
-    pub unsaved: bool,
-    /// Servers that couldn't say what became of your files at the last `collab.files {refresh}`.
-    pub servers: crate::online::Problems,
-    /// The team list of the server in Preferences, as it answered at the last `collab.files
-    /// {refresh}` ([`crate::team`]).
-    pub team: Option<crate::team::Team>,
-    /// Recovery copies of your online files waiting for their file to arrive from its server
-    /// (`collab.recoverFile`).
-    pub(crate) recovering: Vec<crate::online::Recovering>,
 }
 
 impl Lives {
@@ -298,19 +269,9 @@ impl Lives {
         self.sessions.get(&id)
     }
 
-    /// A recovery copy started with session `id` still waits for its outcome (the app keeps the
-    /// copy's file until it doesn't).
-    pub fn recovering(&self, id: SessionId) -> bool {
-        self.recovering.iter().any(|r| r.session == id)
-    }
-
     /// Every session, oldest first.
     pub fn iter(&self) -> impl Iterator<Item = &Live> {
         self.sessions.values()
-    }
-
-    pub(crate) fn sessions_mut(&mut self) -> impl Iterator<Item = &mut Live> {
-        self.sessions.values_mut()
     }
 
     /// The session the tab of document `tab` shows (`None`: no document is open): the one that
@@ -324,7 +285,7 @@ impl Lives {
         self.shown(tab).and_then(|id| self.sessions.get(&id)).unwrap_or(&self.off)
     }
 
-    /// The session of document `uid`: the one that syncs it, or will once it is published.
+    /// The session of document `uid`: the one that syncs it.
     fn doc(&self, uid: u64) -> Option<&Live> {
         self.sessions.values().find(|l| l.doc_uid == Some(uid))
     }
@@ -450,13 +411,6 @@ pub fn editing_hint(names: &[&str]) -> Option<String> {
     })
 }
 
-/// Why team libraries aren't available (no network link, or the browser build).
-pub const NO_TEAM_LIBRARIES: &str = "team libraries on a server need the desktop app or the MCP server";
-
-/// Why a plugin directory request is refused: the app has no plugins (martha-board#31). The wire
-/// still carries the request ([`NetRequest::Plugins`]) until the format changes.
-pub const NO_PLUGIN_DIRECTORY: &str = "this app has no plugins, so it has no plugin directory to ask";
-
 /// Why an edit of a server file you joined with a view link is refused.
 pub const VIEW_ONLY: &str = "View only: the link you joined with lets you see this file, not change it";
 /// Why an edit other than to comment threads of a server file you joined with a comment link is
@@ -477,8 +431,6 @@ pub(crate) fn limited_by(access: Access) -> Option<&'static str> {
 pub fn tool_left(why: &str, tool: ToolId) -> bool {
     matches!(tool, ToolId::Move | ToolId::Hand) || (why == COMMENT_ONLY && tool == ToolId::Comment)
 }
-/// Why an edit of a file on its way to a server is refused.
-pub const PUBLISHING: &str = "The file is being published: you can edit it again once it is on the server";
 
 /// A gesture, version preview or live text preview shows a document that isn't the edit to
 /// sync yet.

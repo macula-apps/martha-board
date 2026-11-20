@@ -1,4 +1,4 @@
-use super::{FigApp, PendingAck, Value, cursors, home_recents, import_report, json, live, missing_fonts, online, tabs, windows};
+use super::{FigApp, PendingAck, Value, cursors, home_recents, import_report, json, live, missing_fonts, tabs, windows};
 
 impl FigApp {
     /// Queue raw input injected through the control channel for the window drawing next, tagged
@@ -40,7 +40,6 @@ impl FigApp {
     pub fn inspect(&self) -> Value {
         let mut state = json!({
             "home": self.ui.home,
-            "online": online::inspect(self),
             "tabs": self.session.docs.iter().map(|d| json!({"name": d.doc.name, "live": tabs::live_mark(self, d.uid).map(|shared| if shared { "shared" } else { "private" })})).collect::<Vec<_>>(),
             "homeSection": self.ui.home_view.section.id(),
             "homeRecents": home_recents::inspect(self),

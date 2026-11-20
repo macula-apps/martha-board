@@ -4,9 +4,8 @@ use figcraft_doc::{Document, NodeId, NodeKind};
 
 use crate::change::{Change, Json, Prop};
 use crate::message::{
-    Accepted, Access, Admin, AdminReply, CatchUp, ClientMsg, Detached, EditingText, FileDetached, FileInfo, FileRow, FileUsage, Hello, HostInfo,
-    LibraryReply, LibraryReq, LinkInfo, Manage, NewLink, OpenHosting, OpenLibrary, OpenPlugins, PROTOCOL, Peer, PluginEntry, PluginReply, PluginReq,
-    Presence, Processed, ReportInfo, Resume, ServerMsg, Signal, Usage, WIRE_VERSION, WeekActions, decode, decode_json, encode, encode_json,
+    Accepted, Access, CatchUp, ClientMsg, EditingText, Hello, PROTOCOL, Peer, Presence, Processed, Resolve, Resume, ServerMsg, Signal, WIRE_VERSION,
+    decode, decode_json, encode, encode_json,
 };
 use crate::sim::Rng;
 use crate::{Error, Replica, diff};
@@ -60,53 +59,11 @@ fn samples() -> (Vec<ClientMsg>, Vec<ServerMsg>) {
         }),
         ClientMsg::Ack { seq: 9 },
         ClientMsg::Ping,
-        ClientMsg::Manage(Manage { protocol: PROTOCOL, key: "k".into(), client_version: "0.3.1".into() }),
-        ClientMsg::Admin(Admin::Publish { name: "Café".into(), snapshot: Replica::new(Document::new("Up")).snapshot().unwrap() }),
-        ClientMsg::Admin(Admin::Files),
-        ClientMsg::Admin(Admin::Links { file: "f".into() }),
-        ClientMsg::Admin(Admin::CreateLink { file: "f".into(), access: Access::View, label: "Review".into() }),
-        ClientMsg::Admin(Admin::Revoke { file: "f".into(), link: "l".into() }),
-        ClientMsg::Admin(Admin::Remove { file: "f".into() }),
-        ClientMsg::OpenLibrary(OpenLibrary { protocol: PROTOCOL, file: "f".into(), token: "t".into(), client_version: "0.3.1".into() }),
-        ClientMsg::Library(LibraryReq::Fetch { have: Some(3), usage: Some(Usage { file: "Checkout".into(), components: vec![(NodeId(7), 12)] }) }),
-        ClientMsg::Library(LibraryReq::Publish { archive: vec![0x50, 0x4B, 3, 4] }),
-        ClientMsg::Library(LibraryReq::Usage),
-        ClientMsg::Library(LibraryReq::ReportDetached(Detached { file: "Checkout".into(), components: vec![(NodeId(7), 2)] })),
-        ClientMsg::Library(LibraryReq::Detached),
-        ClientMsg::Library(LibraryReq::ReportInserted(Detached { file: "Checkout".into(), components: vec![(NodeId(7), 5)] })),
-        ClientMsg::Library(LibraryReq::Actions),
         ClientMsg::Signal(Signal::chat("Hi ☕")),
         ClientMsg::Signal(Signal::spotlight(true)),
-        ClientMsg::OpenPlugins(OpenPlugins { protocol: PROTOCOL, key: String::new(), client_version: "0.3.1".into() }),
-        ClientMsg::Plugins(PluginReq::List { query: "grid".into() }),
-        ClientMsg::Plugins(PluginReq::Fetch { id: "org.example.p".into(), version: Some("1.0.0".into()) }),
-        ClientMsg::Plugins(PluginReq::Publish { bundle: vec![b'F', b'C'] }),
-        ClientMsg::Plugins(PluginReq::Unpublish { id: "org.example.p".into(), version: None }),
-        ClientMsg::OpenHosting(OpenHosting { protocol: PROTOCOL, client_version: "0.3.2 hosting".into(), file: "f".into(), owner: "o".into() }),
-        ClientMsg::Admin(Admin::Rename { file: "f".into(), name: "Café 2".into() }),
-        ClientMsg::Admin(Admin::Listing),
-        ClientMsg::Admin(Admin::Reports),
-        ClientMsg::Admin(Admin::Block { ip: "203.0.113.9".into() }),
-        ClientMsg::Admin(Admin::Unblock { ip: "2001:db8::".into() }),
-        ClientMsg::Admin(Admin::Blocked),
-        ClientMsg::Admin(Admin::RemovePeer { file: "f".into(), client: 7 }),
-        ClientMsg::Report { reason: "Spam ☕".into() },
+        ClientMsg::Resolve(Resolve { protocol: PROTOCOL, client_version: "0.3.1".into(), code: "K7M2QX9TD".into() }),
     ];
     let snapshot = Replica::new(Document::new("Snap")).snapshot().unwrap();
-    let file = FileInfo { id: "f".into(), name: "Café".into(), created: 1, updated: 2, seq: 3, bytes: 4, people: 5 };
-    let link = LinkInfo { id: "l".into(), file: "f".into(), access: Access::Edit, label: String::new(), created: 6 };
-    let new_link = NewLink { link: link.clone(), token: "t".into() };
-    let entry = PluginEntry {
-        id: "org.example.p".into(),
-        name: "Grille ☕".into(),
-        version: "1.2.0".into(),
-        access: "write".into(),
-        commands: vec!["node.*".into()],
-        bytes: 9,
-        sha256: "ab".into(),
-        versions: vec!["1.2.0".into(), "1.0.0".into()],
-        ..PluginEntry::default()
-    };
     let server = vec![
         ServerMsg::Welcome {
             session: 77,
@@ -135,76 +92,8 @@ fn samples() -> (Vec<ClientMsg>, Vec<ServerMsg>) {
         ServerMsg::PeerLeft { client_id: 4 },
         ServerMsg::Refused { reason: "full".into() },
         ServerMsg::Pong,
-        ServerMsg::Admin(Box::new(AdminReply::Ready)),
-        ServerMsg::Admin(Box::new(AdminReply::Published { file: file.clone(), edit: new_link.clone(), view: new_link.clone() })),
-        ServerMsg::Admin(Box::new(AdminReply::Files(vec![file.clone()]))),
-        ServerMsg::Admin(Box::new(AdminReply::Links(vec![link]))),
-        ServerMsg::Admin(Box::new(AdminReply::Link(new_link.clone()))),
-        ServerMsg::Admin(Box::new(AdminReply::Done)),
-        ServerMsg::Admin(Box::new(AdminReply::Failed { reason: "no".into() })),
-        ServerMsg::Library(Box::new(LibraryReply::Ready { access: Access::View })),
-        ServerMsg::Library(Box::new(LibraryReply::Noted)),
-        ServerMsg::Library(Box::new(LibraryReply::Detached(vec![FileDetached {
-            detached: Detached { file: "Checkout".into(), components: vec![(NodeId(7), 2)] },
-            updated: 1_700_000_000,
-        }]))),
-        ServerMsg::Library(Box::new(LibraryReply::Actions(vec![WeekActions {
-            week: 1_699_833_600,
-            component: NodeId(7),
-            insertions: 5,
-            detachments: 2,
-        }]))),
-        ServerMsg::Library(Box::new(LibraryReply::Library { version: 2, archive: vec![1, 2, 3] })),
-        ServerMsg::Library(Box::new(LibraryReply::Unchanged { version: 2 })),
-        ServerMsg::Library(Box::new(LibraryReply::Empty)),
-        ServerMsg::Library(Box::new(LibraryReply::Published { version: 3 })),
-        ServerMsg::Library(Box::new(LibraryReply::Usage(vec![FileUsage {
-            usage: Usage { file: "Checkout".into(), components: vec![(NodeId(7), 12)] },
-            updated: 9,
-        }]))),
-        ServerMsg::Library(Box::new(LibraryReply::Failed { reason: "no".into() })),
         ServerMsg::Signal { client_id: 4, signal: Signal::chat("Hi ☕") },
-        ServerMsg::Signal { client_id: 4, signal: Signal::ready() },
-        ServerMsg::Plugins(Box::new(PluginReply::Ready { publisher: true })),
-        ServerMsg::Plugins(Box::new(PluginReply::List(vec![entry.clone()]))),
-        ServerMsg::Plugins(Box::new(PluginReply::Bundle { entry: entry.clone(), bundle: vec![1, 2] })),
-        ServerMsg::Plugins(Box::new(PluginReply::Published(entry))),
-        ServerMsg::Plugins(Box::new(PluginReply::Removed(vec!["1.0.0".into()]))),
-        ServerMsg::Plugins(Box::new(PluginReply::Failed { reason: "no".into() })),
-        ServerMsg::Admin(Box::new(AdminReply::Hosted {
-            file: file.clone(),
-            edit: new_link.clone(),
-            view: new_link.clone(),
-            owner: "o".into(),
-            expires: Some(99),
-        })),
-        ServerMsg::Admin(Box::new(AdminReply::Listing(vec![FileRow {
-            info: file.clone(),
-            opened: 7,
-            expires: None,
-            open: true,
-            ip: "203.0.113.9".into(),
-            reports: 2,
-        }]))),
-        ServerMsg::Admin(Box::new(AdminReply::Reports(vec![ReportInfo {
-            at: 8,
-            file: "f".into(),
-            name: "Café".into(),
-            link: "l".into(),
-            ip: "203.0.113.9".into(),
-            reason: "Spam".into(),
-        }]))),
-        ServerMsg::Admin(Box::new(AdminReply::Blocked(vec!["203.0.113.9".into()]))),
-        ServerMsg::Hosting(Box::new(HostInfo {
-            open: true,
-            operator: "abuse@example.com".into(),
-            terms: "https://example.com/terms".into(),
-            idle_secs: 86_400,
-            max_file_mb: 16,
-            expires: Some(1_800_000_000),
-        })),
-        ServerMsg::Reported { error: None },
-        ServerMsg::Reported { error: Some("too many reports".into()) },
+        ServerMsg::Resolved { file: "f".into(), token: "t".into() },
     ];
     (client, server)
 }
@@ -310,15 +199,75 @@ fn message_sizes() {
     assert!(eb <= 96, "a move is small: {eb}");
 }
 
-/// The library messages from before detach counts keep their bytes (the newer ones were added
-/// after them), so apps and servers on either side of the change still read each other.
+/// The tag (postcard's variant index, the byte after the wire version) of every message kept when
+/// the server-only ones left (martha-board#41): each keeps the number it had, so a kept message's
+/// bytes are what they always were. The gaps are the retired tags.
 #[test]
-fn older_library_messages_keep_their_encoding() {
-    let body = |b: Vec<u8>| b[1..].to_vec();
-    assert_eq!(body(encode(&LibraryReq::Fetch { have: None, usage: None }).unwrap()), [0, 0, 0]);
-    assert_eq!(body(encode(&LibraryReq::Usage).unwrap()), [2]);
-    assert_eq!(body(encode(&LibraryReply::Usage(Vec::new())).unwrap()), [5, 0]);
-    assert_eq!(body(encode(&LibraryReply::Failed { reason: "x".into() }).unwrap()), [6, 1, b'x']);
-    let usage = FileUsage { usage: Usage { file: "A".into(), components: vec![(NodeId(7), 2)] }, updated: 3 };
-    assert_eq!(body(encode(&usage).unwrap()), [1, b'A', 1, 7, 2, 3]);
+fn every_kept_message_keeps_its_tag() {
+    let (client, server) = samples();
+    let tag = |bytes: Vec<u8>| bytes[1];
+    let client_tag = |m: &ClientMsg| match m {
+        ClientMsg::Hello(_) => 0,
+        ClientMsg::Changes { .. } => 1,
+        ClientMsg::Presence(_) => 2,
+        ClientMsg::Ack { .. } => 3,
+        ClientMsg::Ping => 4,
+        ClientMsg::Signal(_) => 9,
+        ClientMsg::Resolve(_) => 14,
+        _ => panic!("a retired message can't be made"),
+    };
+    let server_tag = |m: &ServerMsg| match m {
+        ServerMsg::Welcome { .. } => 0,
+        ServerMsg::Changes(_) => 1,
+        ServerMsg::Reject { .. } => 2,
+        ServerMsg::Presence { .. } => 3,
+        ServerMsg::PeerJoined(_) => 4,
+        ServerMsg::PeerLeft { .. } => 5,
+        ServerMsg::Refused { .. } => 6,
+        ServerMsg::Pong => 7,
+        ServerMsg::Signal { .. } => 10,
+        ServerMsg::Resolved { .. } => 14,
+        _ => panic!("a retired message can't be made"),
+    };
+    let mut kept = (std::collections::BTreeSet::new(), std::collections::BTreeSet::new());
+    for m in &client {
+        assert_eq!(tag(encode(m).unwrap()), client_tag(m), "{m:?}");
+        kept.0.insert(client_tag(m));
+    }
+    for m in &server {
+        assert_eq!(tag(encode(m).unwrap()), server_tag(m), "{m:?}");
+        kept.1.insert(server_tag(m));
+    }
+    // Every kept message is in the samples (and round-trips there).
+    assert_eq!(kept.0.into_iter().collect::<Vec<_>>(), [0, 1, 2, 3, 4, 9, 14]);
+    assert_eq!(kept.1.into_iter().collect::<Vec<_>>(), [0, 1, 2, 3, 4, 5, 6, 7, 10, 14]);
+}
+
+/// A frame carrying a tag that left with martha-board#41 reads as [`Error::Retired`] with that
+/// tag: not a panic, and never another message. The tags are the variant indexes as they were on
+/// main at 4f2f3956 (`crates/collab/src/message.rs`, counted from 0 in declaration order):
+/// `ClientMsg` 5 `Manage`, 6 `Admin`, 7 `OpenLibrary`, 8 `Library`, 10 `OpenPlugins`, 11 `Plugins`,
+/// 12 `OpenHosting`, 13 `Report`, 15 `ResolveTeam`; `ServerMsg` 8 `Admin`, 9 `Library`,
+/// 11 `Plugins`, 12 `Hosting`, 13 `Reported`. Each frame is the wire version, the tag, then a
+/// payload as its old message would carry one (a string's length and bytes; nothing for some).
+#[test]
+fn a_retired_tag_reads_as_a_named_error() {
+    let frame = |tag: u8, payload: &[u8]| [&[WIRE_VERSION, tag][..], payload].concat();
+    let reason = [1, b'x'];
+    for tag in [5, 6, 7, 8, 10, 11, 12, 13, 15] {
+        for payload in [&[][..], &reason[..]] {
+            assert_eq!(decode::<ClientMsg>(&frame(tag, payload), 1 << 20), Err(Error::Retired(u32::from(tag))), "ClientMsg tag {tag}");
+        }
+    }
+    for tag in [8, 9, 11, 12, 13] {
+        for payload in [&[][..], &reason[..]] {
+            assert_eq!(decode::<ServerMsg>(&frame(tag, payload), 1 << 20), Err(Error::Retired(u32::from(tag))), "ServerMsg tag {tag}");
+        }
+    }
+    // A tag past the last one is unknown, not retired; and a kept message after a retired one
+    // reads as itself.
+    assert!(matches!(decode::<ClientMsg>(&frame(16, &[]), 1 << 20), Err(Error::Decode(_))));
+    assert!(matches!(decode::<ServerMsg>(&frame(15, &[]), 1 << 20), Err(Error::Decode(_))));
+    assert_eq!(decode::<ClientMsg>(&frame(4, &[]), 1 << 20), Ok(ClientMsg::Ping));
+    assert_eq!(decode::<ServerMsg>(&frame(7, &[]), 1 << 20), Ok(ServerMsg::Pong));
 }

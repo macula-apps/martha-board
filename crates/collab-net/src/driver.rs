@@ -10,11 +10,6 @@
 //! A join by code ([`GuestConfig::code`]) first asks the server which file the code opens on a
 //! connection of its own, then joins that file as with a link; a server that doesn't know the
 //! code (or can't be reached) ends the join with the reason.
-//!
-//! Publishing ([`Driver::publish`]) and the requests sent in the background
-//! ([`Driver::asking`]) first ask a server things on managing connections of their own (see
-//! `exchange.rs`), each waiting for its answers as long as a large upload may take; a publish then
-//! joins the new file.
 
 use figcraft_collab::message::{self, ClientMsg, Presence, ServerMsg};
 use figcraft_engine::live::{Event, Status};
@@ -22,12 +17,9 @@ use std::time::Duration;
 // `std::time::Instant` on native builds; the browser's clock in the web build.
 use web_time::Instant;
 
-use crate::exchange::{self, Exchange, Then};
 use crate::inbox::Inbox;
-use crate::invite::Endpoint;
 use crate::join::{GuestConfig, Next, Outcome, Resuming, Seen, Taken, after, ask, closed, hello, resolved, take, too_large, unresolved};
 use crate::limits::NetLimits;
-use crate::requests::Publish;
 use crate::throttle::{PRESENCE_INTERVAL, Paced, Throttle, earliest};
 
 /// A WebSocket the driver opens, writes and closes; what it receives comes back through the
@@ -82,8 +74,6 @@ pub(crate) struct Driver<S: Socket> {
     /// Sync messages waiting their turn (a long queue from while offline).
     paced: Paced<ClientMsg>,
     reconnect_at: Option<Instant>,
-    /// What this connection asks a server (a managing one), and what follows its answers.
-    asking: Option<(Box<Exchange>, Then)>,
     done: bool,
 }
 
@@ -101,7 +91,6 @@ impl<S: Socket> Driver<S> {
             throttle: Throttle::new(PRESENCE_INTERVAL),
             paced: Paced::new(now),
             reconnect_at: None,
-            asking: None,
             done: false,
         }
     }
@@ -114,56 +103,9 @@ impl<S: Socket> Driver<S> {
         d
     }
 
-    /// Start with what `next` asks a server (a background request): the events it ends in go to
-    /// `inbox`, then the join it ends in, if any, as `cfg` says.
-    pub(crate) fn asking(sock: S, cfg: GuestConfig, next: exchange::Next, inbox: Inbox, now: Instant) -> Self {
-        let mut d = Self::new(sock, cfg, inbox, now);
-        d.follow(next, now);
-        d
-    }
-
-    /// Start publishing `job`, then join the new file as `cfg` says (its invite is the new file's).
-    pub(crate) fn publish(sock: S, cfg: GuestConfig, job: Publish, inbox: Inbox, now: Instant) -> Self {
-        inbox.push(Event::Status(Status::Connecting));
-        Self::asking(sock, cfg, exchange::publish(job), inbox, now)
-    }
-
     /// The session is over (left, refused, ended or given up): nothing more will happen.
     pub(crate) fn done(&self) -> bool {
         self.done
-    }
-
-    /// Ask the next server, or tell the UI and join (or stop).
-    fn follow(&mut self, next: exchange::Next, now: Instant) {
-        match next {
-            exchange::Next::Ask(ex, then) => {
-                self.asking = Some((ex, then));
-                self.connect(now);
-            }
-            exchange::Next::Done(events, join) => {
-                for e in events {
-                    self.inbox.push(e);
-                }
-                match join {
-                    Some(invite) => {
-                        self.cfg.invite = invite;
-                        self.connect(now);
-                    }
-                    None => self.done = true,
-                }
-            }
-            exchange::Next::Tell(events, then) => {
-                for e in events {
-                    self.inbox.push(e);
-                }
-                self.follow(*then, now);
-            }
-        }
-    }
-
-    /// The server this connection is to.
-    fn server(&self) -> &Endpoint {
-        self.asking.as_ref().map_or(&self.cfg.invite.server, |(ex, _)| &ex.server)
     }
 
     fn connect(&mut self, now: Instant) {
@@ -171,72 +113,34 @@ impl<S: Socket> Driver<S> {
         // A server counts per connection, and these were made for the last one.
         self.paced = Paced::new(now);
         self.conn = Some(Conn::new(now));
-        if let Err(e) = self.sock.open(&self.server().url()) {
-            self.dropped(e, now);
+        if let Err(e) = self.sock.open(&self.cfg.invite.server.url()) {
+            self.end(Outcome::Retry(e), now);
         }
     }
 
-    /// The connection broke for this reason: a managing one fails, a session's tries again.
-    fn dropped(&mut self, why: String, now: Instant) {
-        if self.asking.is_some() { self.answered(Err(why), now) } else { self.end(Outcome::Retry(why), now) }
-    }
-
-    /// The managing connection is over (with why it failed): close it, then what follows.
-    fn answered(&mut self, r: Result<(), String>, now: Instant) {
-        let Some((ex, then)) = self.asking.take() else { return };
-        if self.conn.take().is_some() {
-            self.sock.close();
-        }
-        let answers = match r {
-            Ok(()) => Ok(ex.answers()),
-            Err(e) => Err(ex.failed(e)),
-        };
-        self.follow(then(answers), now);
-    }
-
-    /// The connection is open: say hello (or ask about the join code first, or open what is asked).
+    /// The connection is open: say hello (or ask about the join code first).
     pub(crate) fn opened(&mut self, now: Instant) {
         let Some(c) = self.conn.as_mut() else { return };
         c.opened = true;
         c.last_heard = now;
-        let hello = match (&self.asking, &self.cfg.lookup) {
-            (Some((ex, _)), _) => ex.opening().clone(),
-            (None, Some(lookup)) => ask(&self.cfg.invite, lookup),
-            (None, None) => hello(&self.cfg, &self.resume),
+        let hello = match &self.cfg.lookup {
+            Some(lookup) => ask(lookup),
+            None => hello(&self.cfg, &self.resume),
         };
         if !self.write(&hello) {
-            self.dropped("the connection dropped".into(), now);
+            self.end(Outcome::Retry("the connection dropped".into()), now);
         }
     }
 
-    /// A binary message on a managing connection: the next request, or what follows the answers.
-    fn answer(&mut self, bytes: &[u8], now: Instant) {
-        let Some((ex, _)) = self.asking.as_mut() else { return };
-        let next = match message::decode::<ServerMsg>(bytes, self.cfg.limits.max_server_message) {
-            Ok(m) => ex.take(m),
-            Err(e) => Err(format!("the server sent a message this version can't read ({e})")),
-        };
-        let done = ex.done();
-        match next {
-            Err(e) => self.answered(Err(e), now),
-            Ok(Some(req)) if !self.write(&req) => self.answered(Err("the connection to the server dropped".into()), now),
-            Ok(_) if done => self.answered(Ok(()), now),
-            Ok(_) => {}
-        }
-    }
-
-    /// A binary message from the host (or the server asked).
+    /// A binary message from the host (or the server asked about a join code).
     pub(crate) fn message(&mut self, bytes: &[u8], now: Instant) {
         let Some(c) = self.conn.as_mut() else { return };
         c.last_heard = now;
-        if self.asking.is_some() {
-            return self.answer(bytes, now);
-        }
         if bytes.len() > self.cfg.limits.max_server_message {
             return self.end(too_large(&self.cfg.limits), now);
         }
         let taken = match message::decode::<ServerMsg>(bytes, self.cfg.limits.max_server_message) {
-            // The join code's answer (or the team list's): join the file, on a new connection.
+            // The join code's answer: join the file, on a new connection.
             Ok(ServerMsg::Resolved { file, token }) if self.cfg.lookup.is_some() => {
                 return match resolved(&mut self.cfg, file, token) {
                     Ok(()) => {
@@ -269,23 +173,12 @@ impl<S: Socket> Driver<S> {
         if self.conn.is_none() {
             return;
         }
-        if self.asking.is_some() {
-            return self.answered(Err("the server sent a text message".into()), now);
-        }
         self.end(Outcome::Refused("the host sent a text message".into()), now);
     }
 
     /// The connection closed (`code` and `reason` from the close frame; 1006 when it just broke).
     pub(crate) fn closed(&mut self, code: u16, reason: &str, now: Instant) {
         let Some(opened) = self.conn.as_ref().map(|c| c.opened) else { return };
-        if self.asking.is_some() {
-            let why = match (opened, reason) {
-                (false, _) => format!("no answer from {}", self.server().display()),
-                (true, "") => "the server closed the connection".to_string(),
-                (true, r) => format!("the server closed the connection: {r}"),
-            };
-            return self.answered(Err(why), now);
-        }
         let outcome = match closed(code, reason) {
             Outcome::Retry(_) if !opened => Outcome::Retry(format!("no answer from {}", self.cfg.invite.server.display())),
             Outcome::Retry(_) if code == 1006 => Outcome::Retry("the connection dropped".into()),
@@ -352,13 +245,9 @@ impl<S: Socket> Driver<S> {
             return None;
         }
         let l = &self.cfg.limits;
-        let conn = self.conn.as_ref().map(|c| match (c.opened, self.asking.is_some()) {
-            (false, _) => [Some(c.started + self.cfg.connect_timeout), None, None],
-            // A managing connection waits for each answer.
-            (true, true) => [Some(c.last_heard + l.request_reply_timeout), None, None],
-            (true, false) => {
-                [Some(c.last_ping + l.keepalive), Some(c.last_heard + c.silence_limit(l)), if c.welcomed { self.throttle.due() } else { None }]
-            }
+        let conn = self.conn.as_ref().map(|c| match c.opened {
+            false => [Some(c.started + self.cfg.connect_timeout), None, None],
+            true => [Some(c.last_ping + l.keepalive), Some(c.last_heard + c.silence_limit(l)), if c.welcomed { self.throttle.due() } else { None }],
         });
         earliest(conn.into_iter().flatten().chain([self.reconnect_at, self.paced.due()]))
     }
@@ -377,13 +266,7 @@ impl<S: Socket> Driver<S> {
         let (opened, started, last_heard, last_ping, silence) = (c.opened, c.started, c.last_heard, c.last_ping, c.silence_limit(&l));
         if !opened {
             if now >= started + self.cfg.connect_timeout {
-                self.dropped(format!("no answer from {}", self.server().display()), now);
-            }
-            return;
-        }
-        if self.asking.is_some() {
-            if now >= last_heard + l.request_reply_timeout {
-                self.answered(Err("no answer from the server".into()), now);
+                self.end(Outcome::Retry(format!("no answer from {}", self.cfg.invite.server.display())), now);
             }
             return;
         }
@@ -412,10 +295,7 @@ impl<S: Socket> Driver<S> {
 
     /// The connection ended: close it, then stop or plan the reconnect.
     fn end(&mut self, outcome: Outcome, now: Instant) {
-        // Left while asking a server: what it was asked stays done (a file uploaded stays there),
-        // nothing follows.
-        self.asking = None;
-        // Still asking about the join code (or the team list's file): whatever went wrong is final.
+        // Still asking about the join code: whatever went wrong is final.
         let outcome = if self.cfg.lookup.is_some() { unresolved(&self.cfg, outcome) } else { outcome };
         if self.conn.take().is_some() {
             self.sock.close();

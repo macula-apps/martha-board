@@ -100,8 +100,7 @@ read or write root and written only inside a write root; anything else is an ord
 resolved as `docs/mcp.md` › Confining file access describes. A root that isn't an existing folder
 stops the app before its window opens, and so does any option the app doesn't know (a mistyped
 flag such as `--automation-write-roots` exits with `unknown option`, never starts unconfined).
-Confined work reaches no FigCraft server either: hosting, joining, publishing and
-sharing files are refused (`automation roots
+Confined work reaches no FigCraft server either: hosting, joining and sharing files are refused (`automation roots
 are set: commands don't reach the network …`). A root on a network share (a UNC path such as
 `\\server\share\…`, or a mounted network drive) is the exception: files read and written inside it,
 documents saved there included, go to that file server. Without the flags nothing changes. The flags arrived in FigCraft 0.7.0: 0.6.0 and earlier ignore
@@ -265,23 +264,18 @@ small for the choice (`limited`, so `zoom` is smaller). `live` is the live
 session of the window's active file as the window shows it (sessions are per file: another tab
 shows its own, or `status: "off"`): `session` (its id, null when the file isn't in one),
 `sessions` (how many the app has running), `status`, `role`, the number of `peers`, who you `follow`, the
-peers whose cursors are drawn on the canvas (`cursorsShown`), whether the Join and Publish to
-server dialogs are open (`joinDialog`, `publishDialog`; Escape closes them), the join code the
-Share popover shows (`code`, with `share: {via, access}`; null when the file isn't shared with
-one), what is typed in the popover's and the home screen's join field (`joinField`), whether the
-popover has Local network chosen and Advanced open (`local`, `advanced`), and why the active
-document can't be edited now (`readOnly`: the "View only", "Can comment" or "Publishing" reason, else null); the
-session itself is `engine.execute {command: "collab.peers"}` (sharing with a join code, hosting,
-joining and publishing are `collab.share`, `collab.host`, `collab.join` and `collab.publish`, opening invite links `collab.registerLinks`,
+peers whose cursors are drawn on the canvas (`cursorsShown`), whether the Join dialog is open
+(`joinDialog`; Escape closes it), the join code the Share popover shows (`code`, with
+`share: {via, access}`; null when the file isn't shared with one), what is typed in the popover's
+and the home screen's join field (`joinField`), whether the popover has Advanced open
+(`advanced`), and why the active document can't be edited now (`readOnly`: the "View only" or
+"Can comment" reason, else null); the session itself is
+`engine.execute {command: "collab.peers"}` (sharing with a join code, hosting and joining are
+`collab.share`, `collab.host` and `collab.join`, opening invite links `collab.registerLinks`,
 see [mcp.md](mcp.md#live-sessions)). The app also joins the invite link it
-was started with (`figcraft "figcraft://join?…"`). `online` is the home screen's Online section:
-whether it shows (`open`), your online files as its rows read (`files: [{file, name, detail,
-shared, state, hasOwnerToken}]`; never a token or a link of yours), whether the servers are being
-asked (`checking`), how many couldn't say (`problems`), and the file whose removal is being
-confirmed or renamed (`confirmRemove`, `rename`; Escape closes them); the list itself is
-`engine.execute {command: "collab.files"}`. `tabs` lists the open files as the tab strip shows
-them: `[{name, live}]`, `live` being `"shared"` (in a live session others get into), `"private"`
-(a file of yours on a server, open only to you) or null.
+was started with (`figcraft "figcraft://join?…"`). `tabs` lists the open files as the tab strip
+shows them: `[{name, live}]`, `live` being `"shared"` (in a live session others get into),
+`"private"` (a share without ways in for others) or null.
 
 ### `ui.pointer {kind, x, y | sx, sy, to?, steps?, shift?, alt?, cmd?, ctrl?}`
 
@@ -339,9 +333,8 @@ Invoke a menu item exactly like clicking it (this may open a dialog). Returns `{
 ### `ui.set {theme?, home?, homeSection?, homeSearch?, homeRecentsView?, homeRecentsSort?, homeRecentsOrder?, palette?, mainMenu?, focusRegion?, colorPicker?, layerFilter?, collapseLayers?, exportPreview?, colorProfileDialog?, stylePicker?, stylePickerEdit?, stylePickerView?, iconGallery?, contextMenu?, contextSelectLayer?, commentOpen?, commentDraft?, commentFilter?, commentSort?, commentSearch?, commentReply?, commentEdit?, resetFrameStats?}`
 
 Switch panels and modes: `theme`,
-`home` (bool), `homeSection` (`recents` or `online`: which section the home screen shows, as `ui.inspect` reports it; opening
-`online` asks each server once what became of your online files), `homeRecentsView` (`grid|list`), `homeRecentsSort` (`modified|name|created`) and `homeRecentsOrder` (`desc|asc`): how the home screen shows its recent files (kept in the preferences; `ui.inspect` reports them under `homeRecents` with each file and whether its picture is in), `palette` (bool: the Actions palette), `mainMenu` (bool, or a top-level menu such
-as `"Arrange"` to open the main menu with it open), `homeSearch` (text, at most 256 characters: filters locally known open, recent and online files in Home; an empty string returns to the selected section),
+`home` (bool), `homeSection` (`recents`, the home screen's one section, as `ui.inspect` reports it), `homeRecentsView` (`grid|list`), `homeRecentsSort` (`modified|name|created`) and `homeRecentsOrder` (`desc|asc`): how the home screen shows its recent files (kept in the preferences; `ui.inspect` reports them under `homeRecents` with each file and whether its picture is in), `palette` (bool: the Actions palette), `mainMenu` (bool, or a top-level menu such
+as `"Arrange"` to open the main menu with it open), `homeSearch` (text, at most 256 characters: filters locally known open and recent files in Home; an empty string returns to the selected section),
 `focusRegion`
 (`toolbar|layers|canvas|properties`: give that region the keyboard as F6 would, on the next frame),
 `iconGallery` (bool:

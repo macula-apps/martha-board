@@ -8,7 +8,7 @@ use figcraft_collab::{Client, Limits, Outgoing, Server};
 use figcraft_doc::{Document, NodeId};
 use serde_json::json;
 
-use crate::live::{Access, Event, HostOptions, LiveLink, Peer, Presence, PublishOptions, Role, SessionInfo, Status};
+use crate::live::{Access, Event, HostOptions, LiveLink, Peer, Presence, Role, SessionInfo, Status};
 use crate::{EngineError, Session};
 
 /// What the scripted link was asked to do, and the events it hands out next.
@@ -24,7 +24,6 @@ pub(crate) struct Script {
     pub(crate) retried: Vec<u64>,
     pub(crate) left: usize,
     pub(crate) msgs: Vec<ClientMsg>,
-    pub(crate) published: Vec<PublishOptions>,
     /// The session started last: the scripted events are its.
     pub(crate) session: u64,
     /// The sessions ended, in order.
@@ -66,15 +65,6 @@ impl LiveLink for Mock {
         let mut s = self.0.lock().unwrap();
         s.session = session;
         s.joined.push(link.to_string());
-        Ok(())
-    }
-    fn publish(&mut self, session: u64, opts: PublishOptions) -> Result<(), String> {
-        if !opts.server.starts_with("ws") {
-            return Err("not a server address".into());
-        }
-        let mut s = self.0.lock().unwrap();
-        s.session = session;
-        s.published.push(opts);
         Ok(())
     }
     fn remove(&mut self, session: u64, client: u32) -> Result<(), String> {
@@ -513,14 +503,6 @@ fn hosting_commands_check_what_they_are_given() {
     assert_eq!(s.prefs.publish_server, "wss://figcraft.example.com/", "a refused address changes nothing");
     s.execute("pref.publishServer", &json!({"url": ""})).unwrap();
     assert!(s.prefs.publish_server.is_empty());
-    // No network here: the server can't be asked, nothing can be reported.
-    let e = s.execute("collab.serverInfo", &json!({"server": "wss://figcraft.example.com/"})).unwrap_err().to_string();
-    assert!(e.contains("desktop app or the MCP server"), "{e}");
-    let e = s.execute("collab.manageFile", &json!({"server": "wss://x/", "file": "f", "owner": "o", "action": "explode"})).unwrap_err().to_string();
-    assert!(e.contains("`action` must be"), "{e}");
-    let e = s.execute("collab.report", &json!({"reason": "Spam"})).unwrap_err().to_string();
-    assert!(e.contains("join a file"), "{e}");
-    assert!(s.execute("collab.report", &json!({"reason": " \n "})).unwrap_err().to_string().contains("few words"));
 }
 
 #[test]
@@ -529,4 +511,32 @@ fn parse_color_rejects_signs_and_non_hex() {
     assert_eq!(parse_color("#+1+2+3"), None);
     assert_eq!(parse_color("#-1-2-3"), None);
     assert_eq!(parse_color("#0D99FF"), Some((13, 153, 255)));
+}
+
+/// Commands confined to automation roots reach no network: hosting, sharing and joining are refused
+/// by name and no session starts; unconfined, the link is asked. (This lived with the background
+/// server requests until they left with martha-board#41.)
+#[test]
+fn commands_confined_to_automation_roots_reach_no_network() {
+    let dir = std::env::temp_dir().join(format!("figcraft-roots-live-network-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let roots = Arc::new(crate::file_access::Roots::new(&[], &[dir.to_string_lossy().into_owned()]).unwrap());
+    let (mut s, script) = session();
+    let refused = |r: Result<serde_json::Value, EngineError>| {
+        let e = r.unwrap_err().to_string();
+        assert!(e.contains(crate::file_access::NETWORK_REFUSED), "{e}");
+    };
+    crate::file_access::confined(Some(&roots), || {
+        refused(s.execute("collab.host", &json!({})));
+        refused(s.execute("collab.share", &json!({"via": "local"})));
+        refused(s.execute("collab.join", &json!({"link": "figcraft://join?host=a:1&file=f&token=t"})));
+    });
+    {
+        let sc = script.lock().unwrap();
+        assert!(sc.hosted.is_empty() && sc.joined.is_empty(), "the link was never asked");
+    }
+    assert!(s.live.iter().next().is_none(), "no session was started");
+    let _ = std::fs::remove_dir_all(&dir);
+    s.execute("collab.host", &json!({})).unwrap();
+    assert_eq!(script.lock().unwrap().hosted.len(), 1, "unconfined, the link is asked");
 }

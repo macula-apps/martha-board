@@ -6,7 +6,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use figcraft_collab::Client;
-use figcraft_collab::message::{self, ClientMsg, PROTOCOL, Peer, Resolve, ResolveTeam, Resume, ServerMsg};
+use figcraft_collab::message::{self, ClientMsg, PROTOCOL, Peer, Resolve, Resume, ServerMsg};
 use figcraft_engine::live::{Event, MAX_PEERS, Role, SessionInfo, Status, TOO_LARGE_TO_JOIN};
 
 use crate::inbox::Inbox;
@@ -29,8 +29,8 @@ pub(crate) const CLOSE_RESTART: u16 = 1012;
 #[derive(Clone, Debug)]
 pub struct GuestConfig {
     pub invite: Invite,
-    /// What to ask `invite.server` first (a join code, or the team link of `invite.file`): its
-    /// answer fills in the invite's file and token ([`resolved`]).
+    /// What to ask `invite.server` first (a join code): its answer fills in the invite's file and
+    /// token ([`resolved`]).
     pub lookup: Option<Lookup>,
     /// Your name (empty: the host picks one).
     pub name: String,
@@ -96,10 +96,7 @@ pub(crate) enum Outcome {
 /// typed it (the server's own for a code it doesn't know).
 pub(crate) fn unresolved(cfg: &GuestConfig, outcome: Outcome) -> Outcome {
     Outcome::Failed(match outcome {
-        // A server from before join codes (or team lists) can't read the question.
-        Outcome::Refused(why) if why.contains("couldn't be read") && cfg.lookup == Some(Lookup::Team) => {
-            format!("{} has no team list (it runs an older version): ask for the invite link instead", cfg.invite.server.display())
-        }
+        // A server from before join codes can't read the question.
         Outcome::Refused(why) if why.contains("couldn't be read") => {
             format!("{} doesn't know join codes yet (it runs an older version): ask for the invite link instead", cfg.invite.server.display())
         }
@@ -115,20 +112,17 @@ pub(crate) fn too_large(limits: &NetLimits) -> Outcome {
     Outcome::Failed(TOO_LARGE_TO_JOIN.replace("{mb}", &(limits.max_server_message >> 20).to_string()))
 }
 
-/// The first message that asks `invite`'s server what `lookup` stands for (answered with
+/// The first message that asks the invite's server what `lookup` stands for (answered with
 /// [`ServerMsg::Resolved`]).
-pub(crate) fn ask(invite: &Invite, lookup: &Lookup) -> ClientMsg {
+pub(crate) fn ask(lookup: &Lookup) -> ClientMsg {
     let client_version = message::client_version();
-    match lookup {
-        Lookup::Code(code) => ClientMsg::Resolve(Resolve { protocol: PROTOCOL, client_version, code: code.clone() }),
-        Lookup::Team => ClientMsg::ResolveTeam(ResolveTeam { protocol: PROTOCOL, client_version, file: invite.file.clone() }),
-    }
+    let Lookup::Code(code) = lookup;
+    ClientMsg::Resolve(Resolve { protocol: PROTOCOL, client_version, code: code.clone() })
 }
 
-/// The server's answer to the join code (or about the team list's file): the invite is whole now.
+/// The server's answer to the join code: the invite is whole now.
 pub(crate) fn resolved(cfg: &mut GuestConfig, file: String, token: String) -> Result<(), Outcome> {
-    let asked_file = cfg.lookup != Some(Lookup::Team) || file == cfg.invite.file;
-    if !crate::invite::valid_id(&file, 1, 64) || !crate::invite::valid_id(&token, 16, 128) || !asked_file {
+    if !crate::invite::valid_id(&file, 1, 64) || !crate::invite::valid_id(&token, 16, 128) {
         return Err(Outcome::Failed("the server answered the join code with something that isn't a file".into()));
     }
     cfg.lookup = None;
@@ -334,10 +328,8 @@ pub(crate) fn take(mut m: ServerMsg, cfg: &GuestConfig, inbox: &Inbox, seen: &mu
         ServerMsg::Reject { .. } => inbox.push(Event::Sync(m)),
         // Checked again by the engine (the host is as untrusted as any peer).
         ServerMsg::Signal { client_id, signal } => inbox.push(Event::Signal(client_id, signal)),
-        ServerMsg::Hosting(info) => inbox.push(Event::Hosting(*info)),
-        ServerMsg::Reported { error } => inbox.push(Event::Reported(error)),
-        // Answers for managing and library connections, and to a join code: not this one's.
-        ServerMsg::Pong | ServerMsg::Admin(_) | ServerMsg::Library(_) | ServerMsg::Plugins(_) | ServerMsg::Resolved { .. } => {}
+        // The answer to a join code: not this connection's.
+        ServerMsg::Pong | ServerMsg::Resolved { .. } => {}
     }
     Taken::Continue
 }

@@ -5,32 +5,25 @@
 //! host sends.
 //! When the connection drops after having been live, it reconnects with growing pauses; a
 //! refusal or the host ending the session is final.
-//!
-//! Publishing ([`Guest::publish`]) first uploads the document to a server over a managing
-//! connection, then joins the new file with its edit link on the same thread.
 
 use std::io;
 use std::net::TcpStream;
 use std::sync::Arc;
-use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, TryRecvError, channel};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use figcraft_collab::message::{self, ClientMsg, HostInfo, Presence, ServerMsg};
-use figcraft_doc::Document;
-use figcraft_engine::live::{Event, Published, Status};
+use figcraft_collab::message::{self, ClientMsg, Presence, ServerMsg};
+use figcraft_engine::live::{Event, Status};
 use tungstenite::protocol::frame::coding::CloseCode;
 use tungstenite::protocol::{CloseFrame, Role as WsRole, WebSocket};
 use tungstenite::{Bytes, Message};
 
 use crate::inbox::Inbox;
-use crate::invite::{Endpoint, Invite};
 pub use crate::join::GuestConfig;
 use crate::join::{Next, Outcome, Resuming, Seen, Taken, after, closed, hello, resolved, take, too_large, unresolved};
 use crate::manage;
-use crate::net::{Duplex, NetLimits, config, open, shutdown};
-use crate::requests;
-pub use crate::requests::Publish;
+use crate::net::{Duplex, config, open, shutdown};
 use crate::throttle::{PRESENCE_INTERVAL, Paced, Throttle, earliest};
 
 /// A joined (or joining) session. Dropping it leaves.
@@ -58,8 +51,8 @@ impl Guest {
         let (tx, rx) = channel();
         let me = tx.clone();
         let thread = std::thread::Builder::new().name("live-guest".into()).spawn(move || {
-            // A join code (or a file of the team list): the server says which file and token, then
-            // the join goes on as with a link.
+            // A join code: the server says which file and token, then the join goes on as with a
+            // link.
             if let Some(lookup) = cfg.lookup.clone() {
                 inbox.push(Event::Status(Status::Connecting));
                 let asked =
@@ -73,51 +66,6 @@ impl Guest {
                     }
                     return;
                 }
-            }
-            supervise(&cfg, &inbox, &rx, &me);
-        })?;
-        Ok(Guest { cmd: tx, thread: Some(thread) })
-    }
-
-    /// Upload `job.doc` to the server as a new file, then join it with its edit link (returns at
-    /// once: [`Event::Published`] with the file's links, then the session, arrive in `inbox`).
-    /// `cfg` says how to join; its invite is replaced by the new file's.
-    pub fn publish(job: Publish, cfg: GuestConfig, inbox: Inbox) -> io::Result<Guest> {
-        let (tx, rx) = channel();
-        let me = tx.clone();
-        let thread = std::thread::Builder::new().name("live-publish".into()).spawn(move || {
-            inbox.push(Event::Status(Status::Connecting));
-            let (cfg, published, hosting) = match upload(&job, cfg) {
-                Ok(done) => done,
-                Err(e) => return inbox.push(Event::Status(Status::Failed { reason: format!("Couldn't publish to the server: {e}") })),
-            };
-            // Before anyone hears the file is there, so what others join with shows with it. The
-            // file's first links stay its owner's (this app joins with one): others get their own,
-            // which stopping takes away again.
-            let shared = job.share.then(|| {
-                let owner = published.owner.as_deref().unwrap_or_default();
-                let made = manage::share(&job.server, job.key.as_deref(), &published.file, owner, &[], true, &cfg.limits, cfg.connect_timeout);
-                made.and_then(|s| s.ok_or_else(|| "the server didn't make the links".to_string()))
-            });
-            if let Some(h) = hosting {
-                inbox.push(Event::Hosting(h));
-            }
-            inbox.push(Event::Published(published));
-            if let Some(shared) = shared {
-                inbox.push(Event::Shared(shared));
-            }
-            // Left while uploading: the file stays on the server, nobody joins it. Anything else
-            // that came meanwhile (presence) waits for the session.
-            let mut waiting = Vec::new();
-            loop {
-                match rx.try_recv() {
-                    Ok(Cmd::Leave) | Err(TryRecvError::Disconnected) => return,
-                    Ok(c) => waiting.push(c),
-                    Err(TryRecvError::Empty) => break,
-                }
-            }
-            for c in waiting {
-                let _ = me.send(c);
             }
             supervise(&cfg, &inbox, &rx, &me);
         })?;
@@ -170,36 +118,6 @@ struct Conn {
     reader: WebSocket<Duplex>,
     writer: WebSocket<Duplex>,
     sock: TcpStream,
-}
-
-/// Keep `doc` on `server` as a new file named `name`, with the server's `key` (or, without one, as
-/// anyone may on a server open to the public): its edit link, where it is with its links (and its
-/// owner token without a key), and what the server says about its hosting (without a key).
-pub(crate) fn upload_file(
-    server: &Endpoint,
-    key: Option<&str>,
-    name: &str,
-    doc: &Document,
-    limits: &NetLimits,
-    timeout: Duration,
-) -> Result<(Invite, Published, Option<HostInfo>), String> {
-    let publish = vec![requests::upload(name, doc)?];
-    let (replies, hosting) = match key {
-        Some(key) => (manage::request(server, key, publish, limits, timeout)?, None),
-        None => {
-            let (info, replies) = manage::hosting(server, "", "", publish, limits, timeout)?;
-            (replies, Some(info))
-        }
-    };
-    let (edit, published) = requests::uploaded(server, replies.into_iter().next())?;
-    Ok((edit, published, hosting))
-}
-
-/// Upload the document; the join settings for the new file, its links and the server's hosting.
-fn upload(job: &Publish, mut cfg: GuestConfig) -> Result<(GuestConfig, Published, Option<HostInfo>), String> {
-    let (edit, published, hosting) = upload_file(&job.server, job.key.as_deref(), &job.name, &job.doc, &cfg.limits, cfg.connect_timeout)?;
-    cfg.invite = edit;
-    Ok((cfg, published, hosting))
 }
 
 fn connect(cfg: &GuestConfig) -> Result<Conn, String> {

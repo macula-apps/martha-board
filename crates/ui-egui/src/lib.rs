@@ -157,6 +157,8 @@ mod live_server_tests;
 #[cfg(test)]
 mod live_share_tests;
 #[cfg(test)]
+mod live_tabs_tests;
+#[cfg(test)]
 mod live_tests;
 #[cfg(test)]
 mod live_text_tests;
@@ -178,8 +180,6 @@ mod mirror_tests;
 mod missing_fonts_tests;
 #[cfg(test)]
 mod naming_tests;
-#[cfg(test)]
-mod online_tests;
 #[cfg(test)]
 mod open_issues_tests;
 #[cfg(test)]
@@ -280,7 +280,6 @@ pub use dialogs::missing_fonts;
 pub use dialogs::sampled_color;
 pub use dialogs::updates_ui;
 pub use home::home_recents;
-pub use home::online;
 pub use panels::compare_view;
 pub use panels::export_panel;
 pub use panels::frame_presets;
@@ -546,8 +545,6 @@ pub struct UiState {
     pub nav: a11y::Nav,
     /// Live sessions: remote cursors as drawn, the Join dialog.
     pub live: live::LiveUi,
-    /// Home ▸ Online.
-    pub online: online::OnlineUi,
     /// The window was asked to close with unsaved changes: the question shows.
     pub confirm_close: bool,
     /// A tab was asked to close with unsaved changes: the question for it, then its save.
@@ -662,7 +659,6 @@ impl Default for UiState {
             auto_saving: Vec::new(),
             nav: a11y::Nav::default(),
             live: live::LiveUi::default(),
-            online: online::OnlineUi::default(),
             confirm_close: false,
             close_tab: None,
             close_after_save_as: None,
@@ -711,8 +707,6 @@ pub struct FigApp {
     pub windows: windows::Windows,
     /// `window.new` / `window.focus` asked for by commands, for the end of the frame.
     window_requests: Vec<figcraft_engine::UiRequest>,
-    /// Commands waiting for a server ([`FigApp::run_background`]) and what to do with their results.
-    waiting: Vec<(String, Done)>,
     /// Native dialogs complete asynchronously so their modal event loop never re-enters winit.
     pending_dialog: Option<PendingDialog>,
     /// The latest UI context schedules the first poll and wakes the app when a dialog completes.
@@ -754,9 +748,6 @@ pub struct FigApp {
     #[cfg(test)]
     pub(crate) ime_observations: u32,
 }
-
-/// What to do with the result of a command run in the background.
-pub type Done = Box<dyn FnOnce(&mut FigApp, &egui::Context, Value)>;
 
 #[cfg(test)]
 mod selection_spacing_tests;

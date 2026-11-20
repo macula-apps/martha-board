@@ -188,13 +188,11 @@ icons! {
     ArcRatio,
     /// A colour outside the screen's gamut: a triangle with an exclamation mark.
     GamutWarning,
-    /// Online: a globe (a circle with its equator and a meridian).
-    Online,
     /// In a live session others get into: a point sending waves to both sides.
     LiveShared,
     /// Disconnected from a live session: the point and its waves, struck through.
     LiveDisconnected,
-    /// A file of yours on a server that only you get into: a point inside a closed ring.
+    /// A share that only you get into: a point inside a closed ring.
     LivePrivate,
     /// A design file: a pen nib leaning to the left, its grip filled.
     PenNib,

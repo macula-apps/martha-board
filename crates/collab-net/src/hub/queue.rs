@@ -196,8 +196,7 @@ impl InFlight {
 }
 
 pub(super) enum HubIn {
-    /// A connection's first message (`Hello`, `Manage`, `OpenLibrary`, `OpenPlugins`,
-    /// `OpenHosting` or `Resolve`) and its client's address ([`ip_key`]).
+    /// A connection's first message (`Hello` or `Resolve`) and its client's address ([`ip_key`]).
     Open {
         conn: u64,
         ip: IpAddr,

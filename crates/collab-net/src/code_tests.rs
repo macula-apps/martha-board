@@ -122,9 +122,9 @@ fn a_local_code_with_the_wrong_secret_or_a_typo_doesnt_join() {
     *last = if *last == 'A' { 'B' } else { 'A' };
     let e = guest.execute("collab.join", &json!({"code": typo.iter().collect::<String>()})).unwrap_err().to_string();
     assert!(e.contains("typing mistake"), "{e}");
-    // A comment code doesn't exist here, and says where it does.
+    // A comment code doesn't exist here, and says so.
     let e = host.execute("collab.share", &json!({"access": "comment"})).unwrap_err().to_string();
-    assert!(e.contains("share it online"), "{e}");
+    assert!(e.contains("not a comment code"), "{e}");
 }
 
 /// A local network share started for looking only shows its view code: whoever joins with it sees
@@ -258,7 +258,7 @@ fn links_can_name_a_join_code() {
     ] {
         assert!(Invite::parse_join(bad).is_err(), "{bad}");
     }
-    // Where a file's link is needed (team libraries), a code isn't one.
+    // Where a file's link is needed, a code isn't one.
     let e = Invite::parse("figcraft://join?server=wss://share.example/&code=K7M2QX9TD").unwrap_err();
     assert!(e.contains("join code") && !e.contains("K7M"), "{e}");
 }
@@ -283,42 +283,8 @@ fn old_server() -> (Endpoint, std::thread::JoinHandle<()>) {
     (at, t)
 }
 
-/// A server from before join codes that manages a file's links as it always did: two connections,
-/// the first makes links, the second (asked for codes) can't read the request.
-fn old_server_with_links() -> (Endpoint, std::thread::JoinHandle<()>) {
-    use figcraft_collab::message::{Admin, AdminReply, LinkInfo, NewLink};
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let at = Endpoint::plain(listener.local_addr().unwrap().to_string());
-    let t = std::thread::spawn(move || {
-        let mut made = 0;
-        for stream in listener.incoming().take(2).flatten() {
-            let Ok(mut ws) = tungstenite::accept(stream) else { continue };
-            let say = |ws: &mut tungstenite::WebSocket<std::net::TcpStream>, m: ServerMsg| {
-                let _ = ws.send(Message::Binary(Bytes::from(message::encode(&m).unwrap())));
-            };
-            while let Ok(Message::Binary(b)) = ws.read() {
-                match message::decode::<ClientMsg>(&b, usize::MAX) {
-                    Ok(ClientMsg::OpenHosting(_)) => say(&mut ws, ServerMsg::Hosting(Box::default())),
-                    Ok(ClientMsg::Admin(Admin::CreateLink { file, access, label })) => {
-                        made += 1;
-                        let link = LinkInfo { id: format!("link{made}"), file, access, label, created: 0 };
-                        say(&mut ws, ServerMsg::Admin(Box::new(AdminReply::Link(NewLink { link, token: format!("TokenTokenTokenToken0{made}") }))));
-                    }
-                    _ => {
-                        say(&mut ws, ServerMsg::Refused { reason: "that message couldn't be read".into() });
-                        break;
-                    }
-                }
-            }
-            let _ = ws.close(None);
-            while ws.read().is_ok() {}
-        }
-    });
-    (at, t)
-}
-
 #[test]
-fn a_server_older_than_join_codes_says_so_and_the_links_still_work() {
+fn a_server_older_than_join_codes_says_so() {
     let (server, thread) = old_server();
     let limits = fast_limits();
     // Asking it about a code: the join fails with what to do instead.
@@ -330,14 +296,6 @@ fn a_server_older_than_join_codes_says_so_and_the_links_still_work() {
     pump(&mut [&mut guest], "the answer", |s| matches!(s[0].live().status, Status::Failed { .. }));
     let why = guest.live().status.label();
     assert!(why.contains("doesn't know join codes yet") && why.contains("invite link"), "{why}");
-    thread.join().unwrap();
-    // Sharing a file there: it makes the links (it always could) but no codes, without an error:
-    // the app shows the links.
-    let (server, thread) = old_server_with_links();
-    let shared =
-        manage::share(&server, None, "0123456789abcdef", "AbCdEfGhIjKlMnOpQrStUv", &[], true, &limits, Duration::from_secs(5)).unwrap().unwrap();
-    assert!(shared.edit.code.is_none() && shared.view.as_ref().is_some_and(|v| v.code.is_none()));
-    assert!(shared.edit.link.contains("&file=0123456789abcdef&token=TokenTokenTokenToken01") && shared.edit.id == "link1");
     thread.join().unwrap();
 }
 
@@ -447,54 +405,4 @@ fn the_browser_shows_why_a_code_didnt_join() {
     let (mut d, inbox) = driver(t0);
     d.leave(t0);
     assert!(d.done() && failure(&inbox).is_empty());
-}
-
-#[test]
-fn links_can_name_a_file_of_a_servers_team_list() {
-    let link = "figcraft://join?server=wss://figcraft.example/team/&file=0123456789abcdef&team=1";
-    let (invite, found) = Invite::parse_join(link).unwrap();
-    assert_eq!(
-        (invite.server.url(), invite.file.as_str(), invite.token.as_str(), found),
-        ("wss://figcraft.example:443/team/".to_string(), "0123456789abcdef", "", Some(Lookup::Team))
-    );
-    assert_eq!(Invite::parse_join(&invite.team_link()).unwrap(), (invite.clone(), Some(Lookup::Team)));
-    let plain = Invite::new("127.0.0.1:47900", "abc", "");
-    assert_eq!(plain.team_link(), "figcraft://join?host=127.0.0.1:47900&file=abc&team=1");
-    // It names no token, so it isn't a link to join with directly; it needs a file.
-    assert!(Invite::parse(link).is_err_and(|e| e.contains("team list")));
-    assert!(Invite::parse_join("figcraft://join?server=wss://figcraft.example/&team=1").is_err());
-    assert!(Invite::parse_join("figcraft://join?server=wss://figcraft.example/&file=../x&team=1").is_err());
-}
-
-/// The browser's driver joining a file of a server's team list.
-fn team_driver(t0: web_time::Instant) -> (Driver<Script>, Inbox) {
-    let (invite, found) = Invite::parse_join("figcraft://join?server=ws://127.0.0.1:47900/&file=0123456789abcdef&team=1").unwrap();
-    let inbox = Inbox::new(Arc::new(|| {}));
-    let cfg = GuestConfig { lookup: found, ..GuestConfig::new(invite, "Ada".into()) };
-    (Driver::start(Script::default(), cfg, inbox.clone(), t0), inbox)
-}
-
-#[test]
-fn the_browser_asks_the_team_list_for_the_link_then_joins_the_file() {
-    let t0 = web_time::Instant::now();
-    let (mut d, inbox) = team_driver(t0);
-    d.opened(t0);
-    let [ClientMsg::ResolveTeam(ask)] = d.sock.sent.as_slice() else { panic!("asked {:?}", d.sock.sent) };
-    assert_eq!((ask.protocol, ask.file.as_str()), (PROTOCOL, "0123456789abcdef"));
-    let answer = ServerMsg::Resolved { file: "0123456789abcdef".into(), token: "AbCdEfGhIjKlMnOpQrStUv".into() };
-    d.message(&message::encode(&answer).unwrap(), t0);
-    d.opened(t0);
-    let Some(ClientMsg::Hello(hello)) = d.sock.sent.last() else { panic!("sent {:?}", d.sock.sent) };
-    assert_eq!((hello.file.as_str(), hello.token.as_str()), ("0123456789abcdef", "AbCdEfGhIjKlMnOpQrStUv"));
-    assert!(failure(&inbox).is_empty());
-    // Another file in the answer than the one asked about isn't taken.
-    let (mut d, inbox) = team_driver(t0);
-    d.opened(t0);
-    d.message(&message::encode(&ServerMsg::Resolved { file: "fedcba9876543210".into(), token: "AbCdEfGhIjKlMnOpQrStUv".into() }).unwrap(), t0);
-    assert!(d.done() && failure(&inbox).contains("isn't a file"));
-    // A server from before team lists.
-    let (mut d, inbox) = team_driver(t0);
-    d.opened(t0);
-    d.message(&message::encode(&ServerMsg::Refused { reason: "that message couldn't be read".into() }).unwrap(), t0);
-    assert!(failure(&inbox).contains("has no team list"));
 }

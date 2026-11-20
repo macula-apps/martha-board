@@ -1,8 +1,7 @@
-//! Files on a server, against a scripted link: `collab.publish` makes the open tab the server
-//! file's synced document (read-only until it is there, its undo history per person after), and
-//! a view link makes the synced document read-only (commands, gestures, editing tools and changes
-//! made outside a command are all refused or put back; others' edits still arrive; other tabs stay
-//! editable). Leaving keeps the file open as your copy.
+//! Joined files, against a scripted link: a view link makes the synced document read-only
+//! (commands, gestures, editing tools and changes made outside a command are all refused or put
+//! back; others' edits still arrive; other tabs stay editable), and a live document can't be
+//! reverted in any state it is in.
 
 use std::sync::{Arc, Mutex};
 
@@ -10,7 +9,7 @@ use figcraft_collab::message::{ClientMsg, ServerMsg};
 use figcraft_collab::{Client, NoRecompute, Outgoing};
 use serde_json::json;
 
-use crate::live::{Access, Event, PUBLISHING, Published, Role, Status, VIEW_ONLY};
+use crate::live::{Access, Event, Role, Status, VIEW_ONLY};
 use crate::live_tests::{Script, info, push, relay, serve_as, session};
 use crate::tools::ToolId;
 use crate::{EngineError, Session};
@@ -20,66 +19,6 @@ fn refused(s: &mut Session, cmd: &str, params: serde_json::Value, why: &str) {
         Err(EngineError::Disabled(_, reason)) => assert_eq!(reason, why, "{cmd}"),
         other => panic!("{cmd}: expected a refusal, got {other:?}"),
     }
-}
-
-#[test]
-fn publishing_makes_the_open_tab_the_server_file() {
-    let (mut s, script) = session();
-    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap();
-    assert!(s.undo_depth().0 > 0);
-    let e = s.execute("collab.publish", &json!({"server": "nope"})).unwrap_err();
-    assert!(e.to_string().contains("not a server address"), "{e}");
-    let r = s.execute("collab.publish", &json!({"server": " ws://127.0.0.1:47900/?key=k ", "name": " Team\n"})).unwrap();
-    assert_eq!(r["status"], "connecting");
-    assert_eq!(r["readOnly"], true);
-    {
-        let sc = script.lock().unwrap();
-        assert_eq!(sc.published.len(), 1);
-        assert_eq!(sc.published[0].server, "ws://127.0.0.1:47900/?key=k");
-        assert_eq!(sc.published[0].name, "Team");
-        assert_eq!(sc.published[0].doc.node_count(), s.doc().unwrap().node_count());
-    }
-    // Until it is on the server nothing changes it (and the name defaults to the file's).
-    refused(&mut s, "shape.ellipse", json!({"x": 0, "y": 0, "width": 5, "height": 5}), PUBLISHING);
-    refused(&mut s, "tool.set", json!({"tool": "rectangle"}), PUBLISHING);
-    assert!(s.execute("tool.set", &json!({"tool": "hand"})).is_ok(), "moving around is fine");
-    assert!(s.begin_interaction("Move").is_err());
-    // The server's welcome: this tab is the synced document, undo is per person from now on.
-    let mut doc = s.doc().unwrap().clone();
-    doc.name = "Team".into();
-    let (mut server, id, welcome) = serve_as(&doc, Access::Edit);
-    let published = Published {
-        server: "127.0.0.1:47900".into(),
-        file: "f".into(),
-        name: "Team".into(),
-        edit: "e".into(),
-        view: "v".into(),
-        owner: None,
-        expires: None,
-    };
-    push(&script, vec![Event::Published(published.clone()), Event::Welcome { info: info(Role::Guest, id), peers: vec![] }, welcome]);
-    s.live_poll();
-    assert!(s.live().syncing());
-    assert_eq!(s.docs.len(), 1, "no new tab");
-    assert_eq!(s.doc().unwrap().name, "Team");
-    assert_eq!(s.undo_depth(), (0, 0));
-    assert_eq!(s.active_read_only(), None);
-    assert_eq!(s.live().published, Some(published));
-    assert_eq!(s.message.as_deref(), Some("Published Team to the server"));
-    assert_eq!(s.live_summary()["published"]["name"], "Team");
-    // Edits sync through the server.
-    let rect = s.execute("shape.rectangle", &json!({"x": 100, "y": 0, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
-    let answers = relay(&script, &mut server, id);
-    assert!(server.document().contains(figcraft_doc::NodeId(rect)));
-    push(&script, answers);
-    s.live_poll();
-    assert_eq!(s.undo_depth(), (1, 0));
-    // Leaving keeps the file open, yours to edit.
-    s.execute("collab.leave", &json!({})).unwrap();
-    assert_eq!(s.docs.len(), 1);
-    assert!(s.doc().unwrap().contains(figcraft_doc::NodeId(rect)));
-    assert_eq!(s.message.as_deref(), Some("You left the session; your copy stays open here"));
-    assert!(s.execute("shape.ellipse", &json!({"x": 0, "y": 0, "width": 5, "height": 5})).is_ok());
 }
 
 #[test]
@@ -172,34 +111,36 @@ fn revert_refused_unchanged(s: &mut Session, script: &Arc<Mutex<Script>>) {
     assert_eq!((sc.msgs.len(), sc.sent.len(), sc.left), script_before, "no sync, presence or leave sent");
 }
 
+/// A live document isn't reverted in any state it can be in: editing or viewing a file you joined,
+/// reconnecting to it, and hosting. (The joined states came from a published file until publishing
+/// to a server left with martha-board#41; a joined file saved to disk is the same live document.)
 #[test]
 fn revert_refuses_live_documents_without_losing_access_or_sync() {
-    for state in ["editing", "viewing", "publishing", "reconnecting", "hosting"] {
+    for state in ["editing", "viewing", "reconnecting", "hosting"] {
         let (mut s, script) = session();
-        let path = saved_file(&mut s);
-        let uid = s.ds().unwrap().uid;
-        if state == "hosting" {
-            s.execute("collab.host", &json!({})).unwrap();
-        } else {
-            s.execute("collab.publish", &json!({"server": "ws://127.0.0.1:47900/"})).unwrap();
-        }
         let access = if state == "viewing" { Access::View } else { Access::Edit };
-        let (mut server, me, welcome) = serve_as(s.doc().unwrap(), access);
-        if !matches!(state, "publishing" | "hosting") {
+        let (path, mut server, me, welcome) = if state == "hosting" {
+            let path = saved_file(&mut s);
+            s.execute("collab.host", &json!({})).unwrap();
+            let (server, me, welcome) = serve_as(s.doc().unwrap(), access);
+            (path, server, me, Some(welcome))
+        } else {
+            s.execute("collab.join", &json!({"link": "figcraft://join?host=a:1&file=f&token=t"})).unwrap();
+            let (server, me, welcome) = serve_as(&figcraft_doc::Document::new("Shared"), access);
             let mut i = info(Role::Guest, me);
             i.access = access;
-            push(&script, vec![Event::Welcome { info: i, peers: vec![] }, welcome.clone()]);
+            push(&script, vec![Event::Welcome { info: i, peers: vec![] }, welcome]);
             s.live_poll();
-        }
+            let path = std::env::temp_dir().join(format!("figcraft-live-revert-{}-{}.figcraft", std::process::id(), s.ds().unwrap().uid));
+            s.execute("file.save", &json!({"path": path})).unwrap();
+            (path, server, me, None)
+        };
+        let uid = s.ds().unwrap().uid;
         if state == "reconnecting" {
             push(&script, vec![Event::Status(Status::Reconnecting { attempt: 1 })]);
             s.live_poll();
         }
-        let read_only = match state {
-            "viewing" => Some(VIEW_ONLY),
-            "publishing" => Some(PUBLISHING),
-            _ => None,
-        };
+        let read_only = (state == "viewing").then_some(VIEW_ONLY);
         assert_eq!(s.active_read_only(), read_only, "{state}");
         revert_refused_unchanged(&mut s, &script);
         assert_eq!(s.live().doc_uid, Some(uid), "{state}");
@@ -207,10 +148,7 @@ fn revert_refuses_live_documents_without_losing_access_or_sync() {
         if let Some(why) = read_only {
             refused(&mut s, "file.rename", json!({"name": "Refused"}), why);
         }
-        if matches!(state, "publishing" | "hosting") {
-            if state == "publishing" {
-                push(&script, vec![Event::Welcome { info: info(Role::Guest, me), peers: vec![] }]);
-            }
+        if let Some(welcome) = welcome {
             push(&script, vec![welcome]);
             s.live_poll();
             assert_eq!(s.live().doc_uid, Some(uid), "the welcome still finds its document");

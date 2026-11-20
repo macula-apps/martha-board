@@ -282,8 +282,7 @@ fn help_button(app: &mut FigApp, ui: &mut Ui, canvas: Rect, pill: Rect, t: &Toke
 }
 
 /// The pill shown for a file you can't edit now: Move and Hand (and Comment with a comment link),
-/// and a badge saying why ("View only", "Can comment", or "Publishing…" until the file is on the
-/// server).
+/// and a badge saying why ("View only" or "Can comment").
 fn view_only_toolbar(app: &mut FigApp, ui: &mut Ui, why: &'static str) {
     let t = Tokens::get(ui.ctx());
     // The editing tools are off: the tool falls back to moving around.
@@ -293,11 +292,7 @@ fn view_only_toolbar(app: &mut FigApp, ui: &mut Ui, why: &'static str) {
     let comment = why == figcraft_engine::live::COMMENT_ONLY;
     let moving = [(ToolId::Move, Icon::Move), (ToolId::Hand, Icon::Hand), (ToolId::Comment, Icon::Comment)];
     let tools = if comment { &moving[..] } else { &moving[..2] };
-    let (label, badge_icon) = match why {
-        figcraft_engine::live::PUBLISHING => (tr("Publishing…"), Icon::Eye),
-        _ if comment => (tr("Can comment"), Icon::Comment),
-        _ => (tr("View only"), Icon::Eye),
-    };
+    let (label, badge_icon) = if comment { (tr("Can comment"), Icon::Comment) } else { (tr("View only"), Icon::Eye) };
     let text = ui.painter().layout_no_wrap(label.to_string(), crate::theme::semibold(11.5), t.text);
     let badge_w = 12.0 + 14.0 + 6.0 + text.size().x + 12.0;
     let width = PAD * 2.0 + tools.len() as f32 * (TOOL_CELL + GAP) + DIVIDER + GAP + badge_w;

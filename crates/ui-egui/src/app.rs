@@ -3,9 +3,9 @@ use super::open::OPEN_EXTENSIONS;
 use super::services::{DialogFuture, PickFuture, Picked, RepaintWaker, Services};
 use super::state::{LEFT_PANEL, MOBILE_STRIP, MobilePanel, NARROW_WIDTH, PANEL_DEFAULT, RIGHT_PANEL, TitleBar, fit_panels};
 use super::{
-    Arc, Done, FigApp, NodeId, OsStr, Path, PathBuf, PendingAck, PendingDialog, Poll, Session, TaskContext, UiState, Value, Waker, a11y, branch_ui,
-    canvas, cjk, comments, cursors, dialogs, frame_stats, home, home_recents, i18n, icons, import_report, json, layers, live, menus, missing_fonts,
-    online, render_worker, right, selection_spacing, shortcuts, style_picker, tabs, theme, toolbar, ui_scale, updates_ui, versions, widgets, windows,
+    Arc, FigApp, NodeId, OsStr, Path, PathBuf, PendingAck, PendingDialog, Poll, Session, TaskContext, UiState, Value, Waker, a11y, branch_ui, canvas,
+    cjk, comments, cursors, dialogs, frame_stats, home, home_recents, i18n, icons, import_report, json, layers, live, menus, missing_fonts,
+    render_worker, right, selection_spacing, shortcuts, style_picker, tabs, theme, toolbar, ui_scale, updates_ui, versions, widgets, windows,
 };
 
 mod clipboard;
@@ -45,7 +45,6 @@ impl FigApp {
             frame_stats: frame_stats::FrameStats::default(),
             windows: windows::Windows::default(),
             window_requests: Vec::new(),
-            waiting: Vec::new(),
             pending_dialog: None,
             ui_context: None,
             automation_roots: None,
@@ -203,9 +202,8 @@ impl FigApp {
         // its acknowledgement for the presented pass but never replays the input (its side effects
         // already happened and would otherwise duplicate).
         self.end_input_frame(&ctx);
-        // The owner tokens of files put online are kept at once, so a crash doesn't lose them, and
-        // so are preferences a command keeps at once.
-        if std::mem::take(&mut self.session.live.unsaved) | std::mem::take(&mut self.session.prefs_unsaved) {
+        // Preferences a command keeps at once are kept at once, so a crash doesn't lose them.
+        if std::mem::take(&mut self.session.prefs_unsaved) {
             self.services.save_prefs(&self.session.prefs);
         }
         #[cfg(not(target_arch = "wasm32"))]

@@ -88,6 +88,23 @@ fn restart(root: &std::path::Path) -> (Session, Recovery) {
     (next, r)
 }
 
+/// A run from before online files left (martha-board#41) wrote a note beside the copy of one: the
+/// copy opens as any other (nothing is joined), and the note goes with it.
+#[test]
+fn an_older_runs_note_beside_a_copy_goes_with_it() {
+    let root = root("old-note");
+    let left = crashed(&edited(), &root);
+    let copy = std::fs::read_dir(&left).unwrap().flatten().map(|f| f.path()).find(|p| p.extension().is_some_and(|e| e == "figcraft")).unwrap();
+    std::fs::write(copy.with_extension("online"), "wss://share.example/\nf1\n7 3 12 0").unwrap();
+    let (next, mut r) = restart(&root);
+    assert!(next.live.iter().next().is_none(), "nothing is joined");
+    r.write(&next, true);
+    r.tick(&next, 100.0);
+    assert!(!left.exists(), "the copy, its note and its folder go once this run has its own copy");
+    r.finish();
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 #[test]
 fn a_recovered_copy_stays_until_this_run_has_its_own_copy() {
     let root = root("handoff");

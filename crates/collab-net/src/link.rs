@@ -1,32 +1,21 @@
 //! [`NetLink`]: the engine's [`LiveLink`] over the network.
 
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
 
 use figcraft_collab::code;
-use figcraft_collab::message::{Access, Admin, AdminReply, ClientMsg, LibraryReply, LibraryReq, PluginReply, PluginReq};
-use figcraft_engine::live::{
-    Bind, Event, HostInfo, HostOptions, LiveLink, NO_SESSION, NetReply, NetRequest, PageInfo, Presence, PublishOptions, Published, Resume, Role,
-    SessionId, SessionInfo, Shared, WayIn,
-};
+use figcraft_collab::message::{Access, ClientMsg};
+use figcraft_engine::live::{Bind, Event, HostOptions, LiveLink, PageInfo, Presence, Resume, Role, SessionId, SessionInfo, WayIn};
 
-use crate::guest::{Guest, GuestConfig, Publish, upload_file};
+use crate::guest::{Guest, GuestConfig};
 use crate::host::{Host, HostConfig};
 use crate::inbox::{Inbox, Waker};
-use crate::invite::{Endpoint, Invite, Lookup};
-use crate::manage;
+use crate::invite::{Invite, Lookup};
 use crate::net::NetLimits;
-use crate::requests;
 use crate::sessions::Sessions;
 use crate::token;
 
 /// The port a hosted session tries first.
 pub const DEFAULT_PORT: u16 = 47900;
-
-/// How long a request to a server (outside a session) waits for its connection.
-const CONNECT: Duration = Duration::from_secs(5);
 
 enum Active {
     Host(Host),
@@ -49,17 +38,12 @@ pub struct NetLink {
     sessions: Sessions<Active>,
     /// Tweaks for joining (tests shorten the reconnect pauses).
     guest: fn(GuestConfig) -> GuestConfig,
-    /// Answers to requests sent in the background (outlives sessions).
-    libraries: Inbox,
-    /// Background library requests are out.
-    fetching: Arc<AtomicBool>,
 }
 
 impl NetLink {
     /// `wake` is called (from network threads) whenever something arrives for the UI.
     pub fn new(wake: Waker) -> Self {
-        let libraries = Inbox::new(wake.clone());
-        Self { limits: NetLimits::default(), sessions: Sessions::new(wake), guest: |c| c, libraries, fetching: Arc::default() }
+        Self { limits: NetLimits::default(), sessions: Sessions::new(wake), guest: |c| c }
     }
 
     /// With other transport limits.
@@ -216,84 +200,6 @@ impl LiveLink for NetLink {
         Ok(())
     }
 
-    fn publish(&mut self, session: SessionId, o: PublishOptions) -> Result<(), String> {
-        let (server, query) = Endpoint::parse(&o.server)?;
-        // Without a key: as anyone may, when the server is open to the public (it says if not).
-        let key = requests::server_key(o.key, query);
-        requests::key_over_tls(&server, key.as_deref())?;
-        // Until the upload is done the invite names only the server.
-        let cfg = self.guest_config(Invite { server: server.clone(), file: String::new(), token: String::new() }, None, &o.me);
-        let inbox = self.sessions.inbox();
-        let job = Publish { server, key, name: o.name, doc: o.doc, share: o.share };
-        let guest = Guest::publish(job, cfg, inbox.clone()).map_err(|e| format!("can't start the connection: {e}"))?;
-        self.started(session, Active::Guest(guest), inbox);
-        Ok(())
-    }
-
-    fn upload(&mut self, o: PublishOptions) -> Result<Published, String> {
-        upload(o, &self.limits)
-    }
-
-    fn library(&mut self, link: &str, req: LibraryReq) -> Result<LibraryReply, String> {
-        manage::library(link, req, &self.limits, CONNECT)
-    }
-
-    fn plugins(&mut self, server: &str, req: PluginReq) -> Result<PluginReply, String> {
-        plugins(server, req, &self.limits)
-    }
-
-    fn hosting(&mut self, server: &str, file: &str, owner: &str, req: Option<Admin>) -> Result<(HostInfo, Option<AdminReply>), String> {
-        hosting(server, file, owner, req, &self.limits)
-    }
-
-    fn share(&mut self, server: &str, file: &str, owner: &str, revoke: &[String], create: bool) -> Result<Option<Shared>, String> {
-        share(server, file, owner, revoke, create, &self.limits)
-    }
-
-    fn background(&mut self, job: u64, req: NetRequest) -> bool {
-        let (inbox, limits) = (self.libraries.clone(), self.limits);
-        let (failed, failure) = (inbox.clone(), req.failure());
-        let spawned = std::thread::Builder::new().name("server-request".into()).spawn(move || {
-            let reply = match req {
-                NetRequest::Plugins { server, req } => NetReply::Plugins(plugins(&server, req, &limits)),
-                NetRequest::Library { link, req } => NetReply::Library(manage::library(&link, req, &limits, CONNECT)),
-                NetRequest::Upload(o) => NetReply::Upload(upload(o, &limits)),
-                NetRequest::Hosting { server, file, owner, req } => NetReply::Hosting(hosting(&server, &file, &owner, req, &limits)),
-                NetRequest::Share { server, file, owner, revoke, create } => NetReply::Share(share(&server, &file, &owner, &revoke, create, &limits)),
-            };
-            inbox.push(Event::Net { job, reply: Box::new(reply) });
-        });
-        if let Err(e) = spawned {
-            failed.push(Event::Net { job, reply: Box::new(failure(format!("can't start a thread for the request: {e}"))) });
-        }
-        true
-    }
-
-    fn library_background(&mut self, jobs: Vec<(String, LibraryReq)>) {
-        if jobs.is_empty() || self.fetching.swap(true, Ordering::SeqCst) {
-            return;
-        }
-        let (inbox, fetching, limits) = (self.libraries.clone(), self.fetching.clone(), self.limits);
-        let spawned = std::thread::Builder::new().name("library-fetch".into()).spawn(move || {
-            for (link, req) in jobs {
-                // A report's answer says nothing about the library (and an older server refuses it).
-                let report = matches!(
-                    req,
-                    LibraryReq::ReportDetached(_) | LibraryReq::ReportInserted(_) | LibraryReq::ReportAssets(_) | LibraryReq::ReportAssetActions(_)
-                );
-                let reply = manage::library(&link, req, &limits, CONNECT);
-                if !report {
-                    inbox.push(Event::Library { link, reply });
-                }
-            }
-            fetching.store(false, Ordering::SeqCst);
-        });
-        if let Err(e) = spawned {
-            log::warn!("team libraries: can't start a thread: {e}");
-            self.fetching.store(false, Ordering::SeqCst);
-        }
-    }
-
     fn remove(&mut self, session: SessionId, client: u32) -> Result<(), String> {
         match self.sessions.get(session) {
             Some(Active::Host(h)) if h.me().client_id == client => Err("you can't remove yourself: stop the session instead".into()),
@@ -335,44 +241,8 @@ impl LiveLink for NetLink {
     }
 
     fn poll(&mut self) -> Vec<(SessionId, Event)> {
-        let mut out: Vec<(SessionId, Event)> = self.libraries.drain().into_iter().map(|e| (NO_SESSION, e)).collect();
-        out.extend(self.sessions.poll());
-        out
+        self.sessions.poll()
     }
-}
-
-/// Keep `o.doc` on a server as a new file (see [`LiveLink::upload`]).
-fn upload(o: PublishOptions, limits: &NetLimits) -> Result<Published, String> {
-    let (server, query) = Endpoint::parse(&o.server)?;
-    let key = requests::server_key(o.key, query)
-        .ok_or("the server address needs the server's key (ws://host:port/?key=…; `figcraft-server key` prints it)")?;
-    requests::key_over_tls(&server, Some(&key))?;
-    upload_file(&server, Some(&key), &o.name, &o.doc, limits, CONNECT).map(|(_, published, _)| published)
-}
-
-/// What the server at `server` says about its hosting, and its answer to `req` about `file` with
-/// its owner token (see [`LiveLink::hosting`]). A new link comes back whole, in place of its token.
-fn hosting(server: &str, file: &str, owner: &str, req: Option<Admin>, limits: &NetLimits) -> Result<(HostInfo, Option<AdminReply>), String> {
-    let (endpoint, _) = Endpoint::parse(server)?;
-    let (info, replies) = manage::hosting(&endpoint, file, owner, req.into_iter().collect(), limits, CONNECT)?;
-    Ok((info, requests::hosted(&endpoint, replies.into_iter().next())))
-}
-
-/// See [`LiveLink::share`]: as the server's operator when the address carries its key, else as
-/// the file's owner.
-fn share(server: &str, file: &str, owner: &str, revoke: &[String], create: bool, limits: &NetLimits) -> Result<Option<Shared>, String> {
-    let (endpoint, query) = Endpoint::parse(server)?;
-    let key = requests::server_key(None, query);
-    requests::key_over_tls(&endpoint, key.as_deref())?;
-    manage::share(&endpoint, key.as_deref(), file, owner, revoke, create, limits, CONNECT)
-}
-
-/// One request to the plugin directory at `server` (its key in the address's query, if any).
-fn plugins(server: &str, req: PluginReq, limits: &NetLimits) -> Result<PluginReply, String> {
-    let (server, query) = Endpoint::parse(server)?;
-    let key = query.into_iter().find(|(k, _)| k == "key").map(|(_, v)| v).unwrap_or_default();
-    requests::key_over_tls(&server, Some(&key))?;
-    manage::plugins(&server, key.trim(), req, limits, CONNECT)
 }
 
 impl Drop for NetLink {

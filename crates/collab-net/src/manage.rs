@@ -1,91 +1,26 @@
-//! Requests to a server outside a live session, each on a connection of its own answered in
-//! order: managing its files with the server's key ([`Manage`], [`request`]; the app publishes
-//! through it, and the server's command line uses it to reach a running server), and using a
-//! file's team library with one of the file's share links ([`OpenLibrary`], [`library`]), and its
-//! plugin directory ([`OpenPlugins`], [`plugins`]: anyone browses, the key publishes).
+//! A question to a server outside a live session, on a connection of its own: which file a join
+//! code opens ([`resolve`]), asked before joining it.
 
 use std::time::Duration;
 
-use figcraft_collab::message::{
-    self, Admin, AdminReply, ClientMsg, HostInfo, LibraryReply, LibraryReq, Manage, OpenHosting, OpenLibrary, OpenPlugins, PROTOCOL, PluginReply,
-    PluginReq, ServerMsg,
-};
-use figcraft_engine::live::Shared;
+use figcraft_collab::message::{self, ClientMsg, ServerMsg};
 use tungstenite::{Bytes, Message, WebSocket};
 
 use crate::invite::{Endpoint, Invite, Lookup};
 use crate::join::ask;
 use crate::net::{Duplex, NetLimits, config, open};
-pub(crate) use crate::requests::REFUSED;
-use crate::requests::{code_requests, comment_request, directory_error, hosting_error, link_requests, made_comment, made_links, shared};
 
 type Ws = WebSocket<Duplex>;
 
-/// Send `requests` to the server at `server` with its `key`; the replies, in order. Fails when the
-/// server can't be reached, refuses the key or closes the connection (a request it can't do is a
-/// [`AdminReply::Failed`] reply, not an error). Never echoes the key.
-pub fn request(server: &Endpoint, key: &str, requests: Vec<Admin>, limits: &NetLimits, timeout: Duration) -> Result<Vec<AdminReply>, String> {
-    let admin = |m: ServerMsg| match m {
-        ServerMsg::Admin(r) => Some(*r),
-        _ => None,
-    };
-    let manage = Manage { protocol: PROTOCOL, key: key.to_string(), client_version: message::client_version() };
-    let mut ws = connect(server, limits, timeout)?;
-    send(&mut ws, &ClientMsg::Manage(manage))?;
-    match reply(&mut ws, limits, admin)? {
-        AdminReply::Ready => {}
-        other => return Err(format!("the server answered {other:?} instead of letting this connection manage files")),
-    }
-    let mut replies = Vec::with_capacity(requests.len());
-    for r in requests {
-        send(&mut ws, &ClientMsg::Admin(r))?;
-        replies.push(reply(&mut ws, limits, admin)?);
-    }
-    close(ws);
-    Ok(replies)
-}
+/// How an error starts when the server said no (then its reason), rather than not answering.
+pub(crate) const REFUSED: &str = "the server refused: ";
 
-/// Ask the server at `server` about its hosting, with a file's owner token when `file` and `owner`
-/// aren't empty; what it says, and its replies to `requests` (publishing without the key, managing
-/// that file), in order. Fails when the server can't be reached or refuses (a wrong owner token, a
-/// blocked address); a server older than open hosting can't read the request, and is reported as
-/// taking files only with its key. Never echoes the token.
-pub fn hosting(
-    server: &Endpoint,
-    file: &str,
-    owner: &str,
-    requests: Vec<Admin>,
-    limits: &NetLimits,
-    timeout: Duration,
-) -> Result<(HostInfo, Vec<AdminReply>), String> {
-    let admin = |m: ServerMsg| match m {
-        ServerMsg::Admin(r) => Some(*r),
-        _ => None,
-    };
-    let open = OpenHosting { protocol: PROTOCOL, client_version: message::client_version(), file: file.to_string(), owner: owner.to_string() };
-    let mut ws = connect(server, limits, timeout)?;
-    send(&mut ws, &ClientMsg::OpenHosting(open))?;
-    let info = reply(&mut ws, limits, |m| match m {
-        ServerMsg::Hosting(i) => Some(*i),
-        _ => None,
-    })
-    .map_err(|e| hosting_error(server, e))?;
-    let mut replies = Vec::with_capacity(requests.len());
-    for r in requests {
-        send(&mut ws, &ClientMsg::Admin(r))?;
-        replies.push(reply(&mut ws, limits, admin)?);
-    }
-    close(ws);
-    Ok((info, replies))
-}
-
-/// Ask `invite`'s server what `lookup` stands for: which file a join code opens, or the team link
-/// of `invite.file`; the file's id and the link's token. Fails with the server's own words when it
-/// knows no such code or keeps no such file on its team list (or the address tried too many: the
-/// error starts with [`REFUSED`]); a server older than join codes (or team lists) can't read the
-/// question ("couldn't be read").
+/// Ask `invite`'s server what `lookup` stands for: which file a join code opens; the file's id and
+/// the link's token. Fails with the server's own words when it knows no such code (or the address
+/// tried too many: the error starts with [`REFUSED`]); a server older than join codes can't read
+/// the question ("couldn't be read").
 pub fn resolve(invite: &Invite, lookup: &Lookup, limits: &NetLimits, timeout: Duration) -> Result<(String, String), String> {
-    let ask = ask(invite, lookup);
+    let ask = ask(lookup);
     let mut ws = connect(&invite.server, limits, timeout)?;
     send(&mut ws, &ask)?;
     let answer = reply(&mut ws, limits, |m| match m {
@@ -96,92 +31,12 @@ pub fn resolve(invite: &Invite, lookup: &Lookup, limits: &NetLimits, timeout: Du
     Ok(answer)
 }
 
-/// Change who else gets into `file`, as whoever manages it (with the server's `key`, else with the
-/// file's `owner` token): revoke the links with the ids in `revoke` (whoever joined with them is
-/// disconnected, and their join codes stop working; one already gone is fine), then, to `create`,
-/// make a new edit link, a new view link and a new comment link and ask for their join codes: what
-/// others join with. A server older than join codes makes the links without codes, and one older
-/// than comment links makes no comment link.
-pub fn share(
-    server: &Endpoint,
-    key: Option<&str>,
-    file: &str,
-    owner: &str,
-    revoke: &[String],
-    create: bool,
-    limits: &NetLimits,
-    timeout: Duration,
-) -> Result<Option<Shared>, String> {
-    let ask = |requests: Vec<Admin>| match key {
-        Some(key) => request(server, key, requests, limits, timeout),
-        None => hosting(server, file, owner, requests, limits, timeout).map(|(_, replies)| replies),
-    };
-    let Some(mut links) = made_links(ask(link_requests(file, revoke, create))?, create)? else { return Ok(None) };
-    // The comment link on a connection of its own: a server from before comment links can't read
-    // the request and closes it (the file is shared without one then).
-    let comment = ask(comment_request(file)).map_err(|e| log::info!("live session: no comment link from {}: {e}", server.display()));
-    links.comment = made_comment(comment.unwrap_or_default());
-    // Their codes, on a connection of its own: a server from before join codes can't read the
-    // request and closes it (the links are shared without codes then).
-    let codes =
-        ask(code_requests(file, &links)).map_err(|e| log::info!("live session: no join codes from {}: {e}", server.display())).unwrap_or_default();
-    Ok(Some(shared(server, file, links, codes)))
-}
-
-/// Send one library request about the file behind share link `link`; the reply. Fails when the
-/// link isn't one, the server can't be reached or refuses the link (a request it can't do is a
-/// [`LibraryReply::Failed`] reply). Never echoes the link.
-pub fn library(link: &str, req: LibraryReq, limits: &NetLimits, timeout: Duration) -> Result<LibraryReply, String> {
-    let lib = |m: ServerMsg| match m {
-        ServerMsg::Library(r) => Some(*r),
-        _ => None,
-    };
-    let invite = Invite::parse(link)?;
-    let open = OpenLibrary { protocol: PROTOCOL, file: invite.file, token: invite.token, client_version: message::client_version() };
-    let mut ws = connect(&invite.server, limits, timeout)?;
-    send(&mut ws, &ClientMsg::OpenLibrary(open))?;
-    match reply(&mut ws, limits, lib)? {
-        LibraryReply::Ready { .. } => {}
-        other => return Err(format!("the server answered {other:?} instead of opening the library")),
-    }
-    send(&mut ws, &ClientMsg::Library(req))?;
-    let r = reply(&mut ws, limits, lib)?;
-    close(ws);
-    Ok(r)
-}
-
-/// Send one request to the plugin directory of the server at `server`, with its `key` (empty: only
-/// browsing); the reply. Fails when the server can't be reached, refuses the key or has no
-/// directory (an older server); a request it can't do is a [`PluginReply::Failed`] reply. Never
-/// echoes the key.
-pub fn plugins(server: &Endpoint, key: &str, req: PluginReq, limits: &NetLimits, timeout: Duration) -> Result<PluginReply, String> {
-    let pick = |m: ServerMsg| match m {
-        ServerMsg::Plugins(r) => Some(*r),
-        _ => None,
-    };
-    let open = OpenPlugins { protocol: PROTOCOL, key: key.to_string(), client_version: env!("CARGO_PKG_VERSION").to_string() };
-    let mut ws = connect(server, limits, timeout)?;
-    send(&mut ws, &ClientMsg::OpenPlugins(open))?;
-    match reply(&mut ws, limits, pick) {
-        Ok(PluginReply::Ready { .. }) => {}
-        // An older server can't read the request at all.
-        Err(e) => return Err(directory_error(server, e)),
-        Ok(other) => return Err(format!("the server answered {other:?} instead of opening its plugin directory")),
-    }
-    send(&mut ws, &ClientMsg::Plugins(req))?;
-    let r = reply(&mut ws, limits, pick)?;
-    close(ws);
-    Ok(r)
-}
-
-/// A WebSocket to `server` that waits for answers up to the request-reply timeout (a large upload
-/// takes the server a while to keep).
+/// A WebSocket to `server` that waits for answers up to the request-reply timeout.
 fn connect(server: &Endpoint, limits: &NetLimits, timeout: Duration) -> Result<Ws, String> {
     let (stream, _, _) = open(server, timeout, limits)?;
     let (ws, _) = tungstenite::client::client_with_config(server.url(), stream, Some(config(limits.max_server_message)))
         .map_err(|e| format!("{} doesn't answer as a FigCraft server: {e}", server.display()))?;
-    // A publish uploads a whole file; a large project on a slow link can take several minutes to
-    // receive and answer. The wait uses `request_reply_timeout`, not the session `idle_timeout`.
+    // The wait uses `request_reply_timeout`, not the session `idle_timeout`.
     ws.get_ref().set_read_timeout(Some(limits.request_reply_timeout)).map_err(|e| e.to_string())?;
     Ok(ws)
 }
@@ -206,10 +61,8 @@ fn send(ws: &mut Ws, msg: &ClientMsg) -> Result<(), String> {
 /// The next answer `pick` takes, or why there is none.
 fn reply<T>(ws: &mut Ws, limits: &NetLimits, pick: impl Fn(ServerMsg) -> Option<T>) -> Result<T, String> {
     // One deadline for the whole answer: pings, pongs and a message trickling in each renew the
-    // read timeout, so without it a server could keep a request (and the refresh permit the
-    // caller holds) waiting for as long as it liked.
-    // The request-reply bound, not the session idle one: a publish uploads a whole file and can
-    // legitimately take minutes to be answered (see `connect`).
+    // read timeout, so without it a server could keep a request waiting for as long as it liked.
+    // The request-reply bound, not the session idle one (see `connect`).
     let until = std::time::Instant::now() + limits.request_reply_timeout;
     ws.get_mut().read_until(Some(until));
     loop {

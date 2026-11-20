@@ -54,14 +54,11 @@ pub use selection::selection_reorder;
 pub use selection::selection_spacing;
 pub use selection::tidy;
 pub use sharing::agent;
-pub use sharing::background;
 pub use sharing::branches;
 pub use sharing::collab;
 pub use sharing::compare;
 pub use sharing::invite_links;
 pub use sharing::live;
-pub use sharing::online;
-pub use sharing::team;
 
 pub use batch::{BatchScope, BatchStep};
 pub use cmd::{CommandSpec, all_commands, find_command};
@@ -124,8 +121,6 @@ pub struct Session {
     /// The live sessions (collaboration), one per document at most: status, peers, presence.
     /// [`Session::live`] is the active document's.
     pub live: live::Lives,
-    /// Commands the UI runs without waiting on a server ([`Session::start_background`]).
-    pub background: background::Background,
     /// Live agent events (comment changes), shared with the control channel's `events.poll`.
     pub events: Arc<events::EventLog>,
     /// Events recorded inside a group: (kind, document, path, data).
@@ -366,8 +361,6 @@ mod node_set_refusals_tests;
 #[cfg(test)]
 mod normalize_guard_tests;
 #[cfg(test)]
-mod online_tests;
-#[cfg(test)]
 mod open_issues_tests;
 #[cfg(test)]
 mod outline_options_tests;
@@ -429,6 +422,8 @@ mod select_area_tests;
 mod selection_behaviour_tests;
 #[cfg(test)]
 mod selection_depth_tests;
+#[cfg(test)]
+mod server_only_left_tests;
 #[cfg(test)]
 mod shape_handles_tests;
 #[cfg(test)]

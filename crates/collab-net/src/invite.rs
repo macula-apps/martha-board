@@ -7,18 +7,12 @@
 //! session as a WebSocket URL `ws(s)://host[:port][/path]?file=<id>&token=<secret>`.
 //!
 //! The token never travels in the WebSocket request (a proxy's logs would keep it): the client
-//! connects to the endpoint and sends the token in its `Hello`. A server address for managing
-//! files carries the server's key the same way (`ws://host:port/?key=<key>`). Errors never echo a
-//! link or an address.
+//! connects to the endpoint and sends the token in its `Hello`. Errors never echo a link or an
+//! address.
 //!
 //! A join by code names the server to ask and the code:
 //! `figcraft://join?server=<ws(s)://…>&code=<code>` ([`Invite::parse_join`]); the server says which
 //! file and token the code stands for.
-//!
-//! A file of a server's team list is named by the server and the file, without a token:
-//! `figcraft://join?server=<ws(s)://…>&file=<id>&team=1` ([`Invite::team_link`]); the server hands
-//! out the file's team link to whoever asks, while the file is shared. Such a link carries no
-//! secret: whoever can reach the server may join with it.
 
 /// Where a session or a server listens: `ws://host:port/path` or `wss://…` (TLS).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -46,8 +40,6 @@ pub struct Invite {
 pub enum Lookup {
     /// The file a join code opens.
     Code(String),
-    /// The team link of the invite's file (on the server's team list).
-    Team,
 }
 
 /// Longest link accepted (anything longer isn't one of ours).
@@ -135,16 +127,6 @@ impl Invite {
         }
     }
 
-    /// The `figcraft://join?…&team=1` link to this invite's file on its server's team list (no
-    /// token: the server gives the team link to whoever asks).
-    pub fn team_link(&self) -> String {
-        if self.server.is_plain() {
-            format!("figcraft://join?host={}&file={}&team=1", self.server.host, self.file)
-        } else {
-            format!("figcraft://join?server={}&file={}&team=1", self.server.url(), self.file)
-        }
-    }
-
     /// The same session as a WebSocket URL.
     pub fn url(&self) -> String {
         format!("{}?file={}&token={}", self.server.url(), self.file, self.token)
@@ -165,13 +147,11 @@ impl Invite {
         match Self::parse_join(link)? {
             (invite, None) => Ok(invite),
             (_, Some(Lookup::Code(_))) => Err("that names a join code, not a file: join with it first".into()),
-            (_, Some(Lookup::Team)) => Err("that names a file of a server's team list, not its link: join with it first".into()),
         }
     }
 
-    /// Read what a join starts from: an invite link, a server with a join code to ask it about
-    /// (then the invite names only the server, until the server says what the code opens), or a
-    /// file of a server's team list (then the invite has no token until the server gives one).
+    /// Read what a join starts from: an invite link, or a server with a join code to ask it about
+    /// (then the invite names only the server, until the server says what the code opens).
     pub fn parse_join(link: &str) -> Result<(Invite, Option<Lookup>), String> {
         let link = clean(link);
         if link.len() > MAX_LINK {
@@ -203,9 +183,6 @@ impl Invite {
             return Ok((Invite { server, file: String::new(), token: String::new() }, Some(Lookup::Code(code))));
         }
         let file = get("file").filter(|f| valid_id(f, 1, 64)).ok_or("the invite link has no valid file id")?;
-        if get("team").is_some() {
-            return Ok((Invite { server, file, token: String::new() }, Some(Lookup::Team)));
-        }
         let token = get("token").filter(|t| valid_id(t, 16, 128)).ok_or("the invite link has no valid token")?;
         Ok((Invite { server, file, token }, None))
     }

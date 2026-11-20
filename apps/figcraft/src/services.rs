@@ -354,7 +354,6 @@ pub fn shutdown(app: &mut FigApp, dir: Option<&Path>, recovery: Option<crate::re
     if let Some(dir) = dir {
         write_prefs(dir, &app.session.prefs);
     }
-    // Before the sessions end: a recovered online file's copy waits for its session's outcome.
     if let Some(r) = recovery {
         r.quit(&app.session, app.ui.quit);
     }
@@ -362,7 +361,8 @@ pub fn shutdown(app: &mut FigApp, dir: Option<&Path>, recovery: Option<crate::re
 }
 
 /// Write `prefs` to `dir` atomically (a temporary file renamed over the old one: a crash leaves
-/// either version whole). They hold online owner tokens, so on Unix only the owner can read them.
+/// either version whole). They are the user's own (names, recent files' paths), so on Unix only
+/// the owner can read them.
 pub(crate) fn write_prefs(dir: &Path, prefs: &Prefs) {
     let tmp = dir.join("state.json.tmp");
     let written = std::fs::create_dir_all(dir)

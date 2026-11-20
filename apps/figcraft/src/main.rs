@@ -37,8 +37,6 @@ mod args_tests;
 #[cfg(test)]
 mod graphics_tests;
 #[cfg(test)]
-mod recovery_online_tests;
-#[cfg(test)]
 mod recovery_tests;
 #[cfg(test)]
 mod services_tests;
@@ -211,7 +209,7 @@ fn main() -> eframe::Result {
     let opened: Vec<u64> = session.docs.iter().map(|d| d.uid).collect();
     // Documents a crashed or killed run left unsaved come back; this run keeps its own copies.
     let recovery_root = services::config_dir().map(|d| d.join("Recovery"));
-    // The preferences first: they hold the online files a recovered document may be one of.
+    // The preferences first.
     let recovery = recovery::Shared::default();
     let svc = services::Desktop::load(recovery.clone());
     svc.follow_system_dark(wake(&ctx_slot));
@@ -220,7 +218,7 @@ fn main() -> eframe::Result {
     }
     let recovered = recovery_root.as_deref().map(|r| recovery::recover_all(r, &mut session)).unwrap_or_default();
     let mut copies = recovery_root.as_deref().and_then(recovery::Recovery::start);
-    // Copies of online files stay until their files arrive from their servers.
+    // Earlier runs' copies stay until this run has its own.
     if let Some(r) = copies.as_mut() {
         r.adopt(recovered.waiting);
     }

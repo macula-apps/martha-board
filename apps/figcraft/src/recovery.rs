@@ -9,15 +9,8 @@
 //! that can't keep copies of its own leaves it for the next start. Then it goes, and its folder
 //! with its last copy. Closing the app normally removes its own.
 //!
-//! A document that is one of your online files has a note beside its copy (`<uid>.online`, written
-//! after the copy it describes): the server, the file's id, and who the app was in the file with
-//! the last change of the server's it had; never a token. The next start joins that file again
-//! as its owner (`collab.recoverFile`) and **keeps the copy until the outcome is known**: the
-//! server has everything in it (the copy goes), the copy's own unconfirmed changes were put on
-//! top of the server's file and sent, the copy was opened beside the file because both had
-//! changed, or the file couldn't be joined and the copy was opened as any other. Whatever a copy
-//! became is copied into this run's folder before the old copy is removed. Without the note, or
-//! when the file is no longer recorded, the copy opens as any other.
+//! Runs from before online files left (martha-board#41) wrote a note beside the copy of one
+//! (`<uid>.online`). Such a copy opens as any other now, and its note goes with it.
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -50,7 +43,7 @@ pub struct Recovery {
     written: HashMap<u64, Copy>,
     /// When (UI clock) the next copies are due.
     next: f64,
-    /// Copies of online files from earlier runs, kept until their outcome is known.
+    /// Copies from earlier runs, kept until what they became is safe.
     waiting: Vec<Waiting>,
 }
 
@@ -86,21 +79,14 @@ impl Copy {
     }
 }
 
-/// A copy from an earlier run, kept until what it became is safe.
+/// A copy from an earlier run, opened as document `uid`, kept until what it became is safe: this
+/// run's own copy of it (or its save or close).
 pub struct Waiting {
-    until: Until,
+    uid: u64,
     copy: PathBuf,
     /// The lock of the folder it is in: no other start takes the copy meanwhile (none for a copy
     /// left directly in the root by older versions).
     _lock: Option<Arc<File>>,
-}
-
-/// What a kept copy waits for.
-enum Until {
-    /// One of your online files, joined again as this session: its outcome.
-    Session(u64),
-    /// Opened as document `uid`: this run's own copy of it (or its save or close).
-    Copied(u64),
 }
 
 /// What [`recover_all`] brought back.
@@ -137,10 +123,8 @@ impl Recovery {
     pub fn tick(&mut self, s: &Session, now: f64) -> Option<f64> {
         self.written.values_mut().for_each(Copy::reap);
         self.settle(s);
-        // A join on its way settles within its timeouts: look again soon. A copy waiting for this
-        // run's own is looked at again with the next copies.
-        let joining = self.waiting.iter().any(|w| matches!(w.until, Until::Session(_)));
-        let settling = if joining { Some(0.5) } else { (!self.waiting.is_empty()).then_some(INTERVAL) };
+        // A copy waiting for this run's own is looked at again with the next copies.
+        let settling = (!self.waiting.is_empty()).then_some(INTERVAL);
         if now < self.next {
             return self.pending(s).then_some(self.next - now).or(settling);
         }
@@ -156,18 +140,10 @@ impl Recovery {
     }
 
     /// Remove earlier runs' copies once what they became is safe: copied here (the write
-    /// succeeded), saved or closed. An online file's copy goes once its outcome is known and every
-    /// document is safe, since which of them it became isn't known.
+    /// succeeded), saved or closed.
     pub fn settle(&mut self, s: &Session) {
-        let joined = |w: &Waiting| matches!(w.until, Until::Session(id) if !s.live.recovering(id));
-        if self.waiting.iter().any(joined) {
-            self.write(s, true);
-        }
-        let all_safe = s.docs.iter().all(|d| self.safe(s, d));
-        let (done, waiting): (Vec<Waiting>, Vec<Waiting>) = std::mem::take(&mut self.waiting).into_iter().partition(|w| match w.until {
-            Until::Session(_) => joined(w) && all_safe,
-            Until::Copied(uid) => s.docs.iter().find(|d| d.uid == uid).is_none_or(|d| self.safe(s, d)),
-        });
+        let (done, waiting): (Vec<Waiting>, Vec<Waiting>) =
+            std::mem::take(&mut self.waiting).into_iter().partition(|w| s.docs.iter().find(|d| d.uid == w.uid).is_none_or(|d| self.safe(s, d)));
         self.waiting = waiting;
         done.into_iter().for_each(remove_kept);
     }
@@ -182,13 +158,11 @@ impl Recovery {
     pub fn write(&mut self, s: &Session, wait: bool) {
         for d in &s.docs {
             let path = self.dir.join(format!("{}.figcraft", d.uid));
-            let note = path.with_extension(ONLINE);
             if !needs_copy(s, d) {
                 if let Some(mut w) = self.written.remove(&d.uid) {
                     // A write still running would bring the copy back after it was removed.
                     w.join();
                     let _ = std::fs::remove_file(&path);
-                    let _ = std::fs::remove_file(&note);
                 }
                 continue;
             }
@@ -205,24 +179,7 @@ impl Recovery {
                 continue;
             }
             let (doc, versions, branches) = recovery_copy(s, d);
-            // Which online file it is and what of the server's this very copy has (a line each:
-            // the server, the file's id, then the session, client id, last change and the secret the
-            // client id resumes with), while it
-            // is one. Written after the copy, never before: a note must not promise more of the
-            // server's changes than its copy holds.
-            let online =
-                s.online_of(d.uid).map(|(server, file, at)| format!("{server}\n{file}\n{} {} {} {}", at.session, at.client_id, at.seq, at.secret));
-            let job = move || {
-                if !write_atomic(&path, &doc, &versions, &branches) {
-                    return false;
-                }
-                let _ = match online {
-                    // The note holds the secret the client resumes with: owner-only, as the copy.
-                    Some(text) => write_private(&note, text.as_bytes()),
-                    None => std::fs::remove_file(&note),
-                };
-                true
-            };
+            let job = move || write_atomic(&path, &doc, &versions, &branches);
             // The stamp counts as copied only once its write succeeded.
             if wait {
                 if job() {
@@ -240,7 +197,6 @@ impl Recovery {
             if !keep {
                 w.join();
                 let _ = std::fs::remove_file(dir.join(format!("{uid}.figcraft")));
-                let _ = std::fs::remove_file(dir.join(format!("{uid}.{ONLINE}")));
             }
             keep
         });
@@ -263,12 +219,11 @@ impl Recovery {
         self.settle(s);
     }
 
-    /// A normal quit: the documents were saved or their changes discarded on purpose. (Earlier
-    /// runs' copies still waiting for their outcome stay for the next start.)
+    /// A normal quit: the documents were saved or their changes discarded on purpose.
     pub fn finish(self) {
         let Self { dir, _lock, written, waiting, .. } = self;
         // The documents earlier runs' copies became were saved or discarded too.
-        waiting.into_iter().filter(|w| matches!(w.until, Until::Copied(_))).for_each(remove_kept);
+        waiting.into_iter().for_each(remove_kept);
         // Windows removes a folder only once nothing in it is open: copies being written first.
         for (_, h) in written.into_values().filter_map(|w| w.flight) {
             let _ = h.join();
@@ -278,8 +233,8 @@ impl Recovery {
     }
 }
 
-/// Remove a kept copy and its note, and its folder with its last copy (while another is kept
-/// there, its lock is held).
+/// Remove a kept copy and the note an older run may have left beside it, and its folder with its
+/// last copy (while another is kept there, its lock is held).
 fn remove_kept(w: Waiting) {
     let _ = std::fs::remove_file(&w.copy);
     let _ = std::fs::remove_file(w.copy.with_extension(ONLINE));
@@ -292,7 +247,8 @@ fn remove_kept(w: Waiting) {
     }
 }
 
-/// The extension of the note beside the copy of a document that is one of your online files.
+/// The extension of the note runs from before martha-board#41 wrote beside the copy of one of
+/// your online files: it goes with its copy.
 const ONLINE: &str = "online";
 
 /// How long the startup waits, once, for folder locks that may free themselves (#334).
@@ -304,22 +260,6 @@ fn lock_folder(dir: &Path) -> Result<File, std::fs::TryLockError> {
     let lock = File::options().write(true).create(true).truncate(false).open(dir.join(LOCK)).map_err(std::fs::TryLockError::Error)?;
     lock.try_lock()?;
     Ok(lock)
-}
-
-/// The copy at `file` is of one of your online files: join that file again as its owner, keeping
-/// the copy to compare with what arrives. The session, or `None` when the copy isn't one (or its
-/// file isn't recorded any more, or is open already): then it opens as any other copy.
-fn rejoin_online(file: &Path, s: &mut Session) -> Option<u64> {
-    let note = std::fs::read_to_string(file.with_extension(ONLINE)).ok()?;
-    let mut lines = note.lines().map(str::trim);
-    let (server, id, at) = (lines.next()?, lines.next()?, lines.next()?);
-    let mut at = at.split(' ').map(|n| n.parse::<u64>().ok());
-    let (session, client, seq) = (at.next()??, at.next()??, at.next()??);
-    // Absent in notes written before ids had secrets.
-    let secret = at.next().flatten().unwrap_or(0);
-    let params =
-        json!({"path": file.to_string_lossy(), "server": server, "file": id, "session": session, "client": client, "seq": seq, "secret": secret});
-    s.execute("collab.recoverFile", &params).ok()?.get("session")?.as_u64()
 }
 
 /// Write `doc` with its version history and branches to `path` through a temporary file; false
@@ -361,8 +301,8 @@ pub fn recover(root: &Path, s: &mut Session) -> usize {
 
 /// Open the copies left by runs that ended without closing (folders under `root` whose lock is
 /// free, and copies directly in `root` from older versions) as unsaved documents. Each is kept
-/// until this run has its own copy of the document ([`Recovered::waiting`]); a copy of one of your
-/// online files, while its file is joined again. A copy that can't be read stays where it is.
+/// until this run has its own copy of the document ([`Recovered::waiting`]). A copy that can't be
+/// read stays where it is.
 pub fn recover_all(root: &Path, s: &mut Session) -> Recovered {
     let mut out = Recovered::default();
     let Ok(entries) = std::fs::read_dir(root) else { return out };
@@ -370,16 +310,11 @@ pub fn recover_all(root: &Path, s: &mut Session) -> Recovered {
         if file.extension().is_none_or(|e| e != "figcraft") {
             return;
         }
-        // One of your online files comes back from its server, its copy kept until then.
-        if let Some((session, lock)) = lock.and_then(|l| Some((rejoin_online(file, s)?, l))) {
-            out.waiting.push(Waiting { until: Until::Session(session), copy: file.to_path_buf(), _lock: Some(lock.clone()) });
-            return;
-        }
         let before: Vec<u64> = s.docs.iter().map(|d| d.uid).collect();
         if s.execute("file.recover", &json!({"path": file.to_string_lossy()})).is_ok() {
             out.copies += 1;
             if let Some(uid) = s.docs.iter().map(|d| d.uid).find(|u| !before.contains(u)) {
-                out.waiting.push(Waiting { until: Until::Copied(uid), copy: file.to_path_buf(), _lock: lock.cloned() });
+                out.waiting.push(Waiting { uid, copy: file.to_path_buf(), _lock: lock.cloned() });
             }
         }
     };

@@ -84,7 +84,7 @@ Each may be given more than once, as `--flag DIR` or `--flag=DIR`:
   are never listed, opened, removed or named: `index` counts the files listed), `file.import`,
   `file.placeImage`, `image.place`, `file.save`, `file.saveAs`, `file.revert`, `file.recover`,
   `file.export`, `file.exportSvg`, `file.exportLayers` (and the folders it makes), `file.exportFramesPdf`,
-  `collab.recoverFile {path}`, and the headless
+  and the headless
   `ui.render` / `ui.screenshot` with a `path`.
 - **How paths are resolved:** a relative path is made absolute against the server's working
   directory, then its links are followed: the real path is what is compared and what is opened. For
@@ -102,8 +102,8 @@ Each may be given more than once, as `--flag DIR` or `--flag=DIR`:
   (`\Device\…`, `\??\…`, `\GLOBAL??\…`) is refused as a device path, and so is a name that ends in a period or a space, in a
   path or as a link's target, since Windows trims it where it looks a name up.
 - **The network:** a confined call reaches no FigCraft server, so it can't send a
-  document anywhere through one. Hosting, joining, publishing and sharing a file (`collab.host`,
-  `collab.join`, `collab.publish`, `collab.share` …) are refused with `automation roots are set: commands
+  document anywhere through one. Hosting, joining and sharing a file (`collab.host`,
+  `collab.join`, `collab.share` …) are refused with `automation roots are set: commands
   don't reach the network …`. The app started with the flags confines its own window too, so its
   sharing is off as well. One exception: a root on a network share (a UNC path such as
   `\\server\share\…`, or a mounted network drive) is still a root, so reading and writing inside
@@ -976,37 +976,22 @@ join but not host); each call takes in what happened since the last one and send
 joined file opens as a new document).
 
 Sessions are per document: every open document has its own session or none, and several run at
-once (host one document, join another, publish a third). They keep syncing while another document
+once (host one document, join another). They keep syncing while another document
 is active; there your presence is empty (no cursor, selection or view). An attached agent's own
 presence in the app (above) is never part of a live session's presence. The `collab.*` commands
 and `collab.peers` are about the **active document's** session (`doc.switch {index}` changes which
 one that is), and `sessions` in `collab.peers` lists them all. Closing a document ends its session
 only: a host stops hosting it, a guest leaves it.
 
-- `collab.share {via?, access?, server?, name?, port?, bind?}` shares the active document with a
-  **join code**, the short way to do what `collab.publish` and `collab.host` do. `via: "online"`
-  (the default) publishes it to the server in Preferences (`pref.publishServer {url?}`: the
-  FigCraft server unless changed; `{url: ""}` turns online sharing off, `{}` goes back to the
-  built-in one; `server` names another for this call, with `?key=…` when it needs its key) and
-  returns `status: "connecting"`; once `collab.peers` says `"live"`, `code` is the code to give
-  others (`K7M-2QX-9TD`) and `share` is `{via, access, shared, editCode, viewCode, commentCode, editLink,
-  viewLink, commentLink}`: links and codes made for others (`published.edit` / `published.view` and `link` are
-  your own way in; keep them). `access: "view"` (or calling again with it while shared) makes
-  `code` the view-only one, and `access: "comment"` the one for viewing and commenting (whoever
-  joins with it adds, replies to, reacts to and resolves comments but can't change the design;
-  `commentCode` is null from a server older than comment links, and asking for it then fails). A server older than join codes leaves `code` null: give
-  `share.editLink` / `share.viewLink` instead. `via: "local"`
-  hosts the document for people on the same network and returns at once with a longer `code`
-  (20 symbols, carrying this machine's IPv4 address, the port and the session's secret; `bind:
-  "local"` keeps it to this machine); everyone who joins edits. **Calling it publishes the
-  document to a server other people run: do it only when asked to share.** `collab.stop {}` stops
-  the sharing. Local: the session ends for everyone (`{ended: true}`). Online: `{ended: false,
-  shared: false}`: the others' links and codes are revoked and they are disconnected at once (with
-  their copy), while you stay in the file, which stays on the server, open only to you
-  (`share.shared` is false, `code` null); `collab.share {}` then shares the same file again with
-  new codes, `collab.leave {}` leaves it there, and `collab.manageFile {file, action: "remove"}`
-  takes it off the server (the file is recorded with your online files: see `collab.files`
-  below).
+- `collab.share {via?, access?, port?, bind?}` shares the active document with a **join code**,
+  the short way to do what `collab.host` does: it hosts the document for people on the same
+  network (`via` is `"local"`, the default and the only way: sharing through a server left with
+  macula-apps/martha-board#41) and returns at once with `code` (20 symbols, carrying this machine's
+  IPv4 address, the port and the session's secret; `bind: "local"` keeps it to this machine) and
+  `share` (`{via, access, shared, editCode, viewCode, editLink, viewLink}`, with `commentCode` and
+  `commentLink` null). `access: "view"` (or calling again with it while shared) makes `code` the
+  view-only one; there is no comment code on the local network. `collab.stop {}` stops the
+  sharing: the session ends for everyone (`{ended: true}`).
 - `collab.host {port?, bind?}` starts hosting the active document (a session that document was in
   ends; other documents' sessions go on): `bind` is `"local"` (this
   machine, the default), `"lan"` (the local network) or an interface address; the port is 47900,
@@ -1015,7 +1000,9 @@ only: a host stops hosting it, a guest leaves it.
   `collab.peers` does, with `link` (`figcraft://join?host=…&file=…&token=…`) and `url`
   (`ws://…/?file=…&token=…`): both carry the session's secret, so share them only with people you
   invite. `collab.stop {}` ends the active document's session.
-- `collab.join {code}` or `collab.join {link}` (a join code of either kind: spaces, dashes and
+- `collab.join {code}` or `collab.join {link}` (a join code of either kind, a server's one asked at
+  the server in Preferences, `pref.publishServer {url?}` (`{url: ""}` turns such codes off, `{}`
+  goes back to the built-in one); spaces, dashes and
   case don't matter, `O` reads as `0` and `I` or `L` as `1`; or a link in any form: an app's
   invite, a `figcraft-server` share link, or the `ws(s)://…?file=…&token=…` URL; either parameter
   takes either) returns at once with the new session (`session`, `status:
@@ -1034,84 +1021,16 @@ only: a host stops hosting it, a guest leaves it.
   the active document's lost session: a reconnect that is waiting tries now, and a session you
   joined that couldn't go on is joined again in its tab. A dropped connection keeps reconnecting
   until you leave (see *Reconnect* in [`collab-protocol.md`](collab-protocol.md)).
-- `collab.publish {server, name?, key?}` puts the active document on a `figcraft-server`
-  (`server.md`) and syncs it from there (as that document's session; others go on): `server` is the address
-  `figcraft-server key` prints (`ws://host:47900/?key=…`; or give `key` separately), `name` the
-  file's name (default: the document's). It returns at once with `status: "connecting"`; the
-  document is read-only until the upload is done, then `collab.peers` has `published: {server,
-  file, name, edit, view}` with the file's first edit link and view link (they carry their
-  tokens: share them like passwords). Someone joining with the view link gets `access: "view"`:
-  every edit on the synced document is refused with "View only: …" (the server refuses them too).
-  With a comment link (`access: "comment"`) the comment commands work and sync, and every other edit
-  is refused with "Can comment: …".
-  On a server open to the public (`server.md`) `server` needs no
-  key (`wss://figcraft.example.com/`): `published` then also has `owner` (the owner token, shown this
-  once: keep it) and `expires` (when the server deletes the file unless someone opens it, seconds
-  since 1970), and `hosting` says who runs the server. A server that isn't open answers that it
-  takes files only with its key (`reason` in `collab.peers`).
-- `collab.serverInfo {server}` → `{open, operator, terms, idleDays, maxFileMb, expires}`: what a
-  server says about its hosting, before publishing (`open`: no key needed; `idleDays`: how long
-  files published without the key are kept unopened, null when they are kept). A server older
-  than open hosting is reported as taking files only with its key.
-- `collab.files {refresh?}` → `{files: [{server, host, file, name, created, opened, shared, code,
-  viewCode, state, expires, session, document, hasOwnerToken}], problems: [{server, host, state,
-  reason}], max}`: **your online files**, the files this session (or, attached, the app with its
-  saved preferences) put on a server without the server's key, most recently opened first. `file`
-  is the id the other commands take; `shared` says whether others get in now, with `code` /
-  `viewCode` to hand out; `session` and `document` name the session and open document a file is
-  in, or are null. Without `refresh` nothing is asked of any server and `state` is what was last
-  heard (`"unknown"` until asked). `refresh: true` asks each server once what became of its files:
-  `"online"`, or `"gone"` (removed, or expired unopened); a name changed elsewhere and links
-  revoked elsewhere are taken over. A server that can't be reached, or is older than the request,
-  is listed in `problems` (`state: "offline"` with the `reason`, or `"unsupported"`) and its
-  files stay as they were. **Owner tokens and your own links are never in the result**
-  (`hasOwnerToken: true` stands for the token); they are kept with the preferences. The headless
-  session keeps its list only while it runs: note `published.owner` from `collab.peers` if a file
-  must be managed after it ends.
-- `collab.openFile {file, server?}` joins one of your online files again as its owner →
-  `{session, status: "connecting", document, alreadyOpen, file, server, name}`; it opens as a new
-  document (poll `collab.peers` until `"live"`), where `collab.stop {}` and `collab.share {}` stop
-  and start its sharing. A file that is open already becomes the active document instead
-  (`alreadyOpen: true`, `document` its index). `server` is needed only when files on several
-  servers share an id. A file whose `state` is `"gone"` is refused.
-- `collab.forgetFile {file, server?}` → `{forgotten, file, server, onServer}` drops a file from
-  the list **on this computer only**: the file stays on its server (`onServer`) until it expires,
-  and can't be managed from here again. To take it off the server use `collab.manageFile {file,
-  action: "remove"}` instead.
-- `collab.recoverFile {path, file, server?, session, client, seq}` is what the desktop app's crash
-  recovery runs for the copy of an online file (the last three come from the note beside the
-  copy): it joins the file as its owner and keeps the copy until the file arrives, then discards
-  it (the server has everything), applies its unconfirmed changes on top as one synced edit, or
-  opens it beside the file as "<name> (recovered copy)"; a file that can't be joined opens the
-  copy as an unsaved document. Returns `{session, status: "connecting"}`.
-- `collab.manageFile {file, action, server?, owner?, …}` manages a file published without the key,
-  with its owner token. `server` and `owner` default to what is recorded for one of your online
-  files (`collab.files`); give both for a file that isn't recorded here. `links` → `{links: [{id,
-  access, label, created}]}`; `createLink {access?: view|edit, label?}` → `{id, access, link}` (a
-  new share link, shown once); `revoke {link}` (whoever joined with it is disconnected); `share`
-  → `{shared: true, code, viewCode, editLink, viewLink}` (new links and join codes for others; the
-  same ones when it is shared already) and `unshare` → `{shared: false, …}` (the recorded links
-  and codes are revoked and whoever joined with them is disconnected; the file stays yours on the
-  server); `rename {name}` (its name on the server and in your list) and `remove` (the file is
-  deleted from the server, whoever is in it is disconnected, it leaves your list and a session
-  open on it here ends, its document staying open as a copy) → `{done}`. A wrong token, or
-  another file's, is refused.
-- `collab.report {reason}` (at most 500 characters) reports the file you joined on a server to its
-  operator → `{sent}`; the session's message says when the server kept it, or why not (ten an hour
-  per address). Servers older than this version don't take reports (`hosting` is null).
 - `collab.peers {}` → the active document's session: `{available, canHost (false in the web
   build), session (its id; null when the document isn't in a session: then `status` is `"off"`
   and the rest is null or empty), status
   (off|connecting|live|reconnecting|failed), reason?,
   attempt?, role (host|guest), me, name, color, fileName, pages, link, url, address, network,
-  access (edit|view|comment), readOnly (the active document can't be edited now: view only,
-  comment only, or being published), published (a file you published: {server, file, name, edit, view, owner, expires}),
+  access (edit|view|comment), readOnly (the active document can't be edited now: view only, or
+  comment only),
   code (the join code to give others when the document was shared with `collab.share`, else
-  null), share ({via: online|local, access, shared, editCode, viewCode, commentCode, editLink, viewLink,
-  commentLink}, or
-  null; `shared: false`: your file on a server, not shared now),
-  hosting (what the server of the file you're in says: {open, operator, terms, idleDays, maxFileMb,
-  expires}, or null),
+  null), share ({via: local, access, shared, editCode, viewCode, commentCode, editLink, viewLink,
+  commentLink}, or null),
   follow, signals (the host passes cursor chat and spotlights on), chat (your cursor chat),
   spotlight (who spotlights, or null), spotlighting (you do), syncing (the document arrived),
   document (the index of the synced open document),
@@ -1133,8 +1052,7 @@ only: a host stops hosting it, a guest leaves it.
   pan or zoom of your own, or Escape).
 - `collab.removePerson {client}` removes that person from the session: they are told the session
   is over for them (they keep their copy and don't reconnect), and their address can't join the
-  file again while the session runs. Only the person hosting, or the owner of a
-  file on a server (with its owner token), can; a server older than this request says it can't.
+  file again while the session runs. Only the person hosting can.
   Returns `{removed, name}`.
 - `collab.cursorChat {text}` shows `text` next to your cursor for everyone in the session (put the
   cursor somewhere first with `collab.cursor`): at most 100 characters, control characters become

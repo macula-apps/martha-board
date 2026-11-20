@@ -1,12 +1,11 @@
-use super::{Access, Arc, HashMap, IpAddr, Ipv6Addr, Mutex, PoisonError, SocketAddr};
+use figcraft_collab::message::Access;
+
+use super::{Arc, HashMap, IpAddr, Ipv6Addr, Mutex, PoisonError, SocketAddr};
 
 /// What a link lets a hello do.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Admission {
     pub access: Access,
-    /// The link's id, when the backend has several per file (revoking it disconnects whoever
-    /// joined with it).
-    pub link: Option<String>,
 }
 
 /// The address limits and blocks count a client by: its IPv4 address (an IPv4-mapped IPv6 address

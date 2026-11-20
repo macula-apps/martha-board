@@ -84,11 +84,6 @@ On macOS, fonts activated through Adobe Fonts are read where Creative Cloud keep
 (`~/Library/Application Support/Adobe/CoreSync/plugins/livetype`), so they're available while
 they're active there. Files without an extension are read when they start like a font file.
 
-The collaboration server is a binary of its own, `figcraft-server` (`cargo build --release -p
-figcraft-server`): it keeps files with share links and serves their live sessions, and its
-`key`, `files`, `links`, `reports`, `block-ip` and `check` subcommands manage them (a server can
-be open to the public: server.md). See server.md.
-
 ## Subcommands
 
 ### `info <file> [--json]`
@@ -248,10 +243,8 @@ write root); everything else is refused ([mcp.md › Confining file access](mcp.
 They apply to the headless session only, and that is why `--attach` refuses them: an attached server
 is confined by the app it attaches to, from the flags that app was started with. With `--attach`,
 `--timeout SECONDS` (1–600, default 60) is how long the app may take over each request. The headless
-session can host, join and publish
-live sessions (`collab.*`: without a key on a server open to the public, with `collab.serverInfo`,
-`collab.manageFile` for the owner token and `collab.report`); the one-shot `run` can't (no network
-link).
+session can host and join
+live sessions (`collab.*`); the one-shot `run` can't (no network link).
 
 ### `perf [--layers N[,N...]]`
 

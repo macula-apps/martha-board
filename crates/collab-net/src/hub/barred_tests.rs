@@ -61,7 +61,7 @@ fn a_kicked_connection_with_a_full_queue_is_shut() {
     use std::sync::mpsc::sync_channel;
     use std::time::Duration;
 
-    use super::{Conn, Kind, Line, Out};
+    use super::{Conn, Line, Out};
 
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let mut client = std::net::TcpStream::connect(listener.local_addr().unwrap()).unwrap();
@@ -87,7 +87,7 @@ fn a_kicked_connection_with_a_full_queue_is_shut() {
         in_flight: InFlight(Default::default()),
         backend: Closes,
         rooms: HashMap::new(),
-        conns: HashMap::from([(1, Conn { out, sock: server_side, kind: Kind::Managing { comments: true }, ip })]),
+        conns: HashMap::from([(1, Conn { out, sock: server_side, file: "f".into(), id: 1, ip })]),
         local: None,
         outbox: Vec::new(),
         barred: HashMap::new(),

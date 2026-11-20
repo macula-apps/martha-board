@@ -280,7 +280,7 @@ pub fn show(app: &mut FigApp, ctx: &Context) {
             ui.add_space(8.0);
             ui.horizontal(|ui| {
                 ui.label(tr("Server for online sharing"));
-                // Where Share ▸ Online keeps files and join codes are asked; no key here
+                // Where a server's join codes are asked about (`collab.join`); no key here
                 // (preferences are saved as text).
                 let name = tr("Server for online sharing");
                 if let Some(url) = crate::widgets::text_field_named(ui, egui::Id::unique("pref_publish_server"), &prefs.publish_server, 220.0, name) {
@@ -370,8 +370,6 @@ pub fn show(app: &mut FigApp, ctx: &Context) {
     }
     color_profile_dialog(app, ctx);
     crate::live::join_dialog(app, ctx);
-    crate::live::publish_dialog(app, ctx);
-    crate::online::dialogs(app, ctx);
     crate::windows::confirm_close(app, ctx);
     crate::windows::confirm_close_tab(app, ctx);
 }
