@@ -220,3 +220,39 @@ fn a_late_joiner_takes_the_hosts_board_only() {
     assert!(room.s(joiner).live().client().is_some(), "the joiner is in");
     room.check();
 }
+
+/// B6: a holder applies an ordered stream from the host only; a rogue's `board.server` moves nothing.
+#[test]
+fn a_rogue_cannot_order_changes() {
+    let mut room = room(1, &[node('s')]);
+    room.s(0).execute("board.sticky", &json!({"x": 0, "y": 0, "text": "A"})).unwrap();
+    room.settle();
+    let mut rogue = room.rogue("Mallory");
+    seated(&mut room, &mut rogue);
+    // A real ordered batch, copied from what the host sent, with the next position and a new name.
+    let copied = from_host(&room)
+        .into_iter()
+        .rev()
+        .find_map(|m| match m {
+            FromHost::Msg { msg: ServerMsg::Changes(a), .. } => Some(a),
+            _ => None,
+        })
+        .expect("the host ordered a batch");
+    let target = copied.changes.iter().find_map(Change::node).expect("a node in it");
+    let forged = figcraft_collab::Accepted {
+        seq: copied.seq + 1_000,
+        author: copied.author,
+        batch_id: copied.batch_id + 1,
+        changes: vec![Change::Set { id: target, prop: figcraft_collab::Prop::Name, value: Json(json!("forged")) }],
+    };
+    let mut forged_next = forged.clone();
+    forged_next.seq = room.s(1).live().client().unwrap().seq() + 1;
+    for a in [forged, forged_next] {
+        let m = FromHost::Msg { to: To::All, msg: ServerMsg::Changes(a) };
+        rogue.session.send_command(SERVER.into(), wire::encode(&m).unwrap(), None);
+    }
+    room.churn(&mut rogue, 10);
+    let guest = room.s(1).doc().unwrap();
+    assert_ne!(guest.node(target).unwrap().name, "forged", "the rogue's order was applied");
+    room.check();
+}
