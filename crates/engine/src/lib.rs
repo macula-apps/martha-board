@@ -57,7 +57,6 @@ pub use sharing::agent;
 pub use sharing::branches;
 pub use sharing::collab;
 pub use sharing::compare;
-pub use sharing::invite_links;
 pub use sharing::live;
 
 pub use batch::{BatchScope, BatchStep};
@@ -316,8 +315,6 @@ mod inspect_behaviour_tests;
 mod inspect_fields_tests;
 #[cfg(test)]
 mod interaction_rollback_tests;
-#[cfg(test)]
-mod invite_links_tests;
 #[cfg(test)]
 mod jpg_export_tests;
 #[cfg(test)]

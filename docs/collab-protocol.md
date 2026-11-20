@@ -687,24 +687,9 @@ resuming with its offline edits, and leaving the session going back to snapshot 
   `200 ok` (the request line is peeked at before the WebSocket handshake, which goes on untouched
   otherwise).
 
-*Built* (opening invite links):
-
-- The desktop app takes an invite link on its command line (`figcraft "figcraft://join?…"`): once
-  the window is up it joins (`collab.join`); a link it can't use opens the Join dialog with the
-  link and the reason. Other arguments are files, as paths or `file://` URLs.
-- **Windows**: the app registers itself per user as the opener of `figcraft://` under
-  `HKEY_CURRENT_USER\Software\Classes\figcraft` (no administrator rights): the scheme, its icon
-  and `"<figcraft.exe>" "%1"`. Preferences ▸ **Open invite links in FigCraft** (and
-  `collab.registerLinks {on?}`) turns it on or off; it defaults to on for installed builds, which
-  register on first run, and off for builds from source (inside a Cargo build directory, or debug
-  builds), which leave any registration alone. Turning it off removes only this copy's
-  registration. The registry sits behind a trait, so tests use a fake.
-- **macOS**: the bundle declares the scheme (`CFBundleURLTypes`), so links open FigCraft; the
-  link itself arrives as an Apple Event, which the windowing layer doesn't pass on yet, so the app
-  opens without joining (paste the link) until it does.
-- **Linux and FreeBSD**: the desktop entry declares `x-scheme-handler/figcraft` and passes URLs
-  (`%U`); the app joins from its command line.
-- An app that is already running doesn't receive the link: a second window starts and joins.
+*Removed* (opening invite links): `figcraft://join` links, `collab.registerLinks`, the Windows
+registration and the macOS `CFBundleURLTypes` scheme left with martha-board#2 (P2 and P3). A
+board is joined with a seam invite line, pasted.
 
 ## Offline and reconnect
 

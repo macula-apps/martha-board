@@ -1051,10 +1051,6 @@ only: a host stops hosting it, a guest leaves it.
   An edit the host refuses (someone deleted the layer) is rolled back and the reason is the
   session's message. While the connection is reconnecting, editing goes on; the edits go out when
   it is back (the same client, catching up with what it missed).
-- `collab.registerLinks {on?}` → `{on, registered}` makes the desktop app the opener of
-  `figcraft://` invite links, or stops (no `on`: switch). Only where the app registers them itself
-  (Windows, per user); elsewhere it reports the command unavailable. It also sets the
-  Preferences checkbox.
 
 ### Plugins
 

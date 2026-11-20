@@ -225,9 +225,6 @@ pub struct Lives {
     last: SessionId,
     /// What a document that isn't in a session shows.
     off: Live,
-    /// Registers the app as the opener of `figcraft://` invite links (the desktop app on Windows
-    /// installs one; see [`crate::invite_links`]).
-    pub links: Option<Box<dyn crate::invite_links::LinkRegistrar>>,
 }
 
 impl Lives {

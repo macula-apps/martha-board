@@ -66,9 +66,6 @@ pub struct Prefs {
     pub auto_save: bool,
     /// The desktop app starts on the Home screen instead of in a new file.
     pub start_on_home: bool,
-    /// `figcraft://` invite links open this app (`collab.registerLinks`); `None`: on for installed
-    /// builds, off for development builds.
-    pub invite_links: Option<bool>,
     /// Recently opened or saved files, newest first (File ▸ Open recent; at most
     /// [`cmd::file::MAX_RECENT`]).
     pub recent_files: Vec<String>,
@@ -121,7 +118,6 @@ impl Default for Prefs {
             ui_scale: 1.0,
             auto_save: false,
             start_on_home: false,
-            invite_links: None,
             recent_files: Vec::new(),
             getting_started_dismissed: false,
             home_views: BTreeMap::new(),

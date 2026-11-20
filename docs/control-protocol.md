@@ -269,7 +269,7 @@ peers whose cursors are drawn on the canvas (`cursorsShown`), whether the Join d
 field (`joinField`: an invite line), and why the active document can't be edited now (`readOnly`: the "View only" or
 "Can comment" reason, else null); the session itself is
 `engine.execute {command: "collab.peers"}` (hosting and joining are `collab.host` and
-`collab.join`, opening invite links `collab.registerLinks`, see
+`collab.join`, see
 [mcp.md](mcp.md#live-sessions)). `tabs` lists the open files as the tab strip
 shows them: `[{name, live}]`, `live` being `"shared"` (in a live session others get into),
 `"private"` (a share without ways in for others) or null.

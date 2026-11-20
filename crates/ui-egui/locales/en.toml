@@ -672,7 +672,6 @@
 "Open file" = "Open file"
 "Open files" = "Open files"
 "Open in new window" = "Open in new window"
-"Open invite links in FigCraft" = "Open invite links in FigCraft"
 "Opened as a new document" = "Opened as a new document"
 "Opened “{name}” in a new tab" = "Opened “{name}” in a new tab"
 "Opening the file…" = "Opening the file…"
@@ -1133,7 +1132,6 @@
 "and {n} more" = { one = "and {n} more", other = "and {n} more" }
 "bleed marks" = "bleed marks"
 "crop marks" = "crop marks"
-"figcraft:// links from a browser, chat or email open this app and join the session." = "figcraft:// links from a browser, chat or email open this app and join the session."
 "hidden" = "hidden"
 "iOS" = "iOS"
 "just now" = "just now"
