@@ -58,8 +58,14 @@ impl GrantIssuer for TestIssuer {
         Ok(SignedGrant { grant, signature: Vec::new() })
     }
     fn revoke(&self, doc: &str, holder: &str, now_ms: u64) -> Result<SignedRevocation, String> {
-        let revocation =
-            Revocation { v: GRANT_VERSION, doc: doc.to_string(), host: self.0.clone(), holder: holder.to_string(), issued_ms: now_ms, nonce: mint_nonce(now_ms, 1) };
+        let revocation = Revocation {
+            v: GRANT_VERSION,
+            doc: doc.to_string(),
+            host: self.0.clone(),
+            holder: holder.to_string(),
+            issued_ms: now_ms,
+            nonce: mint_nonce(now_ms, 1),
+        };
         Ok(SignedRevocation { revocation, signature: Vec::new() })
     }
     fn open_token(&self, doc: &str, role: Role, ttl_ms: u64, now_ms: u64) -> Result<SignedGrant, String> {
@@ -231,11 +237,7 @@ impl Room {
             group: String::new(),
         });
         session.set_auto_approve(true);
-        board.live.install(Box::new(SeamLink::new(Box::new(Handed(VecDeque::from([Opened {
-            session,
-            ceilings,
-            host_node: host.clone(),
-        }]))))));
+        board.live.install(Box::new(SeamLink::new(Box::new(Handed(VecDeque::from([Opened { session, ceilings, host_node: host.clone() }]))))));
         board.execute("collab.host", &json!({})).unwrap();
         let rest = bus.split_off(holders);
         let mut room = Room { people: vec![Person { s: board, tap }], host, ceilings, spares: rest };

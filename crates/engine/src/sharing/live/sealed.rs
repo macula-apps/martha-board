@@ -71,7 +71,13 @@ pub fn specs() -> Vec<CommandSpec> {
             false,
             invite
         ),
-        spec!("collab.approve", "Let in", "{node} → {approved}: a node waiting at the door of the open file's share comes in; only the host", false, approve),
+        spec!(
+            "collab.approve",
+            "Let in",
+            "{node} → {approved}: a node waiting at the door of the open file's share comes in; only the host",
+            false,
+            approve
+        ),
         spec!(
             "collab.revoke",
             "Revoke",
@@ -79,6 +85,12 @@ pub fn specs() -> Vec<CommandSpec> {
             false,
             revoke
         ),
-        spec!("collab.stats", "Share status", "{} → the open file's share: role, node, holders, pending, what it refused, the seam's numbers", false, |s, _| stats(s)),
+        spec!(
+            "collab.stats",
+            "Share status",
+            "{} → the open file's share: role, node, holders, pending, what it refused, the seam's numbers",
+            false,
+            |s, _| stats(s)
+        ),
     ]
 }

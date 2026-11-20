@@ -91,7 +91,6 @@ impl SeamLink {
             None => Err("this board isn't shared".into()),
         }
     }
-
 }
 
 impl LiveLink for SeamLink {

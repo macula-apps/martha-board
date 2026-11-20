@@ -184,7 +184,8 @@ impl HostBoard {
                 self.seat(node);
             }
         }
-        let gone: Vec<u32> = self.seats.iter().filter(|(n, s)| s.joined && **n != self.me_node && !holders.contains(*n)).map(|(_, s)| s.client_id).collect();
+        let gone: Vec<u32> =
+            self.seats.iter().filter(|(n, s)| s.joined && **n != self.me_node && !holders.contains(*n)).map(|(_, s)| s.client_id).collect();
         for id in gone {
             self.unseat(id);
         }

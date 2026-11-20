@@ -68,7 +68,6 @@ fn no_laptop_sends_seam_text_edits() {
     assert!(!room.sent(1, |k| matches!(k, Kind::Command { .. })).is_empty(), "the guest's acts did travel as commands");
 }
 
-
 /// Every `board.server` the host sent, read back.
 fn from_host(room: &Room) -> Vec<FromHost> {
     room.sent(0, |k| matches!(k, Kind::Command { id, .. } if id == SERVER))
@@ -127,7 +126,10 @@ fn refused_from_rogue(changes: Vec<Change>, why: &str) {
 fn a_rogue_layer_kind_is_refused() {
     let page = NodeId(1);
     let kind = Json(serde_json::to_value(NodeKind::Slice).unwrap());
-    refused_from_rogue(vec![Change::Create { id: NodeId(9_999), kind, parent: Some(page), position: "a0".into(), props: Vec::new() }], "a slice layer");
+    refused_from_rogue(
+        vec![Change::Create { id: NodeId(9_999), kind, parent: Some(page), position: "a0".into(), props: Vec::new() }],
+        "a slice layer",
+    );
 }
 
 /// B1: a document property a board never shares.
@@ -204,14 +206,26 @@ fn a_late_joiner_takes_the_hosts_board_only() {
     forged.execute("board.sticky", &json!({"x": 9, "y": 9, "text": "the rogue's"})).unwrap();
     let mut answered = 0;
     let state = Server::new(forged.doc().unwrap().clone(), "", Limits::default()).state().unwrap();
-    let seat = wire::Seat { node: node('t'), client_id: 9, name: "You".into(), color: String::new(), access: figcraft_collab::Access::Edit, processed: Default::default() };
+    let seat = wire::Seat {
+        node: node('t'),
+        client_id: 9,
+        name: "You".into(),
+        color: String::new(),
+        access: figcraft_collab::Access::Edit,
+        processed: Default::default(),
+    };
     // The joiner's first ask may come before the rogue saw its grant; the seam asks again later.
     let end = macula_craft_seam::now_ms() + 15_000;
     while answered == 0 && macula_craft_seam::now_ms() < end {
         std::thread::sleep(std::time::Duration::from_millis(20));
         for got in room.churn(&mut rogue, 1) {
             if matches!(got, Inbound::SnapshotWanted) {
-                let w = Welcome { session: state.session, seq: state.seq, snapshot: Replica::new(forged.doc().unwrap().clone()).snapshot().unwrap(), seats: vec![seat.clone()] };
+                let w = Welcome {
+                    session: state.session,
+                    seq: state.seq,
+                    snapshot: Replica::new(forged.doc().unwrap().clone()).snapshot().unwrap(),
+                    seats: vec![seat.clone()],
+                };
                 rogue.session.answer_snapshot(wire::encode(&w).unwrap());
                 answered += 1;
             }

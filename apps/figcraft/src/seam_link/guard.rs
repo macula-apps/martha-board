@@ -5,8 +5,8 @@
 //! added to these lists on purpose.
 
 use figcraft_collab::{Change, DocProp, Entry, Json, Prop};
-use figcraft_doc::{FileKind, NodeKind};
 use figcraft_doc::color::Paint;
+use figcraft_doc::{FileKind, NodeKind};
 
 /// The node types a board is made of: stickies, shapes, sections, connectors, ink, tables and
 /// the text in them, on pages.
@@ -62,9 +62,7 @@ const DOC_PROPS: &[DocProp] = &[DocProp::Name, DocProp::CurrentPage, DocProp::Ti
 /// Why `change` is outside what a board shares, named (`None`: it is inside).
 pub fn refused(change: &Change) -> Option<String> {
     match change {
-        Change::Create { kind, props, .. } => {
-            refused_kind(kind).or_else(|| props.iter().find_map(|(prop, value)| refused_prop(*prop, value)))
-        }
+        Change::Create { kind, props, .. } => refused_kind(kind).or_else(|| props.iter().find_map(|(prop, value)| refused_prop(*prop, value))),
         Change::Set { prop, value, .. } => refused_prop(*prop, value),
         Change::Delete { .. } => None,
         Change::SetDoc { prop, value } => refused_doc(*prop, value),
