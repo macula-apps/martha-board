@@ -463,7 +463,7 @@ impl Client {
                 Ok(Vec::new())
             }
             // Cursor chat and spotlights are the app's (the transport hands them over).
-            ServerMsg::Pong | ServerMsg::Signal { .. } | ServerMsg::Resolved { .. } => Ok(Vec::new()),
+            ServerMsg::Pong | ServerMsg::Signal { .. } => Ok(Vec::new()),
             ServerMsg::Welcome { .. } if self.online => Err(Error::Protocol("already joined".into())),
             ServerMsg::Welcome { session, client_id, seq, catch_up, processed, peers, access, secret } => {
                 if session != self.session || client_id != self.id {

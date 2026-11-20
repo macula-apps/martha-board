@@ -329,20 +329,10 @@ pub enum CatchUp {
 /// left out, so a hostile server can't grow a client's memory without bound.
 pub const MAX_PEERS: usize = 4_096;
 
-/// Asks a server which file a join code opens (the first message on a connection, instead of
-/// [`Hello`]). Answered with [`ServerMsg::Resolved`], then the connection closes; a wrong code, too
-/// many wrong ones from an address, or a server that hosts no files is `Refused`.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Resolve {
-    pub protocol: u32,
-    pub client_version: String,
-    /// The code's symbols ([`crate::code::normalize`]d).
-    pub code: String,
-}
-
 /// A tag this build no longer has. The messages it carried (managing a server's files, its
 /// hosting and reports, team libraries, its plugin directory and team list) left with
-/// martha-board#41, when the server apps were gone; their places keep every later tag's number, so
+/// martha-board#41, when the server apps were gone, and asking which file a join code opens with
+/// martha-board#43, when join codes were; their places keep every later tag's number, so
 /// the messages that stay encode as they always did. Nothing can make one (it has no values), and
 /// reading one fails with [`Error::Retired`] and the tag.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -411,8 +401,9 @@ pub enum ClientMsg {
     Retired12(Retired<12>),
     /// Retired: `Report` (reporting a file to a server's operator).
     Retired13(Retired<13>),
-    /// Ask which file a join code opens (the first message on a connection, instead of `Hello`).
-    Resolve(Resolve),
+    /// Retired: `Resolve` (asking which file a join code opens), a removed message kept so later
+    /// variants keep their wire numbers.
+    Retired14(Retired<14>),
     /// Retired: `ResolveTeam` (the link of a file on a server's team list).
     Retired15(Retired<15>),
 }
@@ -477,12 +468,9 @@ pub enum ServerMsg {
     Retired12(Retired<12>),
     /// Retired: `Reported` (the answer to a report).
     Retired13(Retired<13>),
-    /// The answer to [`ClientMsg::Resolve`]: the file and its link's token (what a `Hello` joins
-    /// with).
-    Resolved {
-        file: String,
-        token: String,
-    },
+    /// Retired: `Resolved` (the answer to `Resolve`: which file a join code opens), a removed
+    /// message kept so its tag reads as retired.
+    Retired14(Retired<14>),
 }
 
 /// The binary form of `msg`: [`WIRE_VERSION`], then postcard.

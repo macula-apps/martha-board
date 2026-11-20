@@ -23,7 +23,6 @@
 
 pub mod change;
 pub mod client;
-pub mod code;
 mod diff;
 mod docprops;
 pub mod frac;

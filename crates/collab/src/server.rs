@@ -467,9 +467,6 @@ impl Server {
                 Vec::new()
             }
             ClientMsg::Ping => vec![Outgoing::To(from, ServerMsg::Pong)],
-            ClientMsg::Resolve(_) => {
-                vec![Outgoing::To(from, ServerMsg::Refused { reason: "a join code is asked about on a connection of its own".into() })]
-            }
         }
     }
 

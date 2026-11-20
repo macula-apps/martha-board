@@ -86,15 +86,6 @@ fn a_viewer_sees_everything_and_changes_nothing() {
 }
 
 #[test]
-fn a_join_code_question_is_refused_on_a_session_connection() {
-    let mut s = Server::new(base(), "", Limits::default());
-    let c = join_as(&mut s, Access::Edit);
-    let ask = message::Resolve { protocol: message::PROTOCOL, client_version: message::client_version(), code: "K7M2QX9TD".into() };
-    let out = s.receive(c.id(), ClientMsg::Resolve(ask));
-    assert!(matches!(out.as_slice(), [Outgoing::To(_, ServerMsg::Refused { .. })]));
-}
-
-#[test]
 fn the_journal_replayed_over_the_last_state_restores_the_server() {
     let mut s = Server::new(base(), "", Limits::default());
     s.journaling(true);

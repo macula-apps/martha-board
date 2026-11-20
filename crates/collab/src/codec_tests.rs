@@ -4,8 +4,8 @@ use figcraft_doc::{Document, NodeId, NodeKind};
 
 use crate::change::{Change, Json, Prop};
 use crate::message::{
-    Accepted, Access, CatchUp, ClientMsg, EditingText, Hello, PROTOCOL, Peer, Presence, Processed, Resolve, Resume, ServerMsg, Signal, WIRE_VERSION,
-    decode, decode_json, encode, encode_json,
+    Accepted, Access, CatchUp, ClientMsg, EditingText, Hello, PROTOCOL, Peer, Presence, Processed, Resume, ServerMsg, Signal, WIRE_VERSION, decode,
+    decode_json, encode, encode_json,
 };
 use crate::sim::Rng;
 use crate::{Error, Replica, diff};
@@ -61,7 +61,6 @@ fn samples() -> (Vec<ClientMsg>, Vec<ServerMsg>) {
         ClientMsg::Ping,
         ClientMsg::Signal(Signal::chat("Hi ☕")),
         ClientMsg::Signal(Signal::spotlight(true)),
-        ClientMsg::Resolve(Resolve { protocol: PROTOCOL, client_version: "0.3.1".into(), code: "K7M2QX9TD".into() }),
     ];
     let snapshot = Replica::new(Document::new("Snap")).snapshot().unwrap();
     let server = vec![
@@ -93,7 +92,6 @@ fn samples() -> (Vec<ClientMsg>, Vec<ServerMsg>) {
         ServerMsg::Refused { reason: "full".into() },
         ServerMsg::Pong,
         ServerMsg::Signal { client_id: 4, signal: Signal::chat("Hi ☕") },
-        ServerMsg::Resolved { file: "f".into(), token: "t".into() },
     ];
     (client, server)
 }
@@ -200,8 +198,8 @@ fn message_sizes() {
 }
 
 /// The tag (postcard's variant index, the byte after the wire version) of every message kept when
-/// the server-only ones left (martha-board#41): each keeps the number it had, so a kept message's
-/// bytes are what they always were. The gaps are the retired tags.
+/// the server-only ones left (martha-board#41) and join codes did (martha-board#43): each keeps
+/// the number it had, so a kept message's bytes are what they always were. The gaps are the retired tags.
 #[test]
 fn every_kept_message_keeps_its_tag() {
     let (client, server) = samples();
@@ -213,7 +211,6 @@ fn every_kept_message_keeps_its_tag() {
         ClientMsg::Ack { .. } => 3,
         ClientMsg::Ping => 4,
         ClientMsg::Signal(_) => 9,
-        ClientMsg::Resolve(_) => 14,
         _ => panic!("a retired message can't be made"),
     };
     let server_tag = |m: &ServerMsg| match m {
@@ -226,7 +223,6 @@ fn every_kept_message_keeps_its_tag() {
         ServerMsg::Refused { .. } => 6,
         ServerMsg::Pong => 7,
         ServerMsg::Signal { .. } => 10,
-        ServerMsg::Resolved { .. } => 14,
         _ => panic!("a retired message can't be made"),
     };
     let mut kept = (std::collections::BTreeSet::new(), std::collections::BTreeSet::new());
@@ -239,27 +235,28 @@ fn every_kept_message_keeps_its_tag() {
         kept.1.insert(server_tag(m));
     }
     // Every kept message is in the samples (and round-trips there).
-    assert_eq!(kept.0.into_iter().collect::<Vec<_>>(), [0, 1, 2, 3, 4, 9, 14]);
-    assert_eq!(kept.1.into_iter().collect::<Vec<_>>(), [0, 1, 2, 3, 4, 5, 6, 7, 10, 14]);
+    assert_eq!(kept.0.into_iter().collect::<Vec<_>>(), [0, 1, 2, 3, 4, 9]);
+    assert_eq!(kept.1.into_iter().collect::<Vec<_>>(), [0, 1, 2, 3, 4, 5, 6, 7, 10]);
 }
 
-/// A frame carrying a tag that left with martha-board#41 reads as [`Error::Retired`] with that
-/// tag: not a panic, and never another message. The tags are the variant indexes as they were on
-/// main at 4f2f3956 (`crates/collab/src/message.rs`, counted from 0 in declaration order):
+/// A frame carrying a tag that left with martha-board#41 or #43 reads as [`Error::Retired`] with
+/// that tag: not a panic, and never another message. The tags are the variant indexes as they were
+/// on main at 4f2f3956 (`crates/collab/src/message.rs`, counted from 0 in declaration order):
 /// `ClientMsg` 5 `Manage`, 6 `Admin`, 7 `OpenLibrary`, 8 `Library`, 10 `OpenPlugins`, 11 `Plugins`,
-/// 12 `OpenHosting`, 13 `Report`, 15 `ResolveTeam`; `ServerMsg` 8 `Admin`, 9 `Library`,
-/// 11 `Plugins`, 12 `Hosting`, 13 `Reported`. Each frame is the wire version, the tag, then a
-/// payload as its old message would carry one (a string's length and bytes; nothing for some).
+/// 12 `OpenHosting`, 13 `Report`, 14 `Resolve` (#43), 15 `ResolveTeam`; `ServerMsg` 8 `Admin`,
+/// 9 `Library`, 11 `Plugins`, 12 `Hosting`, 13 `Reported`, 14 `Resolved` (#43). Each frame is
+/// the wire version, the tag, then a payload as its old message would carry one (a string's
+/// length and bytes; nothing for some).
 #[test]
 fn a_retired_tag_reads_as_a_named_error() {
     let frame = |tag: u8, payload: &[u8]| [&[WIRE_VERSION, tag][..], payload].concat();
     let reason = [1, b'x'];
-    for tag in [5, 6, 7, 8, 10, 11, 12, 13, 15] {
+    for tag in [5, 6, 7, 8, 10, 11, 12, 13, 14, 15] {
         for payload in [&[][..], &reason[..]] {
             assert_eq!(decode::<ClientMsg>(&frame(tag, payload), 1 << 20), Err(Error::Retired(u32::from(tag))), "ClientMsg tag {tag}");
         }
     }
-    for tag in [8, 9, 11, 12, 13] {
+    for tag in [8, 9, 11, 12, 13, 14] {
         for payload in [&[][..], &reason[..]] {
             assert_eq!(decode::<ServerMsg>(&frame(tag, payload), 1 << 20), Err(Error::Retired(u32::from(tag))), "ServerMsg tag {tag}");
         }
