@@ -1,13 +1,15 @@
 //! What may be shared, one rule both ways (B1, R3), whose ballot a holder may cast (B2), and who
-//! runs the timer and the votes (B3).
+//! runs the timer and the votes (B3), and that what a holder signs carries the name the host gave
+//! it (B4).
 //!
 //! An allowlist, not a denylist: a change is admitted only when every part of it is named here.
 //! A property, a node type or a document entry added to FigCraft later is refused until it is
 //! added to these lists on purpose.
 
-use figcraft_collab::{Change, DocProp, Entry, Json, Prop};
+use figcraft_collab::{Change, DocProp, Document, Entry, Json, Prop};
 use figcraft_doc::color::Paint;
-use figcraft_doc::{FileKind, NodeKind};
+use figcraft_doc::{BoardItem, FileKind, NodeKind};
+use figcraft_engine::board::AUTHOR_LAYER;
 use figcraft_engine::cmd::facilitate::live_voter;
 
 /// The node types a board is made of: stickies, shapes, sections, connectors, ink, tables and
@@ -176,6 +178,42 @@ pub fn refused_facilitation(changes: &[Change]) -> Option<String> {
         .iter()
         .any(|c| matches!(c, Change::SetDoc { prop, .. } if FACILITATION.contains(prop)))
         .then(|| "only the host runs the timer and the votes".to_string())
+}
+
+/// The author a board object names (stickies and stamps), if `value` is a board item that does.
+fn author_named(value: &Json) -> Option<String> {
+    let item = value.read::<Option<BoardItem>>("board").ok().flatten()?;
+    Some(item.author().to_string()).filter(|a| !a.is_empty())
+}
+
+/// The text a text layer's kind holds, if `value` is one.
+fn text_in(value: &Json) -> Option<String> {
+    value.read::<NodeKind>("kind").ok()?.text().map(|t| t.characters.clone())
+}
+
+/// Why `changes` from the holder the host named `name` sign something with another name (B4;
+/// `None`: they don't): a sticky or stamp whose author is not `name`, or the author line under a
+/// sticky (its [`AUTHOR_LAYER`]) written with other text. `doc` is the shared board the changes
+/// apply to, when known (the host's): with it, an edit of an author line already there is checked
+/// too. A holder may still type any name into a note: that is writing on the board.
+pub fn refused_author(name: &str, changes: &[Change], doc: Option<&Document>) -> Option<String> {
+    let other = |signed: String| (signed != name).then(|| format!("a name other than the one the host gave you ({signed})"));
+    changes.iter().find_map(|c| match c {
+        Change::Create { kind, props, .. } => {
+            let author_line = props.iter().any(|(p, v)| *p == Prop::Name && v.read::<String>("name").is_ok_and(|n| n == AUTHOR_LAYER));
+            let line = author_line.then(|| text_in(kind)).flatten().and_then(other);
+            line.or_else(|| props.iter().find_map(|(p, v)| (*p == Prop::Board).then(|| author_named(v)).flatten().and_then(other)))
+        }
+        Change::Set { prop: Prop::Board, value, .. } => author_named(value).and_then(other),
+        Change::Set { prop: Prop::Name, value, .. } if value.read::<String>("name").is_ok_and(|n| n == AUTHOR_LAYER) => {
+            Some("a layer renamed to a sticky's author line".to_string())
+        }
+        Change::Set { id, prop: Prop::Kind, value } => {
+            let is_line = doc.and_then(|d| d.node(*id)).is_some_and(|n| n.name == AUTHOR_LAYER);
+            is_line.then(|| text_in(value)).flatten().and_then(other)
+        }
+        _ => None,
+    })
 }
 
 #[cfg(test)]

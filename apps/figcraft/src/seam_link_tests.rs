@@ -1,8 +1,9 @@
 //! The seam link, end to end on the seam's in-memory bus: whole FigCraft sessions sharing a board
 //! with no server (martha-board#2 P2).
 
-use figcraft_collab::{Change, ClientMsg, DocProp, Entry, Json, Limits, Replica, Server, ServerMsg};
+use figcraft_collab::{Change, ClientMsg, DocProp, Entry, Json, Limits, Prop, Replica, Server, ServerMsg};
 use figcraft_doc::{NodeId, NodeKind};
+use figcraft_engine::board::AUTHOR_LAYER;
 use macula_craft_seam::{Inbound, Kind, short};
 use serde_json::json;
 
@@ -100,12 +101,18 @@ fn rogue_sends(rogue: &mut Rogue, changes: Vec<Change>) {
 
 /// A rogue's batch is refused whole: the rogue alone is told why, and no laptop's board moves.
 fn refused_from_rogue(changes: Vec<Change>, why: &str) {
+    refused_from_rogue_on(|_| changes, why);
+}
+
+/// [`refused_from_rogue`], with the batch made from the room once the host's sticky is on it.
+fn refused_from_rogue_on(changes: impl FnOnce(&mut Room) -> Vec<Change>, why: &str) {
     let mut room = room(1, &[node('s')]);
     room.s(0).execute("board.sticky", &json!({"x": 0, "y": 0, "text": "A"})).unwrap();
     room.settle();
     let mut rogue = room.rogue("Mallory");
     let client = seated(&mut room, &mut rogue);
     let before = room.s(0).doc().unwrap().clone();
+    let changes = changes(&mut room);
     rogue_sends(&mut rogue, changes);
     room.churn(&mut rogue, 10);
     let rejects: Vec<(To, String)> = from_host(&room)
@@ -557,4 +564,76 @@ fn the_host_runs_the_session_and_each_holder_votes_once() {
     room.settle();
     assert!(room.s(1).doc().unwrap().vote.as_ref().is_some_and(|v| v.ended), "the host's end reached the holder");
     room.check();
+}
+
+/// The author a sticky on person `i`'s board names.
+fn sticky_author(room: &mut Room, i: usize, sticky: u64) -> String {
+    let doc = room.s(i).doc().unwrap();
+    doc.node(NodeId(sticky)).and_then(|n| n.board.as_ref()).map(|b| b.author().to_string()).unwrap_or_default()
+}
+
+/// B4: a holder signs what it makes with the name the host gave it, not the one it chose for
+/// itself, on every laptop.
+#[test]
+fn a_holder_signs_with_the_name_the_host_gave_it() {
+    let mut room = room(1, &[]);
+    room.s(1).execute("pref.userName", &json!({"name": "Not Me"})).unwrap();
+    let seat = room.s(1).live().info.as_ref().unwrap().name.clone();
+    let a = id_of(&room.s(1).execute("board.sticky", &json!({"x": 0, "y": 0, "text": "A"})).unwrap());
+    room.settle();
+    for i in 0..2 {
+        assert_eq!(sticky_author(&mut room, i, a), seat, "person {i} shows the host's name for the holder");
+    }
+    room.check();
+}
+
+/// B4 on the holder's own laptop: a sticky signed with a name of its choosing is put back there
+/// and said by name, and nothing goes out.
+#[test]
+fn a_holder_cannot_sign_with_another_name() {
+    refused_locally(1, "board.sticky", json!({"x": 0, "y": 0, "text": "hi", "author": "Host"}), "a name other than");
+}
+
+/// B4: a rogue's sticky signed with another's name is refused at the host.
+#[test]
+fn a_rogue_cannot_sign_a_sticky_as_another() {
+    let page = NodeId(1);
+    let frame = Json(serde_json::to_value(NodeKind::Frame).unwrap());
+    let signed = Json(serde_json::to_value(Some(figcraft_doc::BoardItem::Sticky { author: "Alice".into() })).unwrap());
+    refused_from_rogue(
+        vec![Change::Create { id: NodeId(9_999), kind: frame, parent: Some(page), position: "a0".into(), props: vec![(Prop::Board, signed)] }],
+        "a name other than",
+    );
+}
+
+/// B4: a rogue rewrites the author line under the host's sticky: refused at the host.
+#[test]
+fn a_rogue_cannot_rewrite_an_author_line() {
+    refused_from_rogue_on(
+        |room| {
+            let doc = room.s(0).doc().unwrap();
+            let line = doc.nodes().find(|n| n.name == AUTHOR_LAYER).expect("the host's sticky has an author line");
+            let mut kind = line.kind.clone();
+            if let NodeKind::Text(t) = &mut kind {
+                t.characters = "Alice".into();
+            }
+            vec![Change::Set { id: line.id, prop: Prop::Kind, value: Json(serde_json::to_value(kind).unwrap()) }]
+        },
+        "a name other than",
+    );
+}
+
+/// B4: a holder that calls itself the host shows, on every laptop, as the name the host's invite
+/// gave it.
+#[test]
+fn a_holder_shows_as_its_invited_name() {
+    let mut room = room(1, &[node('s')]);
+    let mut rogue = room.rogue_invited_as("Host", "Mallory");
+    let client = seated(&mut room, &mut rogue);
+    rogue.session.share_cursor(Some(serde_json::to_string(&figcraft_collab::Presence::default()).unwrap()));
+    room.churn(&mut rogue, 10);
+    for i in 0..2 {
+        let peer = room.s(i).live().peers.get(&client).cloned().unwrap_or_else(|| panic!("person {i} sees the holder"));
+        assert_eq!(peer.name, "Mallory", "person {i} shows the invited name");
+    }
 }

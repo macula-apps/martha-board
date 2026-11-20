@@ -261,7 +261,12 @@ impl Room {
     /// The host invites `node` as an editor, with no name of its own (it shows as its short id):
     /// what a real holder has before it joins.
     fn invite(&mut self, node: &str) {
-        self.people[0].s.execute("collab.invite", &json!({"forNode": node, "role": "editor"})).unwrap();
+        self.invite_as(node, "");
+    }
+
+    /// The host invites `node` as an editor under `name` (B4: the name shown for it).
+    fn invite_as(&mut self, node: &str, name: &str) {
+        self.people[0].s.execute("collab.invite", &json!({"forNode": node, "forName": name, "role": "editor"})).unwrap();
     }
 
     fn join_on(&mut self, (me, t): (String, Tapped)) -> usize {
@@ -284,6 +289,14 @@ impl Room {
     pub fn rogue(&mut self, name: &str) -> Rogue {
         let (me, t) = self.spares.pop_front().expect("a spare node");
         self.invite(&me);
+        let session = self.granted(&me, t, name);
+        Rogue { session, node: me }
+    }
+
+    /// The next spare node, invited by the host as `invited` and calling itself `name`.
+    pub fn rogue_invited_as(&mut self, name: &str, invited: &str) -> Rogue {
+        let (me, t) = self.spares.pop_front().expect("a spare node");
+        self.invite_as(&me, invited);
         let session = self.granted(&me, t, name);
         Rogue { session, node: me }
     }

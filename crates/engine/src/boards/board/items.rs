@@ -62,6 +62,9 @@ pub(crate) fn add_text(doc: &mut Document, parent: NodeId, text: &str, size: f64
 /// never changes as the note fills, the note grows taller instead.
 pub const STICKY_TEXT_SIZE: f64 = 16.0;
 
+/// What the text layer under a sticky's note that names its author is called.
+pub const AUTHOR_LAYER: &str = "Author";
+
 /// A sticky note's layers: the frame, the note and (when known) its author.
 pub(super) fn make_sticky(
     doc: &mut Document,
@@ -93,7 +96,7 @@ pub(super) fn make_sticky(
     if !author.is_empty() {
         let a = add_text(doc, id, author, 10.0, AUTHOR_INK, TextAlignH::Left, inner)?;
         if let Some(n) = doc.node_mut(a) {
-            n.name = "Author".into();
+            n.name = AUTHOR_LAYER.into();
         }
     }
     Ok((id, note))

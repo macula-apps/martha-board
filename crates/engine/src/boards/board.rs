@@ -70,8 +70,8 @@ pub use edit::label_of;
 pub(crate) use edit::{copied_items, copy_map, rejoin};
 use edit::{label_cmd, set_color, set_style};
 pub(crate) use items::add_text;
+pub use items::{AUTHOR_LAYER, STICKY_TEXT_SIZE, edit_text, owner_of_text, text_of};
 pub use items::{CONNECTED_GAP, connected_place};
-pub use items::{STICKY_TEXT_SIZE, edit_text, owner_of_text, text_of};
 use items::{add_connected, ink_cmd, next_sticky, shape_cmd, stamp_cmd, sticky_cmd};
 pub(crate) use mindmap::settle_mind_maps;
 pub(crate) use reshape::path_handle_at;
@@ -317,11 +317,14 @@ fn line_shade(c: Color) -> Color {
     if palette { Color::new(c.r * 0.55, c.g * 0.55, c.b * 0.55, c.a) } else { c }
 }
 
-/// Your name on what you make: the name from Preferences, else the one a live session gave you
-/// (none for the default name outside a session).
+/// Your name on what you make: in a live session the name it gave you (on a shared board, the name
+/// the host's invite gave you: martha-board#2 B4, the host refuses any other), else the name from
+/// Preferences (none for the default name).
 pub(crate) fn author(s: &Session) -> String {
-    let name = crate::live::display_name(&s.prefs);
-    if name.is_empty() { s.live().info.as_ref().map(|i| i.name.clone()).unwrap_or_default() } else { name }
+    match s.live().info.as_ref() {
+        Some(info) => info.name.clone(),
+        None => crate::live::display_name(&s.prefs),
+    }
 }
 
 /// The parent a command places into, and that parent's page-to-local transform.

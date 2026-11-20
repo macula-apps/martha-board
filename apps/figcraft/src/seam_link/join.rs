@@ -27,6 +27,8 @@ pub struct JoinBoard {
     me_node: String,
     /// The client id the host seated this node as, once the board is loaded.
     me: Option<u32>,
+    /// The name the host gave this node (B4): what it signs with.
+    me_name: String,
     /// Who is who: node → client id, from the welcome and each seat since.
     clients: BTreeMap<String, u32>,
     /// The host's order this board holds: the last batch applied.
@@ -51,6 +53,7 @@ impl JoinBoard {
             host_node: host_node.to_string(),
             me_node,
             me: None,
+            me_name: String::new(),
             clients: BTreeMap::new(),
             position: 0,
             held: false,
@@ -119,6 +122,7 @@ impl JoinBoard {
         self.position = welcome.seq;
         self.held = false;
         self.me = Some(seat.client_id);
+        self.me_name = seat.name.clone();
         let peers: Vec<Peer> = welcome
             .seats
             .iter()
@@ -206,7 +210,11 @@ impl JoinBoard {
                 changes.iter().any(|c| matches!(c, Change::Put { entry: Entry::Ballot(_), .. })).then(|| "not seated on the board yet".to_string())
             }
         };
-        if let Some(why) = guard::refused_any(changes).or_else(|| guard::refused_facilitation(changes)).or_else(ballot) {
+        if let Some(why) = guard::refused_any(changes)
+            .or_else(|| guard::refused_facilitation(changes))
+            .or_else(ballot)
+            .or_else(|| guard::refused_author(&self.me_name, changes, None))
+        {
             return Err(why);
         }
         let bytes = wire::encode(msg)?;

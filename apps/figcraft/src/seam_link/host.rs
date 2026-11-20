@@ -255,7 +255,7 @@ impl HostBoard {
 
     /// A holder's `board.changes`, as the client its node is seated as.
     fn on_holders_changes(&mut self, author: &str, params: &[u8]) {
-        let Some(client) = self.seats.get(author).filter(|s| s.joined).map(|s| s.client_id) else {
+        let Some((client, name)) = self.seats.get(author).filter(|s| s.joined).map(|s| (s.client_id, s.name.clone())) else {
             return self.refuse("changes from a node with no seat".into());
         };
         let msg = match wire::decode::<ClientMsg>(params, self.ceilings.changes) {
@@ -267,6 +267,7 @@ impl HostBoard {
                 let why = guard::refused_any(changes)
                     .or_else(|| guard::refused_facilitation(changes))
                     .or_else(|| guard::refused_ballot(client, changes, Ballots::OwnOnly))
+                    .or_else(|| guard::refused_author(&name, changes, Some(self.server.document())))
                     .or_else(|| self.order_fits(&msg).err());
                 if let Some(why) = why {
                     self.refuse(why.clone());
@@ -301,7 +302,11 @@ impl HostBoard {
     /// ceilings. The engine asks before it applies an act (r=3 M2).
     pub fn check(&mut self, msg: &ClientMsg) -> Result<(), String> {
         let changes = wire::changes_of(msg);
-        if let Some(why) = guard::refused_any(changes).or_else(|| guard::refused_ballot(self.me, changes, Ballots::MayClear)) {
+        let name = self.my_name_and_color().0;
+        let why = guard::refused_any(changes)
+            .or_else(|| guard::refused_ballot(self.me, changes, Ballots::MayClear))
+            .or_else(|| guard::refused_author(&name, changes, Some(self.server.document())));
+        if let Some(why) = why {
             return Err(why);
         }
         self.order_fits(msg)
