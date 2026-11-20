@@ -28,7 +28,7 @@ replaced.
 | L5 | `figcraft-engine` | ~58.3k | Sessions, undo history (`Arc` snapshots), the command registry (`cmd/*`, `spec!`), pointer tools, snapping and measuring, the branch compare, the menu catalog (`catalog.rs`) and the keymap (`keymap.rs`), a panic guard |
 | L6 | `figcraft-ui-egui` | ~55.4k | The UI3-style frontend: canvas (render worker), toolbar, layers, the Design panel, colour picker, menus, dialogs, comments, accessibility (AccessKit), the control channel server |
 | L6 | `figcraft-mcp` | ~2.4k | MCP server (JSON-RPC over stdio), headless or bridged to a running app |
-| L6 | `figcraft-collab-net` | ~3.0k | Live sessions over the network: the WebSocket transport (tungstenite, a reader and a writer thread per connection), the hub that runs a collaboration core server per open file for the session host the app embeds and for `figcraft-server` (behind a `Backend`), the joining client (and a join code's question), invite links, presence relay and limits; the browser client; the only crate allowed networking dependencies |
+| L6 | `figcraft-collab-net` | ~3.0k | Live sessions over the network: the WebSocket transport (tungstenite, a reader and a writer thread per connection), the hub that runs a collaboration core server per open file for the session host the app embeds (behind a `Backend`), the joining client (and a join code's question), invite links, presence relay and limits; the browser client; the only crate allowed networking dependencies |
 | apps | `figcraft`, `figcraft-cli` | | Desktop app (eframe + wgpu) and command line |
 | tools | `xtask` | | `ci`, `test`, `layers`, `assets`, `docs`, `version`, `icon`, `bench` |
 
