@@ -45,7 +45,7 @@ pub struct JoinBoard {
 
 impl JoinBoard {
     pub fn new(session: CollabSession, ceilings: Ceilings, host_node: &str, name: &str) -> JoinBoard {
-        let me_node = session.author();
+        let me_node = session.author().to_string();
         JoinBoard {
             session,
             ceilings,

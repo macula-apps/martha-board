@@ -288,7 +288,7 @@ pub struct HostOptions {
 /// The networking behind live sessions, installed by the app ([`Lives::install`]). It carries
 /// any number of sessions at once, each under the [`SessionId`] it was started with. Calls return
 /// at once; what happens later arrives through [`poll`](Self::poll).
-pub trait LiveLink: Send {
+pub trait LiveLink {
     /// Sessions can be hosted here (the browser build can only join).
     fn can_host(&self) -> bool {
         true

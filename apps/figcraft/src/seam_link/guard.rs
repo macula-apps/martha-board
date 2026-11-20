@@ -5,7 +5,8 @@
 //! added to these lists on purpose.
 
 use figcraft_collab::{Change, DocProp, Entry, Json, Prop};
-use figcraft_doc::{NodeKind, Paint};
+use figcraft_doc::{FileKind, NodeKind};
+use figcraft_doc::color::Paint;
 
 /// The node types a board is made of: stickies, shapes, sections, connectors, ink, tables and
 /// the text in them, on pages.
@@ -54,8 +55,9 @@ const NODE_PROPS: &[Prop] = &[
     Prop::Board,
 ];
 
-/// The board's own document properties: its countdown and its votes.
-const DOC_PROPS: &[DocProp] = &[DocProp::Timer, DocProp::Vote, DocProp::VoteHistory];
+/// The board's own document properties: its file name, the page it opens on, its countdown and
+/// its votes. Its kind is admitted only as a board ([`refused_doc`]).
+const DOC_PROPS: &[DocProp] = &[DocProp::Name, DocProp::CurrentPage, DocProp::Timer, DocProp::Vote, DocProp::VoteHistory];
 
 /// Why `change` is outside what a board shares, named (`None`: it is inside).
 pub fn refused(change: &Change) -> Option<String> {
@@ -65,8 +67,16 @@ pub fn refused(change: &Change) -> Option<String> {
         }
         Change::Set { prop, value, .. } => refused_prop(*prop, value),
         Change::Delete { .. } => None,
-        Change::SetDoc { prop, .. } => (!DOC_PROPS.contains(prop)).then(|| format!("the document's {prop:?}")),
+        Change::SetDoc { prop, value } => refused_doc(*prop, value),
         Change::Put { entry, .. } | Change::Remove { entry } => refused_entry(entry),
+    }
+}
+
+/// A board stays a board: its kind may only ever be set to one.
+fn refused_doc(prop: DocProp, value: &Json) -> Option<String> {
+    match prop {
+        DocProp::Kind => (value.read::<FileKind>("kind").ok() != Some(FileKind::Board)).then(|| "a design file".into()),
+        _ => (!DOC_PROPS.contains(&prop)).then(|| format!("the document's {prop:?}")),
     }
 }
 

@@ -34,7 +34,7 @@ pub struct Opened {
 }
 
 /// Opens shares: on the mesh in the app (`collab_setup`), on an in-memory bus in tests.
-pub trait Opener: Send {
+pub trait Opener {
     /// Shares a board as its host, as `name`.
     fn host(&mut self, file_name: &str, name: &str) -> Result<Opened, String>;
     /// Joins the share behind an invite line, as `name`.

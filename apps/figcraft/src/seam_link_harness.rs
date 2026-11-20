@@ -150,8 +150,20 @@ impl Opener for Handed {
     }
 }
 
-/// The ceilings of a real share of `host`'s, measured as the app measures them.
+/// The ceilings of a real share of `host`'s, measured as the app measures them: once per test
+/// run per host (sealing to measure takes seconds in a debug build).
 pub fn real_ceilings(host: &str) -> Ceilings {
+    static MEASURED: Mutex<Vec<(String, Ceilings)>> = Mutex::new(Vec::new());
+    let mut measured = MEASURED.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some((_, c)) = measured.iter().find(|(h, _)| h == host) {
+        return *c;
+    }
+    let c = measure(host);
+    measured.push((host.to_string(), c));
+    c
+}
+
+fn measure(host: &str) -> Ceilings {
     let prefix = macula_craft_collab::mint_share_prefix("io.macula", host).unwrap();
     let profile = macula_rust::profile::Profile::parse("pq_hybrid").unwrap();
     let crdt = CollabSession::host(DOC, "x", Box::new(MemoryTransport::bus(&[host]).remove(0)), &[]).texts().full_update();
@@ -248,6 +260,21 @@ impl Room {
         let tap = t.1.clone();
         let session = self.granted(&me, t, name);
         Rogue { session, node: me, tap }
+    }
+
+    /// The tap of the next spare node, to set before it joins.
+    pub fn next_tap(&self) -> Tap {
+        self.spares.front().expect("a spare node").1.1.clone()
+    }
+
+    /// `rounds` rounds of the room settling and `rogue` ticking; what the rogue received.
+    pub fn churn(&mut self, rogue: &mut Rogue, rounds: usize) -> Vec<macula_craft_seam::Inbound> {
+        let mut got = Vec::new();
+        for _ in 0..rounds {
+            got.extend(rogue.session.tick());
+            self.settle();
+        }
+        got
     }
 
     /// The session of person `i` (0: the host).

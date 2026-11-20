@@ -92,7 +92,7 @@ impl HostBoard {
         if let Some(why) = guard::refused_any(&snapshot) {
             return Err(format!("this board can't be shared: {why}"));
         }
-        let me_node = session.author();
+        let me_node = session.author().to_string();
         let mut host = HostBoard {
             session,
             ceilings,
@@ -162,7 +162,10 @@ impl HostBoard {
             }
         }
         self.seats.insert(node.to_string(), Seated { client_id: id, name, color, access, secret, joined: true });
-        if node != self.me_node {
+        if node == self.me_node {
+            // The host's own welcome is routed to its side by this id, below.
+            self.me = id;
+        } else {
             self.broadcast(&FromHost::Seated { node: node.to_string(), client_id: id });
         }
         self.route(outs);
