@@ -224,6 +224,14 @@ impl Room {
         let mut session = CollabSession::host(DOC, "Host", Box::new(first), &[]);
         session.set_access(table(&host));
         session.set_issuer(Box::new(TestIssuer(host.clone())));
+        // Mesh coordinates for the invites it mints; the in-memory bus reaches nothing by them.
+        session.set_share_context(macula_craft_seam::ShareContext {
+            realm: node('9'),
+            realm_key: String::new(),
+            seed: format!("127.0.0.1:4433:{}", node('8')),
+            profile: "pq_hybrid".into(),
+            group: String::new(),
+        });
         session.set_auto_approve(true);
         board.live.install(Box::new(SeamLink::new(Box::new(Handed(Arc::new(Mutex::new(VecDeque::from([Opened {
             session,

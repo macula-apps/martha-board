@@ -59,11 +59,19 @@ use crate::{DocState, EngineError, Result, Session, TextEdit, ViewState, bad, sp
 mod events;
 mod host;
 mod join;
+mod sealed;
 mod sync;
 mod types;
 
 use host::unavailable;
-pub use join::{can_remove_people, specs};
+pub use join::can_remove_people;
+
+/// The live session commands (`collab.*`), the sealed share's among them.
+pub fn specs() -> Vec<CommandSpec> {
+    let mut all = join::specs();
+    all.extend(sealed::specs());
+    all
+}
 pub use types::{
     Bind, DEFAULT_SERVER, Event, HostOptions, LiveLink, MAX_NAME, MAX_PEERS, MAX_SELECTION, NO_SESSION, ONLINE_OFF, PEOPLE, PageInfo, Role,
     SessionId, SessionInfo, Share, Shared, SharedLink, Status, TOO_LARGE_TO_JOIN, Via, WayIn, join_target, parse_color,

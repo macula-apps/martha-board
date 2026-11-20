@@ -51,15 +51,28 @@ impl Session {
             }
             return;
         }
-        let Some(live) = self.live.sessions.get_mut(&id) else { return };
-        let Some(client) = live.client.as_mut() else { return };
-        match client.edit_with(&doc, label) {
-            Ok(msg) => {
-                live.synced = Some(doc);
-                self.live.send(id, msg);
+        let Some(live) = self.live.sessions.get(&id) else { return };
+        let Some(client) = live.client.as_ref() else { return };
+        // The batch is built on a copy and asked about first: a refused act is put back and
+        // nothing of it is kept or sent.
+        let mut probe = client.clone();
+        let msg = match probe.edit_with(&doc, label) {
+            Ok(msg) => msg,
+            Err(e) => return self.live_fail(id, format!("Couldn't sync an edit: {e}")),
+        };
+        if let (Some(m), Some(link)) = (msg.as_ref(), self.live.link())
+            && let Err(why) = link.check(id, m)
+        {
+            self.message = Some(format!("Not shared: {why}"));
+            if let Some(s) = synced {
+                self.apply_remote(uid, s);
             }
-            Err(e) => self.live_fail(id, format!("Couldn't sync an edit: {e}")),
+            return;
         }
+        let Some(live) = self.live.sessions.get_mut(&id) else { return };
+        live.client = Some(probe);
+        live.synced = Some(doc);
+        self.live.send(id, msg);
     }
 
     /// A group of commands on document `uid` starts (`on`) or ends: in between its edits don't

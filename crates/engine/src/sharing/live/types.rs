@@ -288,6 +288,9 @@ pub struct HostOptions {
 /// The networking behind live sessions, installed by the app ([`Lives::install`]). It carries
 /// any number of sessions at once, each under the [`SessionId`] it was started with. Calls return
 /// at once; what happens later arrives through [`poll`](Self::poll).
+/// What a link without sealed shares answers for the acts only they have.
+pub const NOT_SEALED: &str = "this app shares no board over the mesh";
+
 pub trait LiveLink {
     /// Sessions can be hosted here (the browser build can only join).
     fn can_host(&self) -> bool {
@@ -321,4 +324,26 @@ pub trait LiveLink {
     /// Events since the last call, each with its session ([`NO_SESSION`] for events about none);
     /// never blocks.
     fn poll(&mut self) -> Vec<(SessionId, Event)>;
+    /// Whether `msg` may be applied and sent in `session`: asked before an act is kept, so a
+    /// refused act leaves nothing behind (what a share carries, and how large). Yes by default.
+    fn check(&mut self, _session: SessionId, _msg: &ClientMsg) -> std::result::Result<(), String> {
+        Ok(())
+    }
+    /// An invite line for the node `node` (hex), shown as `name`, as `role` (`editor` or `viewer`),
+    /// good for `ttl_ms`: only the host of a sealed share mints one.
+    fn invite(&mut self, _session: SessionId, _node: &str, _name: &str, _role: &str, _ttl_ms: u64) -> std::result::Result<String, String> {
+        Err(NOT_SEALED.into())
+    }
+    /// Lets in the node `node`, waiting at the door of `session`.
+    fn approve(&mut self, _session: SessionId, _node: &str) -> std::result::Result<(), String> {
+        Err(NOT_SEALED.into())
+    }
+    /// Takes the node `node` out of `session` for good: its grant is revoked.
+    fn revoke(&mut self, _session: SessionId, _node: &str) -> std::result::Result<(), String> {
+        Err(NOT_SEALED.into())
+    }
+    /// What the share behind `session` counts: who holds it, who waits, what it refused.
+    fn stats(&self, _session: SessionId) -> std::result::Result<serde_json::Value, String> {
+        Err(NOT_SEALED.into())
+    }
 }

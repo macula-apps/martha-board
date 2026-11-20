@@ -204,6 +204,19 @@ impl HostBoard {
         self.route(outs);
     }
 
+    /// Revokes `node` (hex): the seam revokes its grant and the server drops its seat.
+    pub fn revoke(&mut self, node: &str) -> Result<(), String> {
+        let node = node.trim().to_ascii_lowercase();
+        if node == self.me_node {
+            return Err("the host cannot revoke itself: stop sharing instead".into());
+        }
+        self.session.revoke(&node)?;
+        if let Some(id) = self.seats.get(&node).filter(|s| s.joined).map(|s| s.client_id) {
+            self.unseat(id);
+        }
+        Ok(())
+    }
+
     /// Removes client `client` from the share: the seam revokes its node and the server drops it.
     pub fn remove(&mut self, client: u32) -> Result<(), String> {
         let node = self.node_of(client).filter(|n| *n != self.me_node).map(str::to_string).ok_or_else(|| format!("nobody has client id {client}"))?;

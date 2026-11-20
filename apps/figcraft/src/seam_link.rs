@@ -77,22 +77,8 @@ impl SeamLink {
         }
     }
 
-    /// `collab.invite`: an invite line for one named node, with `role` (r=2 §5 "Invite"). The
-    /// node gets the name the host gives it here, and that is the name shown for it (B4).
-    pub fn invite(&mut self, session: SessionId, node: &str, name: &str, role: macula_craft_seam::Role, ttl_ms: u64) -> Result<String, String> {
-        let host = self.hosted(session)?;
-        let line = host.session.mint_invite_for(None, None, node, name, role, ttl_ms)?;
-        host.invited(&node.trim().to_ascii_lowercase(), name, role);
-        Ok(line)
-    }
-
-    /// `collab.approve`: lets in a node waiting at the door.
-    pub fn approve(&mut self, session: SessionId, node: &str) -> Result<(), String> {
-        self.hosted(session)?.session.approve(node)
-    }
-
     /// `collab.stats`: the seam's numbers, the board's refusals and the gaps it asked about.
-    pub fn stats(&self, session: SessionId) -> Result<Value, String> {
+    fn stats_of(&self, session: SessionId) -> Result<Value, String> {
         match self.boards.get(&session) {
             Some(Board::Host(h)) => Ok(json!({
                 "role": "host",
@@ -115,18 +101,46 @@ impl SeamLink {
         }
     }
 
+}
+
+impl LiveLink for SeamLink {
     /// Whether `msg` may be applied and sent in `session` (B1 both ways, R3; the ceilings, M2):
-    /// the engine asks before it applies an act, so a refused act leaves nothing behind.
-    pub fn check(&mut self, session: SessionId, msg: &ClientMsg) -> Result<(), String> {
+    /// the engine asks before it keeps an act, so a refused act leaves nothing behind.
+    fn check(&mut self, session: SessionId, msg: &ClientMsg) -> Result<(), String> {
         match self.boards.get_mut(&session) {
             Some(Board::Host(h)) => h.check(msg),
             Some(Board::Join(j)) => j.check(msg),
             None => Ok(()),
         }
     }
-}
 
-impl LiveLink for SeamLink {
+    /// `collab.invite`: an invite line for one named node (r=2 §5 "Invite"). The node gets the
+    /// name the host gives it here, and that is the name shown for it (B4).
+    fn invite(&mut self, session: SessionId, node: &str, name: &str, role: &str, ttl_ms: u64) -> Result<String, String> {
+        let role = match role {
+            "viewer" => macula_craft_seam::Role::Viewer,
+            _ => macula_craft_seam::Role::Editor,
+        };
+        let host = self.hosted(session)?;
+        let line = host.session.mint_invite_for(None, None, node, name, role, ttl_ms)?;
+        host.invited(&node.trim().to_ascii_lowercase(), name, role);
+        Ok(line)
+    }
+
+    /// `collab.approve`: lets in a node waiting at the door.
+    fn approve(&mut self, session: SessionId, node: &str) -> Result<(), String> {
+        self.hosted(session)?.session.approve(node)
+    }
+
+    /// `collab.revoke`: the node's grant is revoked and its seat goes.
+    fn revoke(&mut self, session: SessionId, node: &str) -> Result<(), String> {
+        self.hosted(session)?.revoke(node)
+    }
+
+    fn stats(&self, session: SessionId) -> Result<Value, String> {
+        self.stats_of(session)
+    }
+
     fn host(&mut self, session: SessionId, opts: HostOptions) -> Result<SessionInfo, String> {
         let doc = (*opts.doc).clone();
         let pages = doc.pages.iter().map(|p| PageInfo { id: p.0, name: doc.node(*p).map(|n| n.name.clone()).unwrap_or_default() }).collect();

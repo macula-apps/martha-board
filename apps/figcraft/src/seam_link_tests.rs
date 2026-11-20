@@ -358,3 +358,66 @@ fn a_joiner_that_missed_batches_asks_again() {
     assert!(room.s(joiner).live().client().is_some());
     room.check();
 }
+
+/// A 1×1 PNG, as `image.place` takes it.
+const ONE_PIXEL: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+/// What person `i` sent on the seam so far.
+fn sent_count(room: &Room, i: usize) -> usize {
+    room.people[i].tap.sent.lock().unwrap().len()
+}
+
+/// R3 while shared: an act that adds what a board never shares is put back on the laptop it was
+/// made on, said by name, and nothing of it reaches the stream.
+fn refused_locally(i: usize, cmd: &str, params: serde_json::Value, why: &str) {
+    let mut room = room(1, &[]);
+    room.s(0).execute("board.sticky", &json!({"x": 0, "y": 0, "text": "A"})).unwrap();
+    room.settle();
+    let before = room.s(i).doc().unwrap().clone();
+    let sent = sent_count(&room, i);
+    let _ = room.s(i).execute(cmd, &params);
+    assert!(*room.s(i).doc().unwrap() == before, "the act was put back");
+    let said = room.s(i).message.clone().unwrap_or_default();
+    assert!(said.contains(why), "said by name: {said}");
+    room.settle();
+    assert_eq!(sent_count(&room, i), sent, "nothing went out");
+    room.check();
+}
+
+#[test]
+fn the_host_cannot_add_an_image_while_shared() {
+    refused_locally(0, "image.place", json!({"data": ONE_PIXEL, "x": 0, "y": 0}), "an image");
+}
+
+#[test]
+fn a_holder_cannot_add_a_style_while_shared() {
+    let mut room = room(1, &[]);
+    let a = id_of(&room.s(0).execute("board.sticky", &json!({"x": 0, "y": 0, "text": "A"})).unwrap());
+    room.settle();
+    let before = room.s(1).doc().unwrap().clone();
+    let sent = sent_count(&room, 1);
+    let _ = room.s(1).execute("style.create", &json!({"type": "paint", "name": "Brand", "from": a}));
+    assert!(*room.s(1).doc().unwrap() == before, "the style was put back");
+    assert!(room.s(1).message.clone().unwrap_or_default().contains("a style"));
+    room.settle();
+    assert_eq!(sent_count(&room, 1), sent, "nothing went out");
+    room.check();
+}
+
+/// The agent commands: an invite names one node, a revoke takes it out, the numbers count it.
+#[test]
+fn invite_revoke_and_stats_by_command() {
+    let mut room = room(1, &[]);
+    let refused = room.s(0).execute("collab.invite", &json!({})).unwrap_err().to_string();
+    assert!(refused.contains("forNode"), "{refused}");
+    assert!(room.s(0).execute("collab.invite", &json!({"forNode": node('e'), "role": "owner"})).is_err());
+    let line = room.s(0).execute("collab.invite", &json!({"forNode": node('e'), "forName": "Eve", "role": "viewer"})).unwrap();
+    assert!(!line["invite"].as_str().unwrap().is_empty());
+    let stats = room.s(0).execute("collab.stats", &json!({})).unwrap();
+    assert_eq!(stats["role"], "host");
+    assert!(stats["holders"].as_array().unwrap().iter().any(|h| *h == json!(node('b'))), "{stats}");
+    room.s(0).execute("collab.revoke", &json!({"node": node('b')})).unwrap();
+    room.settle();
+    assert!(room.s(0).live().peers.is_empty(), "the revoked holder left");
+    assert!(room.s(1).execute("collab.revoke", &json!({"node": node('a')})).is_err(), "only the host revokes");
+}
