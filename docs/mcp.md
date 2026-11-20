@@ -102,8 +102,8 @@ Each may be given more than once, as `--flag DIR` or `--flag=DIR`:
   (`\Device\…`, `\??\…`, `\GLOBAL??\…`) is refused as a device path, and so is a name that ends in a period or a space, in a
   path or as a link's target, since Windows trims it where it looks a name up.
 - **The network:** a confined call reaches no FigCraft server, so it can't send a
-  document anywhere through one. Hosting, joining and sharing a file (`collab.host`,
-  `collab.join`, `collab.share` …) are refused with `automation roots are set: commands
+  document anywhere through one. Hosting and joining a file (`collab.host`,
+  `collab.join` …) are refused with `automation roots are set: commands
   don't reach the network …`. The app started with the flags confines its own window too, so its
   sharing is off as well. One exception: a root on a network share (a UNC path such as
   `\\server\share\…`, or a mounted network drive) is still a root, so reading and writing inside
@@ -971,8 +971,9 @@ the tab in front. Headless sessions take it too.
 ### Live sessions
 
 People (and agents) edit one file together and see each other's cursors, selections and
-viewports. Both the headless session and the attached app can host and join (the web build can
-join but not host); each call takes in what happened since the last one and sends your edits (a
+viewports. The attached app hosts and joins over the Macula mesh (macula-apps/martha-board#2); the
+headless session installs no live link, so there its `collab.*` commands say live sessions aren't
+available; each call takes in what happened since the last one and sends your edits (a
 joined file opens as a new document).
 
 Sessions are per document: every open document has its own session or none, and several run at
@@ -983,38 +984,18 @@ and `collab.peers` are about the **active document's** session (`doc.switch {ind
 one that is), and `sessions` in `collab.peers` lists them all. Closing a document ends its session
 only: a host stops hosting it, a guest leaves it.
 
-- `collab.share {via?, access?, port?, bind?}` shares the active document with a **join code**,
-  the short way to do what `collab.host` does: it hosts the document for people on the same
-  network (`via` is `"local"`, the default and the only way: sharing through a server left with
-  macula-apps/martha-board#41) and returns at once with `code` (20 symbols, carrying this machine's
-  IPv4 address, the port and the session's secret; `bind: "local"` keeps it to this machine) and
-  `share` (`{via, access, shared, editCode, viewCode, editLink, viewLink}`, with `commentCode` and
-  `commentLink` null). `access: "view"` (or calling again with it while shared) makes `code` the
-  view-only one; there is no comment code on the local network. `collab.stop {}` stops the
-  sharing: the session ends for everyone (`{ended: true}`).
-- `collab.host {port?, bind?}` starts hosting the active document (a session that document was in
-  ends; other documents' sessions go on): `bind` is `"local"` (this
-  machine, the default), `"lan"` (the local network) or an interface address; the port is 47900,
-  or any free one when it's taken, as it is for a second hosted document (`port` picks one, 0
-  any). Returns the session as
-  `collab.peers` does, with `link` (`figcraft://join?host=…&file=…&token=…`) and `url`
-  (`ws://…/?file=…&token=…`): both carry the session's secret, so share them only with people you
-  invite. `collab.stop {}` ends the active document's session.
-- `collab.join {code}` or `collab.join {link}` (a join code of either kind, a server's one asked at
-  the server in Preferences, `pref.publishServer {url?}` (`{url: ""}` turns such codes off, `{}`
-  goes back to the built-in one); spaces, dashes and
-  case don't matter, `O` reads as `0` and `I` or `L` as `1`; or a link in any form: an app's
-  invite, a `figcraft-server` share link, or the `ws(s)://…?file=…&token=…` URL; either parameter
-  takes either) returns at once with the new session (`session`, `status:
+- `collab.host {}` starts sharing the active document over the mesh (a session that document was
+  in ends; other documents' sessions go on). Returns the session as `collab.peers` does. People are
+  let in with invite lines the host mints for their node (`collab.invite`; `collab.approve`,
+  `collab.revoke` and `collab.stats` go with it). `collab.stop {}` ends the active
+  document's session.
+- `collab.join {link}` (the invite line you were given, passed on as it is) returns at once with
+  the new session (`session`, `status:
   "connecting"`) and touches no other document's session. Its file opens as a new document, which
   becomes the active one: poll
   `collab.peers` until `status` is `"live"`. Until then the join shows on the document it was
   started from when that one isn't in a session itself, and in `sessions` either way, where it
-  becomes `"failed"` with a `reason` when it can't be joined ("No session with that code", "That
-  code has expired or its sharing was stopped", "Couldn't reach the server (…)", too many wrong
-  codes from your address, a wrong token, a full
-  session, a revoked link, an unreachable host, a `wss://` server whose certificate isn't trusted:
-  see `FIGCRAFT_CA_FILE` in `server.md`). `collab.leave {}`
+  becomes `"failed"` with a `reason` when it can't be joined. `collab.leave {}`
   leaves the active document's session (or ends a join started from it that is still on its way
   or failed), and `collab.leave {session}` the session with that id (from `sessions`), whichever
   document is active; the synced document stays open as your copy. `collab.reconnect {}` acts on
@@ -1027,11 +1008,7 @@ only: a host stops hosting it, a guest leaves it.
   (off|connecting|live|reconnecting|failed), reason?,
   attempt?, role (host|guest), me, name, color, fileName, pages, link, url, address, network,
   access (edit|view|comment), readOnly (the active document can't be edited now: view only, or
-  comment only),
-  code (the join code to give others when the document was shared with `collab.share`, else
-  null), share ({via: local, access, shared, editCode, viewCode, commentCode, editLink, viewLink,
-  commentLink}, or null),
-  follow, signals (the host passes cursor chat and spotlights on), chat (your cursor chat),
+  comment only), follow, signals (the host passes cursor chat and spotlights on), chat (your cursor chat),
   spotlight (who spotlights, or null), spotlighting (you do), syncing (the document arrived),
   document (the index of the synced open document),
   editing (the text layer you are typing in: {node, layer, caret, selection}, or null), peers: [{id,
@@ -1077,8 +1054,7 @@ only: a host stops hosting it, a guest leaves it.
 - `collab.registerLinks {on?}` → `{on, registered}` makes the desktop app the opener of
   `figcraft://` invite links, or stops (no `on`: switch). Only where the app registers them itself
   (Windows, per user); elsewhere it reports the command unavailable. It also sets the
-  Preferences checkbox. Starting the app with an invite link (`figcraft "figcraft://join?…"`)
-  joins that session.
+  Preferences checkbox.
 
 ### Plugins
 

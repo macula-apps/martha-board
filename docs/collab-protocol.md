@@ -3,6 +3,8 @@
 > `server.md` and `plugins.md`, which this page names, are not in MarthaBoard: the collaboration server's guide and the plugin guide left at import (macula-apps/martha-board#1). The names are kept as plain text, not links (#25).
 >
 > What only FigCraft's server served left MarthaBoard with macula-apps/martha-board#41 (team libraries and the plugin directory earlier, with #28 and #31): publishing and uploading a file to a server, your online files, the team list, a server's open hosting, its admin (managing files with the server key) and reports to its operator. Their messages are retired tags on the wire (see *Messages*); this page no longer describes them. Live sharing (hosting, joining, join codes, invite links) and branches stay.
+>
+> With macula-apps/martha-board#2 P2 (#43) live sessions moved to the Macula mesh (macula-craft-collab): the WebSocket transport `crates/collab-net`, its hub, join codes (`collab.share`, `figcraft_collab::code`), `figcraft://join` invite links on the command line and the publish server preference left. Asking which file a code opens (`Resolve`, `Resolved`) is retired tag 14. What this page says about them, and every path under `crates/collab-net`, is history. The core in `crates/collab` (changes, ordering, undo, presence, the message encoding) is what the mesh carries.
 
 Status: milestone M9. **Step 1 (the core, no networking) is implemented** in `crates/collab`:
 identifiers, the object/property model, change sets, ordering and validation, client
