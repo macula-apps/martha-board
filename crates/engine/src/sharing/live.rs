@@ -257,6 +257,11 @@ impl Lives {
         self.link = Some(link);
     }
 
+    /// Some session runs: hosted, joined or on its way (its link is polled until it ends).
+    pub fn running(&self) -> bool {
+        !self.sessions.is_empty()
+    }
+
     /// The installed networking, if any.
     pub(crate) fn link(&mut self) -> Option<&mut (dyn LiveLink + 'static)> {
         self.link.as_deref_mut()

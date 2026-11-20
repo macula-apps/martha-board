@@ -23,6 +23,7 @@ compile_error!("Windows GNU builds must set windows_slim_errors to keep UI Autom
 #[cfg(target_os = "macos")]
 mod apple_events;
 mod args;
+mod collab_setup;
 mod control_server;
 mod graphics;
 mod recovery;
@@ -200,8 +201,8 @@ fn main() -> eframe::Result {
         fonts_wake();
     });
     let mut session = Session::empty();
-    // Live sessions: the network threads wake the window when something arrives.
-    session.live.install(Box::new(figcraft_collab_net::NetLink::new(Arc::new(wake(&ctx_slot)))));
+    // Live boards over the mesh: shared under `--collab`, joined through an invite line.
+    session.live.install(Box::new(seam_link::SeamLink::new(Box::new(collab_setup::MeshOpener::new(args.collab.clone())))));
     // A file that won't open is said in the window too: it may have been double-clicked.
     let mut failed_open = None;
     for f in &args.files {

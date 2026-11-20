@@ -73,9 +73,9 @@ fn no_laptop_sends_seam_text_edits() {
 fn from_host(room: &Room) -> Vec<FromHost> {
     room.sent(0, |k| matches!(k, Kind::Command { id, .. } if id == SERVER))
         .into_iter()
-        .map(|m| match m.kind {
-            Kind::Command { params, .. } => wire::decode(&params, room.ceilings.server).unwrap(),
-            _ => unreachable!(),
+        .filter_map(|m| match m.kind {
+            Kind::Command { params, .. } => Some(wire::decode(&params, room.ceilings.server).unwrap()),
+            _ => None,
         })
         .collect()
 }

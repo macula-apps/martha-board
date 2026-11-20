@@ -139,14 +139,14 @@ impl Transport for Tapped {
 }
 
 /// Opens the share it was handed, once.
-struct Handed(Arc<Mutex<VecDeque<Opened>>>);
+struct Handed(VecDeque<Opened>);
 
 impl Opener for Handed {
     fn host(&mut self, _: &str, _: &str) -> Result<Opened, String> {
-        self.0.lock().map_err(|e| e.to_string())?.pop_front().ok_or_else(|| "no share to open".into())
+        self.0.pop_front().ok_or_else(|| "no share to open".into())
     }
     fn join(&mut self, _: &str, _: &str) -> Result<Opened, String> {
-        self.0.lock().map_err(|e| e.to_string())?.pop_front().ok_or_else(|| "no share to open".into())
+        self.0.pop_front().ok_or_else(|| "no share to open".into())
     }
 }
 
@@ -170,10 +170,9 @@ fn measure(host: &str) -> Ceilings {
     crate::seam_link::ceiling_measure(&prefix, profile, DOC, host, &crdt).unwrap()
 }
 
-/// One person: their FigCraft session, their node and their tap.
+/// One person: their FigCraft session and their tap.
 pub struct Person {
     pub s: Session,
-    pub node: String,
     pub tap: Tap,
 }
 
@@ -191,13 +190,13 @@ pub fn opened_link(host: &str, ceilings: Ceilings) -> Box<SeamLink> {
     let mut session = CollabSession::host(DOC, "Host", Box::new(t), &[]);
     session.set_access(table(host));
     session.set_issuer(Box::new(TestIssuer(host.to_string())));
-    Box::new(SeamLink::new(Box::new(Handed(Arc::new(Mutex::new(VecDeque::from([Opened { session, ceilings, host_node: host.to_string() }])))))))
+    Box::new(SeamLink::new(Box::new(Handed(VecDeque::from([Opened { session, ceilings, host_node: host.to_string() }])))))
 }
 
 /// A link that opens `opened`, installed in a fresh session.
 fn session_with(opened: Opened) -> Session {
     let mut s = Session::new();
-    s.live.install(Box::new(SeamLink::new(Box::new(Handed(Arc::new(Mutex::new(VecDeque::from([opened]))))))));
+    s.live.install(Box::new(SeamLink::new(Box::new(Handed(VecDeque::from([opened]))))));
     s
 }
 
@@ -205,7 +204,6 @@ fn session_with(opened: Opened) -> Session {
 pub struct Rogue {
     pub session: CollabSession,
     pub node: String,
-    pub tap: Tap,
 }
 
 impl Room {
@@ -233,14 +231,14 @@ impl Room {
             group: String::new(),
         });
         session.set_auto_approve(true);
-        board.live.install(Box::new(SeamLink::new(Box::new(Handed(Arc::new(Mutex::new(VecDeque::from([Opened {
+        board.live.install(Box::new(SeamLink::new(Box::new(Handed(VecDeque::from([Opened {
             session,
             ceilings,
             host_node: host.clone(),
-        }]))))))));
+        }]))))));
         board.execute("collab.host", &json!({})).unwrap();
         let rest = bus.split_off(holders);
-        let mut room = Room { people: vec![Person { s: board, node: host.clone(), tap }], host, ceilings, spares: rest };
+        let mut room = Room { people: vec![Person { s: board, tap }], host, ceilings, spares: rest };
         for spare in bus {
             room.join_on(spare);
         }
@@ -261,7 +259,7 @@ impl Room {
         let session = self.granted(&me, t, &format!("Person {}", self.people.len()));
         let mut s = session_with(Opened { session, ceilings: self.ceilings, host_node: self.host.clone() });
         s.execute("collab.join", &json!({"link": "seam://invite"})).unwrap();
-        self.people.push(Person { s, node: me, tap });
+        self.people.push(Person { s, tap });
         self.people.len() - 1
     }
 
@@ -274,9 +272,8 @@ impl Room {
     /// The next spare node, admitted by hand with no board behind it, named `name`.
     pub fn rogue(&mut self, name: &str) -> Rogue {
         let (me, t) = self.spares.pop_front().expect("a spare node");
-        let tap = t.1.clone();
         let session = self.granted(&me, t, name);
-        Rogue { session, node: me, tap }
+        Rogue { session, node: me }
     }
 
     /// The tap of the next spare node, to set before it joins.

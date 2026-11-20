@@ -25,7 +25,6 @@ pub struct JoinBoard {
     /// The host's node, pinned by the invite.
     host_node: String,
     me_node: String,
-    name: String,
     /// The client id the host seated this node as, once the board is loaded.
     me: Option<u32>,
     /// Who is who: node → client id, from the welcome and each seat since.
@@ -44,14 +43,13 @@ pub struct JoinBoard {
 }
 
 impl JoinBoard {
-    pub fn new(session: CollabSession, ceilings: Ceilings, host_node: &str, name: &str) -> JoinBoard {
+    pub fn new(session: CollabSession, ceilings: Ceilings, host_node: &str) -> JoinBoard {
         let me_node = session.author().to_string();
         JoinBoard {
             session,
             ceilings,
             host_node: host_node.to_string(),
             me_node,
-            name: name.to_string(),
             me: None,
             clients: BTreeMap::new(),
             position: 0,
@@ -62,16 +60,6 @@ impl JoinBoard {
             gaps: 0,
             events: Vec::new(),
         }
-    }
-
-    /// The client id this holder is seated as (`None` before the board is loaded).
-    pub fn me(&self) -> Option<u32> {
-        self.me
-    }
-
-    /// Whether the stream is held for a gap (M1).
-    pub fn held(&self) -> bool {
-        self.held
     }
 
     fn refuse(&mut self, why: String) {
@@ -86,7 +74,7 @@ impl JoinBoard {
         for event in self.session.tick() {
             match event {
                 Inbound::Snapshot { author, data, crdt } => self.snapshot(&author, &data, &crdt),
-                Inbound::Command { author, id, params, .. } if id == SERVER => self.from_host(&author, &params),
+                Inbound::Command { author, id, params, .. } if id == SERVER => self.on_host_message(&author, &params),
                 // Every holder hears the others' changes on their way to the host; it reads
                 // them a moment later in the host's order.
                 Inbound::Command { id, .. } if id == CHANGES => {}
@@ -160,7 +148,7 @@ impl JoinBoard {
     }
 
     /// A `board.server`: applied only from the host, past this board's place in its order.
-    fn from_host(&mut self, author: &str, params: &[u8]) {
+    fn on_host_message(&mut self, author: &str, params: &[u8]) {
         if author != self.host_node {
             return self.refuse(format!("an ordered change from {}, who is not the host", macula_craft_seam::short(author)));
         }
@@ -228,10 +216,5 @@ impl JoinBoard {
     /// This holder's cursor and selection, to everyone.
     pub fn presence(&mut self, p: &figcraft_engine::live::Presence) {
         self.session.share_cursor(presence::encode(p));
-    }
-
-    /// The name this holder joined with.
-    pub fn name(&self) -> &str {
-        &self.name
     }
 }

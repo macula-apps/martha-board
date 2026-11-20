@@ -1,4 +1,4 @@
-//! The command line: `figcraft [--control <port>] [--automation-read-root <dir>]…
+//! The command line: `figcraft [--control <port>] [--collab <config.json>] [--automation-read-root <dir>]…
 //! [--automation-write-root <dir>]… [files…] [figcraft://join?…]`. An invite link
 //! (what the system passes when a `figcraft://` link is opened) joins that session once the window
 //! is up; everything else that isn't a flag is a file to open, as a path or a `file://` URL (the
@@ -19,6 +19,9 @@ pub struct Args {
     /// which is refused at startup.
     pub read_roots: Vec<String>,
     pub write_roots: Vec<String>,
+    /// `--collab <config.json>` (or `=`): the mesh config a board is shared with (craft-collab's
+    /// format); `collab.host` shares the open board under it.
+    pub collab: Option<String>,
     /// `--flags` the app doesn't know, as given.
     pub unknown: Vec<String>,
 }
@@ -71,6 +74,8 @@ pub fn parse(args: &[String]) -> Args {
         };
         if let Some(roots) = roots {
             roots.push(inline.or_else(|| it.next().cloned()).unwrap_or_default());
+        } else if flag == "--collab" {
+            out.collab = inline.or_else(|| it.next().cloned());
         } else if flag == "--control" {
             out.control = inline.or_else(|| it.next().cloned()).and_then(|p| p.parse().ok());
         } else if is_invite(a) {

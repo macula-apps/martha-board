@@ -60,15 +60,6 @@ impl SeamLink {
         SeamLink { opener, boards: BTreeMap::new(), waiting: Vec::new() }
     }
 
-    /// Share `session`'s board, when it runs.
-    pub fn board(&self, session: SessionId) -> Option<&Board> {
-        self.boards.get(&session)
-    }
-
-    pub fn board_mut(&mut self, session: SessionId) -> Option<&mut Board> {
-        self.boards.get_mut(&session)
-    }
-
     fn hosted(&mut self, session: SessionId) -> Result<&mut HostBoard, String> {
         match self.boards.get_mut(&session) {
             Some(Board::Host(h)) => Ok(h),
@@ -168,7 +159,7 @@ impl LiveLink for SeamLink {
 
     fn join(&mut self, session: SessionId, link: &str, name: &str) -> Result<(), String> {
         let opened = self.opener.join(link, name)?;
-        let board = JoinBoard::new(opened.session, opened.ceilings, &opened.host_node, name);
+        let board = JoinBoard::new(opened.session, opened.ceilings, &opened.host_node);
         self.boards.insert(session, Board::Join(Box::new(board)));
         Ok(())
     }

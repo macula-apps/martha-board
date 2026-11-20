@@ -1,4 +1,4 @@
-//! The host's side of a board share (design r=2 §5 "Ordering, at the host", r=3 M2).
+//! The hot's side of a board share (design r=2 §5 "Ordering, at the host", r=3 M2).
 //!
 //! The host runs FigCraft's `collab::Server` in-process. Every holder the seam admitted gets a seat
 //! in it, under a `Hello` the host builds from the node id the seam verified (R4); nothing a
@@ -130,11 +130,6 @@ impl HostBoard {
         self.invited.insert(node.to_string(), (name.to_string(), access_of(role)));
     }
 
-    /// The client id of `node`'s seat.
-    pub fn client_of(&self, node: &str) -> Option<u32> {
-        self.seats.get(node).map(|s| s.client_id)
-    }
-
     /// The node seated as `client`.
     pub fn node_of(&self, client: u32) -> Option<&str> {
         self.seats.iter().find(|(_, s)| s.client_id == client).map(|(n, _)| n.as_str())
@@ -231,7 +226,7 @@ impl HostBoard {
         self.seat_holders();
         for event in inbound {
             match event {
-                Inbound::Command { author, id, params, .. } if id == CHANGES => self.from_holder(&author, &params),
+                Inbound::Command { author, id, params, .. } if id == CHANGES => self.on_holders_changes(&author, &params),
                 Inbound::SnapshotWanted => self.answer_snapshot(),
                 // The host sends the ordered stream and loads no one's board.
                 Inbound::Snapshot { .. } => {}
@@ -252,7 +247,7 @@ impl HostBoard {
     }
 
     /// A holder's `board.changes`, as the client its node is seated as.
-    fn from_holder(&mut self, author: &str, params: &[u8]) {
+    fn on_holders_changes(&mut self, author: &str, params: &[u8]) {
         let Some(client) = self.seats.get(author).filter(|s| s.joined).map(|s| s.client_id) else {
             return self.refuse("changes from a node with no seat".into());
         };

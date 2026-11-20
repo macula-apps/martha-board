@@ -3,6 +3,9 @@ use super::{
     versions,
 };
 
+/// How often a running share is polled when nothing else wakes the window.
+const LIVE_POLL: std::time::Duration = std::time::Duration::from_millis(50);
+
 impl FigApp {
     /// Dismiss the composer after a successful switch away from the Comment tool.
     pub(crate) fn clear_comment_draft_after_tool_set(&mut self, id: &str, succeeded: bool) {
@@ -195,6 +198,10 @@ impl FigApp {
             && let Some(m) = self.session.message.take()
         {
             self.toast(live::failure_text(&m));
+        }
+        // A shared board arrives on the seam, which wakes no window: poll while one runs.
+        if self.session.live.running() {
+            ctx.request_repaint_after(LIVE_POLL);
         }
         // Files that arrived without a command (joined, recovered) take the kept View toggles too.
         self.session.apply_view_prefs();
