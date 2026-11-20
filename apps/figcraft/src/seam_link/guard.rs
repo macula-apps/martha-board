@@ -1,4 +1,5 @@
-//! What may be shared, one rule both ways (B1, R3), and whose ballot a holder may cast (B2).
+//! What may be shared, one rule both ways (B1, R3), whose ballot a holder may cast (B2), and who
+//! runs the timer and the votes (B3).
 //!
 //! An allowlist, not a denylist: a change is admitted only when every part of it is named here.
 //! A property, a node type or a document entry added to FigCraft later is refused until it is
@@ -7,6 +8,7 @@
 use figcraft_collab::{Change, DocProp, Entry, Json, Prop};
 use figcraft_doc::color::Paint;
 use figcraft_doc::{FileKind, NodeKind};
+use figcraft_engine::cmd::facilitate::live_voter;
 
 /// The node types a board is made of: stickies, shapes, sections, connectors, ink, tables and
 /// the text in them, on pages.
@@ -141,19 +143,67 @@ pub fn refused_any(changes: &[Change]) -> Option<String> {
     (!kinds.is_empty()).then(|| format!("a board shares its stickies, shapes, sections, connectors and votes only; refused: {}", kinds.join(", ")))
 }
 
-/// The ballot key client `client` votes under while shared (B2): the key FigCraft's vote command
-/// gives a live session's client.
-pub fn ballot_key(client: u32) -> String {
-    format!("peer {client}")
+/// What a client may do to ballots (B2): cast only its own; the host, which runs
+/// the votes (B3), may also clear others' when a vote starts or is cleared.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Ballots {
+    OwnOnly,
+    MayClear,
 }
 
-/// Why client `client`'s `changes` cast a ballot that isn't theirs (B2; `None`: they don't).
-pub fn refused_ballot(client: u32, changes: &[Change]) -> Option<String> {
-    let own = ballot_key(client);
+/// Why client `client`'s `changes` touch a ballot that isn't theirs (B2; `None`: they don't). The
+/// key a client's ballot must have is the one FigCraft's vote command gives it in a live session.
+pub fn refused_ballot(client: u32, changes: &[Change], may: Ballots) -> Option<String> {
+    let own = live_voter(client);
     changes.iter().find_map(|c| match c {
-        Change::Put { entry: Entry::Ballot(key), .. } | Change::Remove { entry: Entry::Ballot(key) } if *key != own => {
+        Change::Put { entry: Entry::Ballot(key), .. } if *key != own => Some(format!("a ballot under another voter's key ({key})")),
+        Change::Remove { entry: Entry::Ballot(key) } if *key != own && may == Ballots::OwnOnly => {
             Some(format!("a ballot under another voter's key ({key})"))
         }
         _ => None,
     })
+}
+
+/// The document properties that run a session: the timer, and the vote's start, end and kept
+/// results (B3).
+const FACILITATION: &[DocProp] = &[DocProp::Timer, DocProp::Vote, DocProp::VoteHistory];
+
+/// Why `changes` from a holder that is not the host run the timer or a vote (B3, DECIDED
+/// 2026-11-21 "Host only": only the host's node does; `None`: they don't). A ballot is not
+/// facilitation: every holder casts its own (B2).
+pub fn refused_facilitation(changes: &[Change]) -> Option<String> {
+    changes
+        .iter()
+        .any(|c| matches!(c, Change::SetDoc { prop, .. } if FACILITATION.contains(prop)))
+        .then(|| "only the host runs the timer and the votes".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use figcraft_collab::{Change, Entry, Json};
+    use figcraft_engine::cmd::facilitate::live_voter;
+
+    use super::{Ballots, refused_ballot};
+
+    fn put(key: &str) -> Change {
+        Change::Put { entry: Entry::Ballot(key.into()), value: Json(serde_json::json!([])) }
+    }
+
+    fn remove(key: &str) -> Change {
+        Change::Remove { entry: Entry::Ballot(key.into()) }
+    }
+
+    /// B2: a client casts and takes back its own ballot only; the host, which runs the votes (B3),
+    /// may also clear others' ballots, and still never cast one under another's key.
+    #[test]
+    fn a_ballot_is_its_casters_own() {
+        let (own, other) = (live_voter(3), live_voter(4));
+        for may in [Ballots::OwnOnly, Ballots::MayClear] {
+            assert_eq!(refused_ballot(3, &[put(&own), remove(&own)], may), None);
+            assert!(refused_ballot(3, &[put(&other)], may).is_some(), "a cast under another's key");
+            assert!(refused_ballot(3, &[put("Alice")], may).is_some(), "a cast under a chosen name");
+        }
+        assert!(refused_ballot(3, &[remove(&other)], Ballots::OwnOnly).is_some(), "a holder clears another's");
+        assert_eq!(refused_ballot(3, &[remove(&other)], Ballots::MayClear), None, "the host clears a vote");
+    }
 }

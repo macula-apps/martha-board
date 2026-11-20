@@ -13,7 +13,7 @@ use figcraft_engine::live::{Event, PEOPLE};
 use macula_craft_seam::{CollabSession, Inbound, Role};
 
 use super::ceiling::{self, Ceilings};
-use super::guard;
+use super::guard::{self, Ballots};
 use super::presence::Shown;
 use super::wire::{self, CHANGES, FromHost, SERVER, Seat, To, Welcome};
 
@@ -264,7 +264,10 @@ impl HostBoard {
         };
         match msg {
             ClientMsg::Changes { batch_id, ref changes, .. } => {
-                let why = guard::refused_any(changes).or_else(|| guard::refused_ballot(client, changes)).or_else(|| self.order_fits(&msg).err());
+                let why = guard::refused_any(changes)
+                    .or_else(|| guard::refused_facilitation(changes))
+                    .or_else(|| guard::refused_ballot(client, changes, Ballots::OwnOnly))
+                    .or_else(|| self.order_fits(&msg).err());
                 if let Some(why) = why {
                     self.refuse(why.clone());
                     // Answered as FigCraft's server answers a refused batch: nothing of it applies.
@@ -293,10 +296,12 @@ impl HostBoard {
         self.route(outs);
     }
 
-    /// Whether the host's own `msg` may be applied and sent: the same rule as a holder's (R3), and
-    /// the ceilings. The engine asks before it applies an act (r=3 M2).
+    /// Whether the host's own `msg` may be applied and sent: the same rule as a holder's (R3; B2:
+    /// its own ballot only, though it may clear others' as it runs the votes, B3), and the
+    /// ceilings. The engine asks before it applies an act (r=3 M2).
     pub fn check(&mut self, msg: &ClientMsg) -> Result<(), String> {
-        if let Some(why) = guard::refused_any(wire::changes_of(msg)) {
+        let changes = wire::changes_of(msg);
+        if let Some(why) = guard::refused_any(changes).or_else(|| guard::refused_ballot(self.me, changes, Ballots::MayClear)) {
             return Err(why);
         }
         self.order_fits(msg)

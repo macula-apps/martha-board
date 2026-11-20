@@ -147,19 +147,30 @@ fn timer_cmd(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(timer_json(t, now))
 }
 
-/// Who votes: `voter` from the params, else you as the live session knows you (your client id
-/// there, so two people of the same name vote apart), else your name.
+/// What a ballot cast in a live session is keyed by: before the client id the session gave the
+/// voter.
+const LIVE_VOTER: &str = "peer ";
+
+/// The ballot key of client `client` in a live session (martha-board#2 B2: the host checks every
+/// shared ballot against the key of the client that sent it).
+pub fn live_voter(client: u32) -> String {
+    format!("{LIVE_VOTER}{client}")
+}
+
+/// Who votes. In a live session you as the session knows you (your client id there, so two people
+/// of the same name vote apart), whatever `voter` says (B2: nobody votes under another's key on a
+/// shared board). Otherwise `voter` from the params, else your name.
 pub fn voter(s: &Session, p: &Value) -> String {
+    let live = s.ds().ok().filter(|ds| s.live_doc(ds.uid)).and_then(|ds| s.live_of(ds.uid).info.as_ref());
+    if let Some(info) = live {
+        return live_voter(info.me);
+    }
     if let Some(v) = string(p, "voter").map(|v| v.trim().chars().filter(|c| !c.is_control()).take(MAX_VOTER).collect::<String>())
         && !v.is_empty()
     {
         return v;
     }
-    let live = s.ds().ok().filter(|ds| s.live_doc(ds.uid)).and_then(|ds| s.live_of(ds.uid).info.as_ref());
-    match live {
-        Some(info) => format!("peer {}", info.me),
-        None => crate::cmd::comment::user_name(s),
-    }
+    crate::cmd::comment::user_name(s)
 }
 
 fn running<'a>(cmd: &str, doc: &'a Document) -> Result<&'a Vote> {
@@ -397,7 +408,7 @@ pub fn sessions(s: &Session) -> Result<Vec<VoteSession>> {
 /// name there (yours or another's); `None` for one who isn't in the session any more. Any other
 /// key is a name already (yours offline, or a `voter` given to `board.vote`).
 pub fn voter_name(s: &Session, key: &str) -> Option<String> {
-    let Some(client) = key.strip_prefix("peer ").and_then(|n| n.parse::<u32>().ok()) else { return Some(key.to_string()) };
+    let Some(client) = key.strip_prefix(LIVE_VOTER).and_then(|n| n.parse::<u32>().ok()) else { return Some(key.to_string()) };
     let live = s.ds().ok().filter(|ds| s.live_doc(ds.uid)).map(|ds| s.live_of(ds.uid))?;
     match &live.info {
         Some(info) if info.me == client => Some(info.name.clone()),

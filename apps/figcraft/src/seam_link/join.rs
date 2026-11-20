@@ -9,12 +9,12 @@
 
 use std::collections::BTreeMap;
 
-use figcraft_collab::{ClientMsg, ServerMsg};
+use figcraft_collab::{Change, ClientMsg, Entry, ServerMsg};
 use figcraft_engine::live::{Event, Peer, Role, SessionInfo, Status};
 use macula_craft_seam::{CollabSession, Inbound};
 
 use super::ceiling::{self, Ceilings};
-use super::guard;
+use super::guard::{self, Ballots};
 use super::presence::{self, Shown};
 use super::wire::{self, CHANGES, FromHost, SERVER, Welcome};
 
@@ -194,10 +194,19 @@ impl JoinBoard {
         }
     }
 
-    /// Whether this holder's `msg` may be applied and sent: the board rule (B1) and the ceiling
-    /// of one `board.changes` (r=3 M2). The engine asks before it applies an act.
+    /// Whether this holder's `msg` may be applied and sent: the board rule (B1), the timer and the
+    /// votes left to the host (B3), its own ballot only (B2), and the ceiling of one
+    /// `board.changes` (r=3 M2). The engine asks before it applies an act, so the host's own
+    /// refusal of the same is never the first anyone hears of it.
     pub fn check(&self, msg: &ClientMsg) -> Result<(), String> {
-        if let Some(why) = guard::refused_any(wire::changes_of(msg)) {
+        let changes = wire::changes_of(msg);
+        let ballot = || match self.me {
+            Some(me) => guard::refused_ballot(me, changes, Ballots::OwnOnly),
+            None => {
+                changes.iter().any(|c| matches!(c, Change::Put { entry: Entry::Ballot(_), .. })).then(|| "not seated on the board yet".to_string())
+            }
+        };
+        if let Some(why) = guard::refused_any(changes).or_else(|| guard::refused_facilitation(changes)).or_else(ballot) {
             return Err(why);
         }
         let bytes = wire::encode(msg)?;

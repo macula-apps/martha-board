@@ -8,6 +8,7 @@ use serde_json::json;
 
 use crate::seam_link::wire::{self, CHANGES, FromHost, SERVER, To, Welcome};
 use crate::seam_link_harness::{Rogue, Room, board, id_of, node, real_ceilings};
+use figcraft_engine::cmd::facilitate::live_voter;
 
 fn room(holders: usize, spares: &[String]) -> Room {
     Room::with(board("Storm"), holders, spares, real_ceilings(&node('a')))
@@ -498,4 +499,62 @@ fn an_uninvited_holder_only_reads() {
     assert_eq!(rejects, 1, "it was told so");
     let (name, rejects) = renames_board(false);
     assert_eq!((name.as_str(), rejects), ("Renamed", 0), "an invited editor's same change applies");
+}
+
+/// B3: a holder that is not the host starts the timer: refused before it is ordered.
+#[test]
+fn a_rogue_cannot_start_the_timer() {
+    let running = figcraft_doc::BoardTimer::Running { ends: u64::MAX };
+    refused_from_rogue(vec![Change::SetDoc { prop: DocProp::Timer, value: Json(serde_json::to_value(Some(running)).unwrap()) }], "only the host");
+}
+
+/// B3: a holder that is not the host closes a vote: refused before it is ordered.
+#[test]
+fn a_rogue_cannot_close_a_vote() {
+    let ended = figcraft_doc::Vote { per_person: 3, scope: figcraft_doc::VoteScope::All, ended: true, by: String::new() };
+    refused_from_rogue(vec![Change::SetDoc { prop: DocProp::Vote, value: Json(serde_json::to_value(Some(ended)).unwrap()) }], "only the host");
+}
+
+/// B3 on the holder's own laptop: its timer and vote acts are put back there and said by name, and
+/// nothing goes out.
+#[test]
+fn a_holder_cannot_run_the_timer() {
+    refused_locally(1, "board.timer", json!({"action": "start"}), "only the host");
+}
+
+#[test]
+fn a_holder_cannot_start_a_vote() {
+    refused_locally(1, "board.vote", json!({"action": "start"}), "only the host");
+}
+
+/// The ballot keys on the host's board.
+fn ballots(room: &mut Room) -> Vec<String> {
+    room.s(0).doc().unwrap().votes.keys().cloned().collect()
+}
+
+/// B3 and B2 together, the way a workshop runs: the host starts the timer and a vote, each holder
+/// casts under its own seat whatever name it gives (two casts from one node are one ballot), and
+/// the host ends the vote; every laptop ends with the same board.
+#[test]
+fn the_host_runs_the_session_and_each_holder_votes_once() {
+    let mut room = room(1, &[]);
+    let a = id_of(&room.s(0).execute("board.sticky", &json!({"x": 0, "y": 0, "text": "A"})).unwrap());
+    let b = id_of(&room.s(0).execute("board.sticky", &json!({"x": 300, "y": 0, "text": "B"})).unwrap());
+    room.s(0).execute("board.timer", &json!({"action": "start"})).unwrap();
+    room.s(0).execute("board.vote", &json!({"action": "start", "votes": 2})).unwrap();
+    room.settle();
+    assert!(room.s(1).doc().unwrap().timer.is_some(), "the host's timer reached the holder");
+    room.s(1).execute("board.vote", &json!({"action": "cast", "id": a, "voter": "Alice"})).unwrap();
+    room.s(1).execute("board.vote", &json!({"action": "cast", "id": b, "voter": "Bob"})).unwrap();
+    room.s(0).execute("board.vote", &json!({"action": "cast", "id": a, "voter": "Carol"})).unwrap();
+    room.settle();
+    let (host, holder) = (room.s(0).live().info.as_ref().unwrap().me, room.s(1).live().info.as_ref().unwrap().me);
+    let mut want = vec![live_voter(host), live_voter(holder)];
+    want.sort();
+    assert_eq!(ballots(&mut room), want, "one ballot per seat, under the seat's key: no name chosen in a param");
+    assert_eq!(room.s(0).doc().unwrap().votes[&live_voter(holder)].len(), 2, "the holder's two casts are one ballot");
+    room.s(0).execute("board.vote", &json!({"action": "end"})).unwrap();
+    room.settle();
+    assert!(room.s(1).doc().unwrap().vote.as_ref().is_some_and(|v| v.ended), "the host's end reached the holder");
+    room.check();
 }
