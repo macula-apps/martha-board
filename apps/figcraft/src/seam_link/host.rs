@@ -158,12 +158,15 @@ impl HostBoard {
         }
         self.seats.insert(node.to_string(), Seated { client_id: id, name, color, access, secret, joined: true });
         if node == self.me_node {
-            // The host's own welcome is routed to its side by this id, below.
+            // The host seats itself before it shares: nobody holds the board yet, and every holder
+            // learns of the host from the welcome, so nothing of this leaves (a refused start
+            // sends nothing).
             self.me = id;
+            self.route_to(outs, false);
         } else {
             self.broadcast(&FromHost::Seated { node: node.to_string(), client_id: id });
+            self.route(outs);
         }
-        self.route(outs);
         Some(id)
     }
 
@@ -346,8 +349,13 @@ impl HostBoard {
     /// server welcome never goes out: it carries the resume secret (R4), and a holder starts from
     /// the board welcome instead.
     fn route(&mut self, outs: Vec<Outgoing>) {
-        for out in outs {
-            let (to, msg) = match out {
+        self.route_to(outs, true);
+    }
+
+    /// [`route`](Self::route), sending out as `board.server` only when `out`.
+    fn route_to(&mut self, outs: Vec<Outgoing>, out: bool) {
+        for out_msg in outs {
+            let (to, msg) = match out_msg {
                 Outgoing::To(id, msg) => (To::One(id), msg),
                 Outgoing::All(msg) => (To::All, msg),
                 Outgoing::Others(id, msg) => (To::Others(id), msg),
@@ -357,7 +365,7 @@ impl HostBoard {
             {
                 self.events.push(e);
             }
-            if to != To::One(self.me) && !matches!(msg, ServerMsg::Welcome { .. }) {
+            if out && to != To::One(self.me) && !matches!(msg, ServerMsg::Welcome { .. }) {
                 self.broadcast(&FromHost::Msg { to, msg });
             }
         }

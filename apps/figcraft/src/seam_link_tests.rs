@@ -288,7 +288,7 @@ fn a_board_with_an_image_and_a_style_is_not_shared() {
     let sticky = id_of(&s.execute("board.sticky", &json!({"x": 0, "y": 0, "text": "A"})).unwrap());
     s.execute("style.create", &json!({"type": "paint", "name": "Brand", "from": sticky})).unwrap();
     s.doc_mut().unwrap().node_mut(NodeId(sticky)).unwrap().fills = vec![Paint::image("cafe", ImageScaleMode::Fill)];
-    let link = crate::seam_link_harness::opened_link(&node('a'), real_ceilings(&node('a')));
+    let (link, _) = crate::seam_link_harness::opened_link(&node('a'), real_ceilings(&node('a')));
     s.live.install(link);
     let err = s.execute("collab.host", &json!({})).unwrap_err().to_string();
     assert!(err.contains("an image") && err.contains("a style"), "both named: {err}");
@@ -434,4 +434,44 @@ fn invite_revoke_and_stats_by_command() {
     room.settle();
     assert!(room.s(0).live().peers.is_empty(), "the revoked holder left");
     assert!(room.s(1).execute("collab.revoke", &json!({"node": node('a')})).is_err(), "only the host revokes");
+}
+
+/// R2: a message exactly at its ceiling goes; one byte over is refused, naming both sizes.
+#[test]
+fn a_ceiling_is_exact() {
+    use crate::seam_link::ceiling;
+    let at = real_ceilings(&node('a')).welcome;
+    assert!(ceiling::fits(ceiling::WELCOME, at, at).is_ok());
+    let over = ceiling::fits(ceiling::WELCOME, at + 1, at).unwrap_err();
+    assert!(over.contains(&format!("{} bytes", at + 1)) && over.contains(&format!("{at} bytes")), "{over}");
+    assert!(over.starts_with("the board is"), "named: {over}");
+}
+
+/// R2 at the start: a board over its welcome ceiling is refused by name, and nothing is sent.
+#[test]
+fn a_board_over_its_ceiling_is_not_shared() {
+    let host = node('a');
+    let mut s = board("Storm");
+    s.execute("board.sticky", &json!({"x": 0, "y": 0, "text": "A"})).unwrap();
+    let mut small = real_ceilings(&host);
+    small.welcome = 64;
+    let (link, tap) = crate::seam_link_harness::opened_link(&host, small);
+    s.live.install(link);
+    let err = s.execute("collab.host", &json!({})).unwrap_err().to_string();
+    assert!(err.contains("the board is") && err.contains("over the 64 bytes"), "{err}");
+    let sent: Vec<String> = tap.sent.lock().unwrap().iter().map(|m| format!("{:?}", m.kind).chars().take(80).collect()).collect();
+    assert!(sent.is_empty(), "nothing was sent: {sent:?}");
+}
+
+/// R2 while shared: every board the host sends a joiner fits the ceiling it was measured against.
+#[test]
+fn every_snapshot_sent_fits_its_ceiling() {
+    let mut room = room(2, &[]);
+    room.check();
+    let sent = room.sent(0, |k| matches!(k, Kind::Snapshot { .. }));
+    assert!(!sent.is_empty(), "the host answered");
+    for m in sent {
+        let Kind::Snapshot { data, .. } = m.kind else { continue };
+        assert!(data.len() <= room.ceilings.welcome, "{} over {}", data.len(), room.ceilings.welcome);
+    }
 }

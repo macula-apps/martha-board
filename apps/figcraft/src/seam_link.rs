@@ -6,7 +6,7 @@
 //! How a share is opened (the mesh, or an in-memory bus in tests) is the [`Opener`]'s; everything
 //! after that is here.
 
-mod ceiling;
+pub(crate) mod ceiling;
 pub(crate) mod guard;
 mod host;
 mod join;

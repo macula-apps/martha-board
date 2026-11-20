@@ -191,12 +191,13 @@ pub struct Room {
 }
 
 /// A link whose host share is `host`'s own, unshared yet, with `ceilings`.
-pub fn opened_link(host: &str, ceilings: Ceilings) -> Box<SeamLink> {
-    let t = Tapped(MemoryTransport::bus(&[host]).remove(0), Tap::default());
+pub fn opened_link(host: &str, ceilings: Ceilings) -> (Box<SeamLink>, Tap) {
+    let tap = Tap::default();
+    let t = Tapped(MemoryTransport::bus(&[host]).remove(0), tap.clone());
     let mut session = CollabSession::host(DOC, "Host", Box::new(t), &[]);
     session.set_access(table(host));
     session.set_issuer(Box::new(TestIssuer(host.to_string())));
-    Box::new(SeamLink::new(Box::new(Handed(VecDeque::from([Opened { session, ceilings, host_node: host.to_string() }])))))
+    (Box::new(SeamLink::new(Box::new(Handed(VecDeque::from([Opened { session, ceilings, host_node: host.to_string() }]))))), tap)
 }
 
 /// A link that opens `opened`, installed in a fresh session.
