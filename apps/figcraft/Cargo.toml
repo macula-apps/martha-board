@@ -13,7 +13,6 @@ workspace = true
 [dependencies]
 figcraft-engine = { workspace = true }
 figcraft-ui-egui = { workspace = true }
-figcraft-collab-net = { workspace = true }
 macula-craft-seam = { workspace = true }
 macula-craft-collab = { workspace = true }
 macula-rust = { workspace = true }

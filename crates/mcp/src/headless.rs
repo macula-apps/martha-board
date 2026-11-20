@@ -40,12 +40,9 @@ impl Headless {
         Self::with_session(Session::new())
     }
 
-    /// Wrap an existing session (it can host and join live sessions: an agent takes part with
-    /// its own cursor, `collab.cursor`).
-    pub fn with_session(mut session: Session) -> Self {
-        if !session.live.available() {
-            session.live.install(Box::new(figcraft_collab_net::NetLink::new(std::sync::Arc::new(|| {}))));
-        }
+    /// Wrap an existing session. It installs no live link: its `collab.*` commands say live
+    /// sessions aren't available here (the desktop app shares boards over the mesh).
+    pub fn with_session(session: Session) -> Self {
         Self { session }
     }
 

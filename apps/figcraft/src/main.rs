@@ -1,7 +1,7 @@
 //! FigCraft desktop app.
 //!
-//! Usage: `figcraft [--control <port>] [files…] [figcraft://join?…]` (an invite link joins that
-//! live session; the app registers itself as the opener of such links: `collab.registerLinks`).
+//! Usage: `figcraft [--control <port>] [--collab <config.json>] [files…]` (a board is shared or
+//! joined over the mesh: `collab.host`, `collab.join {link}` with an invite line).
 //!
 //! `--control <port>` (or `FIGCRAFT_CONTROL_PORT`) starts a localhost JSON-lines control server:
 //! `{"id":1,"method":"engine.execute","params":{"command":"shape.rectangle","params":{"x":0,"y":0,"width":100,"height":100}}}`
@@ -167,7 +167,7 @@ fn main() -> eframe::Result {
     let args = args::parse(&args);
     if let Some(flag) = args.unknown.first() {
         eprintln!(
-            "FigCraft: unknown option {flag}\nUsage: figcraft [--control PORT] [--automation-read-root DIR]... [--automation-write-root DIR]... [FILE | figcraft://join?...]..."
+            "FigCraft: unknown option {flag}\nUsage: figcraft [--control PORT] [--automation-read-root DIR]... [--automation-write-root DIR]... [FILE]..."
         );
         std::process::exit(2);
     }
@@ -229,11 +229,7 @@ fn main() -> eframe::Result {
         r.adopt(recovered.waiting);
     }
     *recovery::lock(&recovery) = copies;
-    // Invite links open this app (Windows registers per user at run time; installed builds by
-    // default, never a build from source unless asked).
-    session.live.links = figcraft_collab_net::links::system();
-    session.invite_links_startup();
-    let first_run = svc.prefs.is_none() && args.join.is_none();
+    let first_run = svc.prefs.is_none();
     if session.docs.is_empty() && opens_new_file(first_run, session.prefs.start_on_home, port.is_some()) {
         let _ = session.execute("file.new", &json!({}));
     }
@@ -249,9 +245,6 @@ fn main() -> eframe::Result {
     fig.note_recovered(recovered.copies);
     if let Some(message) = failed_open {
         fig.show_error(message);
-    }
-    if let Some(link) = &args.join {
-        figcraft_ui_egui::live::open_invite(&mut fig, link);
     }
     let queue: Arc<Mutex<Vec<ControlRequest>>> = Arc::new(Mutex::new(Vec::new()));
     if let Some(p) = port {

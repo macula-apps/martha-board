@@ -2025,7 +2025,6 @@ dependencies = [
  "egui",
  "env_logger",
  "figcraft-collab",
- "figcraft-collab-net",
  "figcraft-doc",
  "figcraft-engine",
  "figcraft-format",
@@ -2083,29 +2082,6 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "thiserror 2.0.21",
-]
-
-[[package]]
-name = "figcraft-collab-net"
-version = "0.18.1"
-dependencies = [
- "base64 0.22.1",
- "figcraft-collab",
- "figcraft-doc",
- "figcraft-engine",
- "getrandom 0.4.3",
- "js-sys",
- "log",
- "proptest",
- "rustls",
- "rustls-pki-types",
- "serde_json",
- "tungstenite",
- "wasm-bindgen",
- "web-sys",
- "web-time",
- "webpki-roots",
- "windows-registry",
 ]
 
 [[package]]
@@ -2200,7 +2176,6 @@ name = "figcraft-mcp"
 version = "0.18.1"
 dependencies = [
  "base64 0.22.1",
- "figcraft-collab-net",
  "figcraft-doc",
  "figcraft-engine",
  "figcraft-geom",
@@ -6123,22 +6098,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2df906b07856748fa3f6e0ad0cbaa047052d4a7dd609e231c4f72cee8c36f31"
 dependencies = [
  "core_maths",
-]
-
-[[package]]
-name = "tungstenite"
-version = "0.30.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e48ac77174b19c110a50ab2128b24215ac9cb40e0e12e093fb602d175c569d22"
-dependencies = [
- "bytes",
- "data-encoding",
- "http",
- "httparse",
- "log",
- "rand",
- "sha1",
- "thiserror 2.0.21",
 ]
 
 [[package]]

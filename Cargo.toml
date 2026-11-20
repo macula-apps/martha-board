@@ -28,7 +28,6 @@ figcraft-collab = { path = "crates/collab" }
 figcraft-engine = { path = "crates/engine" }
 figcraft-ui-egui = { path = "crates/ui-egui" }
 figcraft-mcp = { path = "crates/mcp" }
-figcraft-collab-net = { path = "crates/collab-net" }
 
 # Live collaboration over the Macula mesh (martha-board#2 P2): the seam (sessions, grants, invites, the
 # snapshot lane) and its mesh transport (sealed groups, the frame ceiling). One seam version in the

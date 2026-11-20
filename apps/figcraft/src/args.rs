@@ -1,8 +1,6 @@
 //! The command line: `figcraft [--control <port>] [--collab <config.json>] [--automation-read-root <dir>]…
-//! [--automation-write-root <dir>]… [files…] [figcraft://join?…]`. An invite link
-//! (what the system passes when a `figcraft://` link is opened) joins that session once the window
-//! is up; everything else that isn't a flag is a file to open, as a path or a `file://` URL (the
-//! Linux desktop entry passes URLs, `%U`, so that it can also hand over invite links). Any other
+//! [--automation-write-root <dir>]… [files…]`. Everything that isn't a flag is a file to open, as a
+//! path or a `file://` URL (the Linux desktop entry passes URLs, `%U`). Any other
 //! `--flag` is unknown and stops the app at startup (#836): a mistyped root flag must never leave
 //! the app running unconfined. After a bare `--`, every argument is a file.
 
@@ -12,8 +10,6 @@ pub struct Args {
     /// `--control <port>` (or `--control=<port>`): the JSON-lines control server.
     pub control: Option<u16>,
     pub files: Vec<String>,
-    /// The last invite link given.
-    pub join: Option<String>,
     /// `--automation-read-root <dir>` / `--automation-write-root <dir>` (each repeatable; `=` works
     /// too): the folders the app's file access is confined to. A flag without a value gives `""`,
     /// which is refused at startup.
@@ -24,11 +20,6 @@ pub struct Args {
     pub collab: Option<String>,
     /// `--flags` the app doesn't know, as given.
     pub unknown: Vec<String>,
-}
-
-/// An invite link rather than a file (`figcraft:` links, in any case).
-pub fn is_invite(arg: &str) -> bool {
-    arg.get(..9).is_some_and(|s| s.eq_ignore_ascii_case("figcraft:"))
 }
 
 /// The path a local `file://` URL names (`%XX` escapes decoded); `None` for anything else.
@@ -78,8 +69,6 @@ pub fn parse(args: &[String]) -> Args {
             out.collab = inline.or_else(|| it.next().cloned());
         } else if flag == "--control" {
             out.control = inline.or_else(|| it.next().cloned()).and_then(|p| p.parse().ok());
-        } else if is_invite(a) {
-            out.join = Some(a.clone());
         } else if let Some(path) = file_url_path(a) {
             out.files.push(path);
         } else if a.starts_with("--") {
