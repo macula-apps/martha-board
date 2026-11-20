@@ -202,18 +202,24 @@ fn a_late_joiner_takes_the_hosts_board_only() {
     // The rogue answers the joiner's request with a board of its own, while the host's is held.
     let mut forged = board("Forged");
     forged.execute("board.sticky", &json!({"x": 9, "y": 9, "text": "the rogue's"})).unwrap();
+    let mut answered = 0;
     let state = Server::new(forged.doc().unwrap().clone(), "", Limits::default()).state().unwrap();
     let seat = wire::Seat { node: node('t'), client_id: 9, name: "You".into(), color: String::new(), access: figcraft_collab::Access::Edit, processed: Default::default() };
-    for _ in 0..20 {
-        for got in rogue.session.tick() {
+    // The joiner's first ask may come before the rogue saw its grant; the seam asks again later.
+    let end = macula_craft_seam::now_ms() + 15_000;
+    while answered == 0 && macula_craft_seam::now_ms() < end {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        for got in room.churn(&mut rogue, 1) {
             if matches!(got, Inbound::SnapshotWanted) {
                 let w = Welcome { session: state.session, seq: state.seq, snapshot: Replica::new(forged.doc().unwrap().clone()).snapshot().unwrap(), seats: vec![seat.clone()] };
                 rogue.session.answer_snapshot(wire::encode(&w).unwrap());
+                answered += 1;
             }
         }
-        room.settle();
     }
+    assert!(answered > 0, "the rogue answered the joiner");
     assert!(tap.holding() > 0, "the host's snapshot was held back");
+    assert!(room.s(joiner).live().client().is_none(), "the joiner took the rogue's board");
     tap.release();
     *tap.hold.lock().unwrap() = None;
     room.churn(&mut rogue, 10);
@@ -239,18 +245,15 @@ fn a_rogue_cannot_order_changes() {
         })
         .expect("the host ordered a batch");
     let target = copied.changes.iter().find_map(Change::node).expect("a node in it");
+    // Exactly the next position: a gap would make the holder ask the host for its board again.
     let forged = figcraft_collab::Accepted {
-        seq: copied.seq + 1_000,
+        seq: room.s(1).live().client().unwrap().seq() + 1,
         author: copied.author,
         batch_id: copied.batch_id + 1,
         changes: vec![Change::Set { id: target, prop: figcraft_collab::Prop::Name, value: Json(json!("forged")) }],
     };
-    let mut forged_next = forged.clone();
-    forged_next.seq = room.s(1).live().client().unwrap().seq() + 1;
-    for a in [forged, forged_next] {
-        let m = FromHost::Msg { to: To::All, msg: ServerMsg::Changes(a) };
-        rogue.session.send_command(SERVER.into(), wire::encode(&m).unwrap(), None);
-    }
+    let m = FromHost::Msg { to: To::All, msg: ServerMsg::Changes(forged) };
+    rogue.session.send_command(SERVER.into(), wire::encode(&m).unwrap(), None);
     room.churn(&mut rogue, 10);
     let guest = room.s(1).doc().unwrap();
     assert_ne!(guest.node(target).unwrap().name, "forged", "the rogue's order was applied");

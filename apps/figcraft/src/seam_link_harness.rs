@@ -271,7 +271,13 @@ impl Room {
     pub fn churn(&mut self, rogue: &mut Rogue, rounds: usize) -> Vec<macula_craft_seam::Inbound> {
         let mut got = Vec::new();
         for _ in 0..rounds {
-            got.extend(rogue.session.tick());
+            for event in rogue.session.tick() {
+                // A modded holder: it takes the board it is given, so it may answer for one.
+                if let macula_craft_seam::Inbound::Snapshot { crdt, .. } = &event {
+                    rogue.session.snapshot_loaded(crdt);
+                }
+                got.push(event);
+            }
             self.settle();
         }
         got
