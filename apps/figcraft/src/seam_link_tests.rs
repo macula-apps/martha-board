@@ -259,3 +259,102 @@ fn a_rogue_cannot_order_changes() {
     assert_ne!(guest.node(target).unwrap().name, "forged", "the rogue's order was applied");
     room.check();
 }
+
+/// Whether every laptop holds the host's board now (the soft form of [`Room::check`], for waiting).
+fn all_equal(room: &Room) -> bool {
+    let Some(host) = room.people[0].s.live().client() else { return false };
+    room.people.iter().all(|p| p.s.live().client().is_some_and(|c| c.pending() == 0 && c.view() == host.view()))
+}
+
+/// R3: a board holding what a board never shares is refused at the start, each thing named.
+#[test]
+fn a_board_with_an_image_and_a_style_is_not_shared() {
+    use figcraft_doc::color::{ImageScaleMode, Paint};
+    let mut s = board("Storm");
+    let sticky = id_of(&s.execute("board.sticky", &json!({"x": 0, "y": 0, "text": "A"})).unwrap());
+    s.execute("style.create", &json!({"type": "paint", "name": "Brand", "from": sticky})).unwrap();
+    s.doc_mut().unwrap().node_mut(NodeId(sticky)).unwrap().fills = vec![Paint::image("cafe", ImageScaleMode::Fill)];
+    let link = crate::seam_link_harness::opened_link(&node('a'), real_ceilings(&node('a')));
+    s.live.install(link);
+    let err = s.execute("collab.host", &json!({})).unwrap_err().to_string();
+    assert!(err.contains("an image") && err.contains("a style"), "both named: {err}");
+    assert!(s.live().client().is_none(), "nothing was shared");
+}
+
+/// The host removes a holder: the seam revokes its node, every laptop sees it go, and it keeps its copy.
+#[test]
+fn the_host_removes_a_holder() {
+    let mut room = room(2, &[]);
+    let gone = room.s(2).live().client().unwrap().id();
+    room.s(0).execute("collab.removePerson", &json!({"client": gone})).unwrap();
+    room.settle();
+    assert!(!room.s(0).live().peers.contains_key(&gone), "the host's list");
+    assert!(!room.s(1).live().peers.contains_key(&gone), "the other holder's list");
+    // What the removed holder sends after is not ordered.
+    let before = room.s(0).doc().unwrap().clone();
+    let _ = room.s(2).execute("board.sticky", &json!({"x": 0, "y": 0, "text": "late"}));
+    room.settle();
+    assert!(*room.s(0).doc().unwrap() == before, "a removed holder's act reached the host");
+    assert!(room.s(2).doc().is_ok(), "the removed holder keeps its copy");
+}
+
+/// A holder that comes back from the same node (a restarted app) takes its old seat and id.
+#[test]
+fn a_rejoin_from_the_same_node_keeps_its_id() {
+    let mut room = room(1, &[node('b')]);
+    let id = room.s(1).live().client().unwrap().id();
+    // The app on that node restarted: its old session is gone. A restart is a new process at a
+    // later millisecond, so the seam gives it a new epoch; in one test process that takes a wait.
+    room.people.remove(1);
+    std::thread::sleep(std::time::Duration::from_millis(5));
+    let again = room.join();
+    assert_eq!(again, 1);
+    room.settle();
+    assert_eq!(room.s(again).live().client().unwrap().id(), id);
+    room.s(again).execute("board.sticky", &json!({"x": 0, "y": 0, "text": "back"})).unwrap();
+    room.settle();
+    room.check();
+}
+
+/// R1: an ordered batch lost on its way to a holder: the seam notices the hole, and the holder
+/// ends with the host's board (the seam's stall runs on the clock).
+#[test]
+fn a_lost_batch_is_recovered() {
+    let mut room = room(1, &[]);
+    let host = room.host.clone();
+    let mut lost = 0;
+    *room.people[1].tap.drop.lock().unwrap() = Some(Box::new(move |m| {
+        let hit = lost == 0 && m.author == host && matches!(&m.kind, Kind::Command { id, .. } if id == SERVER);
+        lost += usize::from(hit);
+        hit
+    }));
+    room.s(0).execute("board.sticky", &json!({"x": 0, "y": 0, "text": "lost"})).unwrap();
+    room.settle();
+    room.s(0).execute("board.sticky", &json!({"x": 300, "y": 0, "text": "after"})).unwrap();
+    assert_eq!(room.people[1].tap.dropped.lock().unwrap().len(), 1, "one batch was lost");
+    assert!(room.settle_until(20_000, |r| all_equal(r)), "the holder caught up");
+    room.check();
+}
+
+/// M1: batches ordered while a joiner's board was on its way are not in the board it got; the next
+/// one shows the hole, and the joiner asks for the board again instead of applying past it.
+#[test]
+fn a_joiner_that_missed_batches_asks_again() {
+    let mut room = room(1, &[node('t')]);
+    let host = room.host.clone();
+    let tap = room.next_tap();
+    *tap.hold.lock().unwrap() = Some(Box::new(move |m| m.author == host && matches!(m.kind, Kind::Snapshot { .. })));
+    let joiner = room.join();
+    assert!(room.settle_until(10_000, |r| r.people[2].tap.holding() > 0), "the host's board was held");
+    // The host's board, as it was when asked for, is on its way; two batches pass it.
+    room.s(0).execute("board.sticky", &json!({"x": 0, "y": 0, "text": "one"})).unwrap();
+    room.s(0).execute("board.sticky", &json!({"x": 300, "y": 0, "text": "two"})).unwrap();
+    room.settle();
+    *tap.hold.lock().unwrap() = None;
+    tap.release();
+    room.settle();
+    room.s(0).execute("board.sticky", &json!({"x": 600, "y": 0, "text": "three"})).unwrap();
+    assert!(room.settle_until(20_000, |r| all_equal(r)), "the joiner caught up");
+    assert!(room.s(joiner).live().client().is_some());
+    room.check();
+}
