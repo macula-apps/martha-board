@@ -466,7 +466,7 @@ fn a_board_over_its_ceiling_is_not_shared() {
 /// R2 while shared: every board the host sends a joiner fits the ceiling it was measured against.
 #[test]
 fn every_snapshot_sent_fits_its_ceiling() {
-    let mut room = room(2, &[]);
+    let room = room(2, &[]);
     room.check();
     let sent = room.sent(0, |k| matches!(k, Kind::Snapshot { .. }));
     assert!(!sent.is_empty(), "the host answered");
