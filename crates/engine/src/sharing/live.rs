@@ -236,9 +236,10 @@ impl Lives {
         self.link = Some(link);
     }
 
-    /// Some session runs: hosted, joined or on its way (its link is polled until it ends).
-    pub fn running(&self) -> bool {
-        !self.sessions.is_empty()
+    /// Some session runs (hosted, joined or on its way) on a link that wakes no window: the app
+    /// polls it until the session ends.
+    pub fn needs_polling(&self) -> bool {
+        !self.sessions.is_empty() && self.link.as_ref().is_some_and(|l| l.polled())
     }
 
     /// The installed networking, if any.

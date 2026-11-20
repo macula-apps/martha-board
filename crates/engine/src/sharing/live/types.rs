@@ -148,13 +148,18 @@ pub struct HostOptions {
     pub doc: Arc<Document>,
 }
 
-/// The networking behind live sessions, installed by the app ([`Lives::install`]). It carries
-/// any number of sessions at once, each under the [`SessionId`] it was started with. Calls return
-/// at once; what happens later arrives through [`poll`](Self::poll).
 /// What a link without sealed shares answers for the acts only they have.
 pub const NOT_SEALED: &str = "this app shares no board over the mesh";
 
+/// The networking behind live sessions, installed by the app ([`Lives::install`]). It carries
+/// any number of sessions at once, each under the [`SessionId`] it was started with. Calls return
+/// at once; what happens later arrives through [`poll`](Self::poll).
 pub trait LiveLink {
+    /// The link wakes no window when something arrives (it is only read when polled), so the app
+    /// polls it while a session runs. No by default: a link that wakes the window costs no frames.
+    fn polled(&self) -> bool {
+        false
+    }
     /// Sessions can be hosted here (the browser build can only join).
     fn can_host(&self) -> bool {
         true

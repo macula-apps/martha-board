@@ -94,6 +94,10 @@ impl SeamLink {
 }
 
 impl LiveLink for SeamLink {
+    /// The seam is read only when polled: nothing it receives wakes the window.
+    fn polled(&self) -> bool {
+        true
+    }
     /// Whether `msg` may be applied and sent in `session` (B1 both ways, R3; the ceilings, M2):
     /// the engine asks before it keeps an act, so a refused act leaves nothing behind.
     fn check(&mut self, session: SessionId, msg: &ClientMsg) -> Result<(), String> {

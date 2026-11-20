@@ -155,3 +155,42 @@ fn a_session_behind_draws_nothing_and_asks_for_no_frames() {
     assert_eq!(crate::live::shown_at(&h.app), vec![(2, (90.0, 10.0))]);
     assert_eq!(live(&h)["chatBox"], Value::Null, "the chat box closed with the switch");
 }
+
+/// A link that wakes no window (the mesh's): it is only read when polled.
+struct Polled(Hosting);
+
+impl LiveLink for Polled {
+    fn polled(&self) -> bool {
+        true
+    }
+    fn host(&mut self, session: u64, opts: HostOptions) -> Result<SessionInfo, String> {
+        self.0.host(session, opts)
+    }
+    fn join(&mut self, session: u64, link: &str, name: &str) -> Result<(), String> {
+        self.0.join(session, link, name)
+    }
+    fn leave(&mut self, session: u64) {
+        self.0.leave(session);
+    }
+    fn presence(&mut self, session: u64, p: &Presence) {
+        self.0.presence(session, p);
+    }
+    fn send(&mut self, session: u64, msg: ClientMsg) {
+        self.0.send(session, msg);
+    }
+    fn poll(&mut self) -> Vec<(u64, LiveEvent)> {
+        self.0.poll()
+    }
+}
+
+#[test]
+fn a_link_that_wakes_no_window_is_polled_while_a_session_runs_and_only_then() {
+    let (mut h, _) = Harness::new();
+    h.app.session.live.install(Box::new(Polled(Hosting(Queue::default()))));
+    h.frames(3);
+    assert!(h.goes_quiet(), "no session: nothing to poll");
+    run(&mut h, "collab.host", json!({}));
+    assert!(!h.goes_quiet(), "a running session on a polled link keeps asking for frames");
+    run(&mut h, "collab.leave", json!({}));
+    assert!(h.goes_quiet(), "the session over, the window goes quiet again");
+}

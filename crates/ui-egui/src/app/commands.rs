@@ -200,7 +200,7 @@ impl FigApp {
             self.toast(live::failure_text(&m));
         }
         // A shared board arrives on the seam, which wakes no window: poll while one runs.
-        if self.session.live.running() {
+        if self.session.live.needs_polling() {
             ctx.request_repaint_after(LIVE_POLL);
         }
         // Files that arrived without a command (joined, recovered) take the kept View toggles too.
