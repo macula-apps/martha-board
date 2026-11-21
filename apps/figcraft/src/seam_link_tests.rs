@@ -637,3 +637,21 @@ fn a_holder_shows_as_its_invited_name() {
         assert_eq!(peer.name, "Mallory", "person {i} shows the invited name");
     }
 }
+
+/// B4: a rogue adds an author line naming another under a sticky of its own: refused at the host.
+#[test]
+fn a_rogue_cannot_add_an_author_line_for_another() {
+    refused_from_rogue_on(
+        |room| {
+            let doc = room.s(0).doc().unwrap();
+            let line = doc.nodes().find(|n| n.name == AUTHOR_LAYER).expect("the host's sticky has an author line");
+            let mut kind = line.kind.clone();
+            if let NodeKind::Text(t) = &mut kind {
+                t.characters = "Alice".into();
+            }
+            let (kind, name) = (Json(serde_json::to_value(kind).unwrap()), Json(json!(AUTHOR_LAYER)));
+            vec![Change::Create { id: NodeId(9_999), kind, parent: line.parent, position: "z0".into(), props: vec![(Prop::Name, name)] }]
+        },
+        "a name other than",
+    );
+}
