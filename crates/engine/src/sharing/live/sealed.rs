@@ -46,7 +46,7 @@ fn invite(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let id = session_of(s, CMD)?;
     let line = link_of(s, CMD)?.invite(id, &node, &name, &role, ttl_ms).map_err(|e| bad(CMD, e))?;
-    Ok(json!({"invite": line, "forNode": node, "role": role, "ttlMs": ttl_ms}))
+    Ok(json!({"invite": line, "forNode": node, "fingerprint": fingerprint(&node), "role": role, "ttlMs": ttl_ms}))
 }
 
 fn approve(s: &mut Session, p: &Value) -> Result<Value> {
@@ -72,20 +72,40 @@ fn stats(s: &mut Session) -> Result<Value> {
     link_of(s, CMD)?.stats(id).map_err(|e| bad(CMD, e))
 }
 
+/// How many hex digits of a node id its fingerprint shows, and how many to a group.
+const FINGERPRINT_DIGITS: usize = 16;
+const FINGERPRINT_GROUP: usize = 4;
+
+/// A node id's short fingerprint, for two people to read to each other before an invite
+/// (martha-board#2 B8): its first hex digits, lowercase, in groups ("a1b2 c3d4 e5f6 0718").
+/// Derived from the id alone, so the host's invite form and the invitee's own view show the
+/// same one for the same id.
+pub fn fingerprint(node: &str) -> String {
+    let digits: Vec<char> = node.trim().chars().filter(char::is_ascii_hexdigit).map(|c| c.to_ascii_lowercase()).take(FINGERPRINT_DIGITS).collect();
+    digits.chunks(FINGERPRINT_GROUP).map(|g| g.iter().collect::<String>()).collect::<Vec<_>>().join(" ")
+}
+
+/// `collab.me`: this app's own node id and its fingerprint (B8).
+fn me(s: &mut Session) -> Result<Value> {
+    const CMD: &str = "collab.me";
+    let node = link_of(s, CMD)?.own_node().map_err(|e| bad(CMD, e))?;
+    Ok(json!({"node": node, "fingerprint": fingerprint(&node)}))
+}
+
 /// The sealed share's commands.
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         spec!(
             "collab.invite",
             "Invite to board",
-            "{forNode (the invited node's id, hex), forName? (the name shown for them), role?: \"editor\" (default) | \"viewer\", ttlMs? (default one day)} → {invite (the line to give them: it carries their credential), forNode, role, ttlMs}; only the host of the open file's share",
+            "{forNode (the invited node's id, hex), forName? (the name shown for them), role?: \"editor\" (default) | \"viewer\", ttlMs? (default one day)} → {invite (the line to give them: it carries their credential), forNode, fingerprint (of forNode, to read back with them), role, ttlMs}; only the host of the open file's share; refused while the control port is on, unless the app was started with --control-may-share",
             false,
             invite
         ),
         spec!(
             "collab.approve",
             "Let in",
-            "{node} → {approved}: a node waiting at the door of the open file's share comes in; only the host",
+            "{node} → {approved}: a node waiting at the door of the open file's share comes in; only the host; refused while the control port is on, unless the app was started with --control-may-share",
             false,
             approve
         ),
@@ -102,6 +122,13 @@ pub fn specs() -> Vec<CommandSpec> {
             "{} → the open file's share: role, node, holders, pending, what it refused, the seam's numbers",
             false,
             |s, _| stats(s)
+        ),
+        spec!(
+            "collab.me",
+            "Your node id",
+            "{} → {node (this app's node id, hex: what a host invites you by), fingerprint (its short form, to read back with the host)}",
+            false,
+            |s, _| me(s)
         ),
     ]
 }

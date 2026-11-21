@@ -214,4 +214,9 @@ pub trait LiveLink {
     fn stats(&self, _session: SessionId) -> std::result::Result<serde_json::Value, String> {
         Err(NOT_SEALED.into())
     }
+    /// This app's own node id (hex): the one it signs with when it hosts or joins, which a host
+    /// needs to invite it (martha-board#2 B8).
+    fn own_node(&mut self) -> std::result::Result<String, String> {
+        Err(NOT_SEALED.into())
+    }
 }

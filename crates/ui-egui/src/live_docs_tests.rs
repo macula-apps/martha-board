@@ -81,7 +81,7 @@ fn the_share_popover_is_the_session_of_the_tab_in_front() {
     let shapes = h.frames(2);
     assert!(has_text(&shapes, "Share this file"));
     let shapes = start_sharing(&mut h, &shapes);
-    for t in ["Live · nobody else here yet", "Invite link", "Stop session"] {
+    for t in ["Live · nobody else here yet", "Invite someone by their node id", "Stop session"] {
         assert!(has_text(&shapes, t), "hosting shows {t:?}");
     }
     queue.lock().unwrap().push((1, LiveEvent::PeerJoined(hana())));

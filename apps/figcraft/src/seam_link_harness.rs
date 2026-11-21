@@ -155,6 +155,10 @@ impl Opener for Handed {
     fn join(&mut self, _: &str, _: &str) -> Result<Opened, String> {
         self.0.pop_front().ok_or_else(|| "no share to open".into())
     }
+    /// The node the next share would sign as: the author of the seam session it holds.
+    fn own_node(&mut self) -> Result<String, String> {
+        self.0.front().map(|o| o.session.author().to_string()).ok_or_else(|| "no share to open".into())
+    }
 }
 
 /// The ceilings of a real share of `host`'s, measured as the app measures them: once per test

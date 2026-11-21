@@ -17,7 +17,7 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 
 use egui::{Align2, Color32, CornerRadius, Pos2, Rect, Sense, Shape, Stroke, Ui, pos2, vec2};
-use figcraft_engine::live::{Access, PEOPLE, Role, SessionId, Signal, Status, TOO_LARGE_TO_JOIN, initials, parse_color, presence_page};
+use figcraft_engine::live::{Access, PEOPLE, Role, SessionId, Signal, Status, TOO_LARGE_TO_JOIN, fingerprint, initials, parse_color, presence_page};
 use serde_json::json;
 
 use crate::FigApp;
@@ -93,6 +93,11 @@ pub struct LiveUi {
     chat_seen: BTreeMap<u32, (String, f64)>,
     /// Your cursor chat (open when `Some`).
     pub chat: Option<ChatBox>,
+    /// Your own node id once read (`Some(None)`: this app has none to show), B8.
+    pub own_node: Option<Option<String>>,
+    /// The Share popover's invite form while hosting: the node id and the name typed.
+    pub invite_node: String,
+    pub invite_name: String,
 }
 
 impl LiveUi {
@@ -764,6 +769,7 @@ pub(crate) fn failure_text(reason: &str) -> Cow<'_, str> {
 /// one with an invite link. The browser only joins (a page can't host a session).
 fn start_ui(app: &mut FigApp, ui: &mut Ui, t: &Tokens) {
     name_row(app, ui, t, egui::Id::unique("live_name"));
+    own_node_rows(app, ui);
     if !app.session.live.can_host() {
         widgets::label(ui, tr("Join with an invite link"), t.text);
         join_row(app, ui, JOIN_WIDTH);
@@ -800,12 +806,48 @@ pub fn name_field(app: &mut FigApp, ui: &mut Ui, id: egui::Id, width: f32) {
 /// The join field's width in the Share popover (the Join button fits beside it).
 const JOIN_WIDTH: f32 = 196.0;
 
-/// Hosting: the invite link and URL to copy, and stop.
-fn host_ui(app: &mut FigApp, ui: &mut Ui) {
-    let Some(info) = app.session.live().info.clone() else { return };
-    link_rows(app, ui, &[(tr("Invite link"), &info.link, tr("Invite link copied")), (tr("WebSocket URL"), &info.url, tr("WebSocket URL copied"))]);
+/// Your own node id, to copy, and its fingerprint (martha-board#2 B8): what a host invites you by.
+/// Read once from the link (`collab.me`), then kept; nothing when this app has no mesh identity.
+fn own_node_rows(app: &mut FigApp, ui: &mut Ui) {
+    if app.ui.live.own_node.is_none() {
+        let me = app.session.execute("collab.me", &json!({}));
+        app.ui.live.own_node = Some(me.ok().and_then(|v| v["node"].as_str().map(str::to_string)));
+    }
+    let Some(Some(node)) = app.ui.live.own_node.clone() else { return };
+    link_rows(app, ui, &[(tr("Your node id"), &node, tr("Node id copied"))]);
     let t = Tokens::get(ui.ctx());
-    widgets::label(ui, tr("The link carries the session's secret: share it only with people you invite."), t.text_secondary);
+    widgets::label(ui, &trf("Fingerprint: {fingerprint}", &[("fingerprint", &fingerprint(&node))]), t.text_secondary);
+    widgets::label(ui, tr("A host invites you by this id. Read the fingerprint back with them before they invite you."), t.text_secondary);
+}
+
+/// The width of the invite form's fields in the Share popover.
+const INVITE_FIELD_WIDTH: f32 = 260.0;
+
+/// Hosting: invite someone by their node id (the fingerprint of what is typed shows, to read back
+/// with them, B8; the invite line is copied, to send them), and stop.
+fn host_ui(app: &mut FigApp, ui: &mut Ui) {
+    let t = Tokens::get(ui.ctx());
+    widgets::label(ui, tr("Invite someone by their node id"), t.text);
+    let mut node = std::mem::take(&mut app.ui.live.invite_node);
+    let mut name = std::mem::take(&mut app.ui.live.invite_name);
+    widgets::text_input(ui, egui::Id::unique("live_invite_node"), &mut node, INVITE_FIELD_WIDTH, tr("Their node id"));
+    widgets::text_input(ui, egui::Id::unique("live_invite_name"), &mut name, INVITE_FIELD_WIDTH, tr("Their name"));
+    let typed = !node.trim().is_empty();
+    if typed {
+        widgets::label(ui, &trf("Fingerprint to read back: {fingerprint}", &[("fingerprint", &fingerprint(&node))]), t.text_secondary);
+    }
+    if widgets::button(ui, tr("Invite"), true, typed).clicked()
+        && let Some(line) =
+            app.run("collab.invite", json!({"forNode": node.trim(), "forName": name.trim()})).and_then(|v| v["invite"].as_str().map(str::to_string))
+    {
+        app.clipboard_set_text(&line);
+        app.toast(tr("Invite copied: send it to them"));
+        node.clear();
+        name.clear();
+    }
+    app.ui.live.invite_node = node;
+    app.ui.live.invite_name = name;
+    widgets::label(ui, tr("An invite lets its holder read the board from the moment it is sent."), t.text_secondary);
     widgets::label(ui, tr(UNDO_NOTE), t.text_secondary);
     if widgets::button(ui, tr("Stop session"), false, true).clicked() {
         app.run("collab.stop", json!({}));

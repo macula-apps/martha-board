@@ -39,6 +39,8 @@ pub trait Opener {
     fn host(&mut self, file_name: &str, name: &str) -> Result<Opened, String>;
     /// Joins the share behind an invite line, as `name`.
     fn join(&mut self, invite: &str, name: &str) -> Result<Opened, String>;
+    /// The node id a join signs with (B8): what a host invites this app by.
+    fn own_node(&mut self) -> Result<String, String>;
 }
 
 /// One running share.
@@ -133,6 +135,15 @@ impl LiveLink for SeamLink {
 
     fn stats(&self, session: SessionId) -> Result<Value, String> {
         self.stats_of(session)
+    }
+
+    /// This app's node id (B8): the one a running share signs with, else the one a join would.
+    fn own_node(&mut self) -> Result<String, String> {
+        let running = self.boards.values().next().map(|b| match b {
+            Board::Host(h) => h.session.author().to_string(),
+            Board::Join(j) => j.session.author().to_string(),
+        });
+        running.map_or_else(|| self.opener.own_node(), Ok)
     }
 
     fn host(&mut self, session: SessionId, opts: HostOptions) -> Result<SessionInfo, String> {

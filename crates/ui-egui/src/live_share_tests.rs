@@ -1,5 +1,5 @@
 //! Sharing in the window: the Share popover not sharing (one Start button, one join field),
-//! hosting (the invite link to copy), joining with the one join field (the popover, the home
+//! hosting (the invite form, by node id, with its fingerprint: B8), joining with the one join field (the popover, the home
 //! screen, the Join dialog) and its errors, and an idle popover asking for no frames. (Sharing
 //! through a server left with martha-board#41; join codes with martha-board#43.)
 
@@ -20,7 +20,12 @@ struct Script {
     events: Vec<LiveEvent>,
     session: u64,
     copied: Vec<String>,
+    /// The nodes invited, in order.
+    invited: Vec<String>,
 }
+
+/// This app's own node id, as the scripted link knows it.
+const OWN: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 type Shared = Arc<Mutex<Script>>;
 
@@ -66,6 +71,13 @@ impl LiveLink for Link {
         let mut s = self.0.lock().unwrap();
         let session = s.session;
         std::mem::take(&mut s.events).into_iter().map(|e| (session, e)).collect()
+    }
+    fn own_node(&mut self) -> Result<String, String> {
+        Ok(OWN.into())
+    }
+    fn invite(&mut self, _: u64, node: &str, _: &str, _: &str, _: u64) -> Result<String, String> {
+        self.0.lock().unwrap().invited.push(node.to_string());
+        Ok(INVITE.into())
     }
 }
 
@@ -143,9 +155,29 @@ fn not_sharing_the_popover_offers_one_way_to_start_and_one_to_join() {
     assert_eq!(h.app.session.live().status, Status::Off);
     let shapes = click(&mut h, &shapes, "Start sharing");
     assert_eq!(script.lock().unwrap().hosted.len(), 1, "the file is hosted");
-    assert!(has_text(&shapes, "Invite link") && has_text(&shapes, "Stop session"));
+    assert!(has_text(&shapes, "Invite someone by their node id") && has_text(&shapes, "Stop session"));
+}
+
+/// B8: not sharing, the popover shows your own node id to copy and its fingerprint; hosting, the
+/// invite form shows the fingerprint of the id typed, invites that id, and copies the line.
+#[test]
+fn the_popover_shows_your_node_id_and_the_fingerprint_you_invite() {
+    let (mut h, script) = harness();
+    let shapes = open(&mut h);
+    let own = format!("Fingerprint: {}", figcraft_engine::live::fingerprint(OWN));
+    assert!(has_text(&shapes, "Your node id") && has_text(&shapes, &own), "your id and its fingerprint show");
     click(&mut h, &shapes, "Copy");
-    assert_eq!(script.lock().unwrap().copied, [INVITE]);
+    assert_eq!(script.lock().unwrap().copied, [OWN], "the id is copied");
+    let shapes = click(&mut h, &shapes, "Start sharing");
+    let theirs = "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210";
+    click(&mut h, &shapes, "Their node id");
+    type_text(&mut h, theirs);
+    let shapes = h.frames(2);
+    let read_back = format!("Fingerprint to read back: {}", figcraft_engine::live::fingerprint(theirs));
+    assert!(has_text(&shapes, &read_back), "the fingerprint of the id typed shows");
+    click(&mut h, &shapes, "Invite");
+    let s = script.lock().unwrap();
+    assert_eq!((s.invited.as_slice(), s.copied.last().map(String::as_str)), ([theirs.to_string()].as_slice(), Some(INVITE)));
 }
 
 #[test]
@@ -220,7 +252,7 @@ fn an_open_popover_asks_for_no_frames() {
     let shapes = open(&mut h);
     assert!(h.goes_quiet(), "not sharing");
     click(&mut h, &shapes, "Start sharing");
-    assert!(h.goes_quiet(), "sharing, with the invite link showing");
+    assert!(h.goes_quiet(), "sharing, with the invite form showing");
     let (shapes, delay) = h.frame(vec![]);
-    assert!(has_text(&shapes, "Invite link") && delay >= Duration::from_secs(1));
+    assert!(has_text(&shapes, "Invite someone by their node id") && delay >= Duration::from_secs(1));
 }

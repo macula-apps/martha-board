@@ -10,6 +10,7 @@ use serde_json::json;
 use crate::seam_link::wire::{self, CHANGES, FromHost, SERVER, To, Welcome};
 use crate::seam_link_harness::{Rogue, Room, board, id_of, node, real_ceilings};
 use figcraft_engine::cmd::facilitate::live_voter;
+use figcraft_engine::live::fingerprint;
 
 fn room(holders: usize, spares: &[String]) -> Room {
     Room::with(board("Storm"), holders, spares, real_ceilings(&node('a')))
@@ -668,4 +669,26 @@ fn a_locked_run_neither_invites_nor_lets_in() {
     assert!(approve.contains("--control-may-share"), "{approve}");
     room.s(0).execute("collab.stats", &json!({})).unwrap();
     room.s(0).execute("collab.revoke", &json!({"node": node('b')})).unwrap();
+}
+
+/// B8: each laptop's own node id is the one its seam session signs with, and its fingerprint is
+/// derived from it; an invite answers with the fingerprint of the id it was minted for.
+#[test]
+fn your_node_id_is_the_one_you_sign_with() {
+    let mut room = room(1, &[]);
+    for i in 0..2 {
+        let me = room.s(i).execute("collab.me", &json!({})).unwrap();
+        let signs = room.s(i).execute("collab.stats", &json!({})).unwrap()["node"].as_str().unwrap().to_string();
+        assert_eq!(me["node"], json!(signs), "person {i}'s own id is its signer");
+        assert_eq!(me["fingerprint"], json!(fingerprint(&signs)));
+    }
+    let line = room.s(0).execute("collab.invite", &json!({"forNode": node('e'), "forName": "Eve"})).unwrap();
+    assert_eq!(line["fingerprint"], json!(fingerprint(&node('e'))), "the fingerprint is of the id invited");
+}
+
+/// B8: a fingerprint is the id's first sixteen hex digits, lowercase, in fours.
+#[test]
+fn a_fingerprint_reads_in_fours() {
+    assert_eq!(fingerprint(" 0123456789ABCDEFfedcba9876543210 "), "0123 4567 89ab cdef");
+    assert_ne!(fingerprint(&node('a')), fingerprint(&node('b')), "two ids, two fingerprints");
 }

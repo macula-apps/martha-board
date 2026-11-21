@@ -62,6 +62,7 @@ mod types;
 
 use host::unavailable;
 pub use join::can_remove_people;
+pub use sealed::fingerprint;
 
 /// The live session commands (`collab.*`), the sealed share's among them.
 pub fn specs() -> Vec<CommandSpec> {

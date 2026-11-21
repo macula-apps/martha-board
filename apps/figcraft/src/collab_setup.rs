@@ -14,11 +14,13 @@ pub struct MeshOpener {
     /// The `--collab` config a board is shared under; `None`: this app shares nothing.
     config: Option<String>,
     mesh: Option<CraftMesh>,
+    /// This app's node id before any share opens, once read (B8).
+    own: Option<String>,
 }
 
 impl MeshOpener {
     pub fn new(config: Option<String>) -> MeshOpener {
-        MeshOpener { config, mesh: None }
+        MeshOpener { config, mesh: None, own: None }
     }
 }
 
@@ -41,6 +43,19 @@ impl Opener for MeshOpener {
         let ceilings = measured(&invite.group, profile, &session)?;
         self.mesh = Some(mesh);
         Ok(Opened { session, ceilings, host_node: invite.host.to_ascii_lowercase() })
+    }
+
+    /// The node id a join signs with (B8): the mesh's own once one is open, else the default Craft
+    /// identity, which is the one `CraftMesh::join_invite` loads (craft-collab 0.11
+    /// `craft_mesh.rs:140` and `:293`: the same profile and slug). Read once, then kept.
+    fn own_node(&mut self) -> Result<String, String> {
+        if let Some(mesh) = &self.mesh {
+            return Ok(mesh.identity().node_id().to_ascii_lowercase());
+        }
+        if self.own.is_none() {
+            self.own = Some(CraftMesh::default_identity()?.identity().node_id().to_ascii_lowercase());
+        }
+        self.own.clone().ok_or_else(|| "no node id".into())
     }
 }
 
