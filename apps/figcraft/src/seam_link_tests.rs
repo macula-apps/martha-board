@@ -803,3 +803,34 @@ fn a_fingerprint_reads_in_fours() {
     assert_eq!(fingerprint(" 0123456789ABCDEFfedcba9876543210 "), "0123 4567 89ab cdef");
     assert_ne!(fingerprint(&node('a')), fingerprint(&node('b')), "two ids, two fingerprints");
 }
+
+/// martha-board#46: a note written through `text.set` (agents, MCP, the control port) is shared
+/// from the host and from a holder, and reaches every laptop.
+#[test]
+fn a_note_written_by_command_reaches_every_laptop() {
+    let mut room = room(1, &[]);
+    let sticky = id_of(&room.s(0).execute("board.sticky", &json!({"x": 0, "y": 0, "text": "A"})).unwrap());
+    room.settle();
+    let note = {
+        let doc = room.s(0).doc().unwrap();
+        doc.nodes()
+            .find(|n| n.parent == Some(NodeId(sticky)) && n.name != AUTHOR_LAYER && matches!(n.kind, NodeKind::Text(_)))
+            .map(|n| n.id)
+            .expect("the sticky's note")
+    };
+    for i in 0..2 {
+        let typed = format!("written by {i}");
+        room.s(i).execute("text.set", &json!({"id": note.0, "characters": typed})).unwrap();
+        room.settle();
+        assert_eq!(room.s(i).message, None, "person {i}: nothing was refused");
+        for j in 0..2 {
+            let doc = room.s(j).doc().unwrap();
+            assert_eq!(
+                doc.node(note).and_then(|n| n.kind.text()).map(|t| t.characters.clone()),
+                Some(typed.clone()),
+                "person {j} shows what {i} wrote"
+            );
+        }
+    }
+    room.check();
+}

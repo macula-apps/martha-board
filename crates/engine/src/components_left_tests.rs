@@ -245,3 +245,23 @@ fn a_paste_from_another_file_names_a_pasted_main_or_none_of_this_files_layers() 
         assert_eq!(mains(&s, *i).1, Some(*m), "the pasted instance's layer names the pasted main's layer");
     }
 }
+
+/// martha-board#46: `text.set` records a characters override only inside an instance (as the
+/// window's text editor does); a plain text layer, such as a sticky's note, gets none.
+#[test]
+fn text_set_overrides_characters_only_inside_an_instance() {
+    let dir = Dir::new("text-set-overrides");
+    let path = dir.file("cards.figcraft");
+    let (doc, main, plain, _) = card_file();
+    write(&path, &doc);
+    let mut s = opened(&path);
+    let in_main = s.doc().unwrap().node(main).unwrap().children[1];
+    let in_instance = s.doc().unwrap().node(plain).unwrap().children[1];
+    for (id, what) in [(in_main, "the main component's own title"), (in_instance, "an instance's title")] {
+        ex(&mut s, "text.set", json!({"id": id.0, "characters": "Typed"}));
+        let n = s.doc().unwrap().node(id).unwrap();
+        assert_eq!(n.kind.text().map(|t| t.characters.as_str()), Some("Typed"), "{what} took the text");
+        let inside = n.source.is_some();
+        assert_eq!(n.overrides.contains("characters"), inside, "{what}: overridden only inside an instance");
+    }
+}
