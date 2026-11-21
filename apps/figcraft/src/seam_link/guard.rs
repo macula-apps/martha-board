@@ -193,7 +193,7 @@ fn text_in(value: &Json) -> Option<String> {
     value.read::<NodeKind>("kind").ok()?.text().map(|t| t.characters.clone())
 }
 
-/// Whether `props` name a layer the sticky's author line.
+/// Whether `props` name a layer as a sticky's author line.
 fn is_author_line(props: &[(Prop, Json)]) -> bool {
     props.iter().any(|(p, v)| *p == Prop::Name && v.read::<String>("name").is_ok_and(|n| n == AUTHOR_LAYER))
 }
