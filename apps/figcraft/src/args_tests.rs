@@ -59,3 +59,12 @@ fn file_urls_are_paths() {
         assert_eq!(file_url_path(bad), None, "{bad}");
     }
 }
+
+/// B9: `--control-may-share` is a known flag, with no value.
+#[test]
+fn control_may_share_is_a_flag() {
+    let a = parse(&["--control".into(), "7".into(), "--control-may-share".into(), "board.fig".into()]);
+    assert!(a.control_may_share);
+    assert_eq!((a.control, a.files, a.unknown), (Some(7), vec!["board.fig".to_string()], Vec::<String>::new()));
+    assert!(!parse(&["--control".into(), "7".into()]).control_may_share);
+}

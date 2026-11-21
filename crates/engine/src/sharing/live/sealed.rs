@@ -4,6 +4,7 @@
 //! drives one drives this one.
 
 use super::{CommandSpec, Result, Session, Value, bad, json, num, req_string, spec, string};
+use crate::EngineError;
 
 /// How long an invite is good for when the caller names no `ttlMs`: one day.
 const INVITE_TTL_MS: u64 = 24 * 60 * 60 * 1000;
@@ -17,12 +18,21 @@ fn session_of(s: &Session, cmd: &str) -> Result<super::SessionId> {
     Ok(live.id)
 }
 
+/// Refused when this run locks the acts that widen who reads a board (B9), saying why.
+fn unlocked(s: &Session, cmd: &str) -> Result<()> {
+    match &s.live.share_lock {
+        Some(why) => Err(EngineError::Disabled(cmd.into(), why.clone())),
+        None => Ok(()),
+    }
+}
+
 fn link_of<'a>(s: &'a mut Session, cmd: &str) -> Result<&'a mut (dyn super::LiveLink + 'static)> {
     s.live.link().ok_or_else(|| super::host::unavailable(cmd))
 }
 
 fn invite(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "collab.invite";
+    unlocked(s, CMD)?;
     let role = match string(p, "role").as_deref().unwrap_or("editor") {
         r @ ("editor" | "viewer") => r.to_string(),
         other => return Err(bad(CMD, format!("unknown role `{other}` (editor or viewer)"))),
@@ -41,6 +51,7 @@ fn invite(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn approve(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "collab.approve";
+    unlocked(s, CMD)?;
     let node = req_string(CMD, p, "node")?;
     let id = session_of(s, CMD)?;
     link_of(s, CMD)?.approve(id, &node).map_err(|e| bad(CMD, e))?;

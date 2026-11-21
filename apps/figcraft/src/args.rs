@@ -1,4 +1,4 @@
-//! The command line: `figcraft [--control <port>] [--collab <config.json>] [--automation-read-root <dir>]…
+//! The command line: `figcraft [--control <port>] [--control-may-share] [--collab <config.json>] [--automation-read-root <dir>]…
 //! [--automation-write-root <dir>]… [files…]`. Everything that isn't a flag is a file to open, as a
 //! path or a `file://` URL (the Linux desktop entry passes URLs, `%U`). Any other
 //! `--flag` is unknown and stops the app at startup (#836): a mistyped root flag must never leave
@@ -15,12 +15,18 @@ pub struct Args {
     /// which is refused at startup.
     pub read_roots: Vec<String>,
     pub write_roots: Vec<String>,
+    /// `--control-may-share`: invites and letting people in work while the control port is on
+    /// (martha-board#2 B9; without it they are refused for as long as the port listens).
+    pub control_may_share: bool,
     /// `--collab <config.json>` (or `=`): the mesh config a board is shared with (craft-collab's
     /// format); `collab.host` shares the open board under it.
     pub collab: Option<String>,
     /// `--flags` the app doesn't know, as given.
     pub unknown: Vec<String>,
 }
+
+/// The flag that lets a run with the control port on invite and let people in (B9).
+pub const CONTROL_MAY_SHARE: &str = "--control-may-share";
 
 /// The path a local `file://` URL names (`%XX` escapes decoded); `None` for anything else.
 pub fn file_url_path(arg: &str) -> Option<String> {
@@ -67,6 +73,8 @@ pub fn parse(args: &[String]) -> Args {
             roots.push(inline.or_else(|| it.next().cloned()).unwrap_or_default());
         } else if flag == "--collab" {
             out.collab = inline.or_else(|| it.next().cloned());
+        } else if a == CONTROL_MAY_SHARE {
+            out.control_may_share = true;
         } else if flag == "--control" {
             out.control = inline.or_else(|| it.next().cloned()).and_then(|p| p.parse().ok());
         } else if let Some(path) = file_url_path(a) {

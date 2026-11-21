@@ -216,7 +216,7 @@ impl Live {
 }
 
 /// The app's live sessions, one per document at most, and what they share: the networking and
-/// the invite-link registration.
+/// whether the acts that widen who reads a board are locked.
 #[derive(Default)]
 pub struct Lives {
     link: Option<Box<dyn LiveLink>>,
@@ -225,6 +225,9 @@ pub struct Lives {
     last: SessionId,
     /// What a document that isn't in a session shows.
     off: Live,
+    /// Why inviting and letting people in are refused in this run, if they are (martha-board#2 B9:
+    /// the control port is on, and any process on this computer can drive the app through it).
+    pub share_lock: Option<String>,
 }
 
 impl Lives {

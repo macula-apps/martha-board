@@ -5,7 +5,10 @@
 //!
 //! `--control <port>` (or `FIGCRAFT_CONTROL_PORT`) starts a localhost JSON-lines control server:
 //! `{"id":1,"method":"engine.execute","params":{"command":"shape.rectangle","params":{"x":0,"y":0,"width":100,"height":100}}}`
-//! → `{"id":1,"ok":true,"result":{…}}`. Methods: `figcraft_ui_egui::control`.
+//! → `{"id":1,"ok":true,"result":{…}}`. Methods: `figcraft_ui_egui::control`. While it listens,
+//! inviting someone to a board and letting someone in are refused, from the window too, unless the
+//! app was started with `--control-may-share` (martha-board#2 B9): any process on the computer can
+//! drive the app through the port, buttons included.
 //!
 //! `--automation-read-root <dir>` / `--automation-write-root <dir>` (each repeatable) confine the
 //! files the window and the control channel read and write (`figcraft_engine::file_access`); the
@@ -167,7 +170,7 @@ fn main() -> eframe::Result {
     let args = args::parse(&args);
     if let Some(flag) = args.unknown.first() {
         eprintln!(
-            "FigCraft: unknown option {flag}\nUsage: figcraft [--control PORT] [--automation-read-root DIR]... [--automation-write-root DIR]... [FILE]..."
+            "FigCraft: unknown option {flag}\nUsage: figcraft [--control PORT] [--control-may-share] [--automation-read-root DIR]... [--automation-write-root DIR]... [FILE]..."
         );
         std::process::exit(2);
     }
@@ -200,9 +203,7 @@ fn main() -> eframe::Result {
         figcraft_text::scan_system_fonts();
         fonts_wake();
     });
-    let mut session = Session::empty();
-    // Live boards over the mesh: shared under `--collab`, joined through an invite line.
-    session.live.install(Box::new(seam_link::SeamLink::new(Box::new(collab_setup::MeshOpener::new(args.collab.clone())))));
+    let mut session = live_session(&args, port);
     // A file that won't open is said in the window too: it may have been double-clicked.
     let mut failed_open = None;
     for f in &args.files {
@@ -319,6 +320,27 @@ fn main() -> eframe::Result {
     graphics.finish(result, frames, port.is_some())
 }
 
+/// The app's session before any file opens: live boards over the mesh (shared under `--collab`,
+/// joined through an invite line), locked against inviting while the control port `port` is on
+/// without the flag (B9).
+fn live_session(args: &args::Args, port: Option<u16>) -> Session {
+    let mut session = Session::empty();
+    session.live.install(Box::new(seam_link::SeamLink::new(Box::new(collab_setup::MeshOpener::new(args.collab.clone())))));
+    session.live.share_lock = share_lock(port, args.control_may_share);
+    session
+}
+
+/// Why this run refuses to invite and let people in, if it does (B9): its control port is on and
+/// it was not started with [`args::CONTROL_MAY_SHARE`].
+fn share_lock(port: Option<u16>, may_share: bool) -> Option<String> {
+    (port.is_some() && !may_share).then(|| {
+        format!(
+            "the control port is on, so any program on this computer can drive MarthaBoard: start it with {} to invite or let people in while it is",
+            args::CONTROL_MAY_SHARE
+        )
+    })
+}
+
 /// With nothing to open, whether the window starts in a new file rather than on the home screen.
 /// A first run (no settings kept yet) shows the home screen's tips and templates, and later runs
 /// start in a new file unless the preference asks for Home, which `--control` overrides: its
@@ -420,7 +442,33 @@ mod title_bar_tests {
 
 #[cfg(test)]
 mod start_tests {
-    use super::opens_new_file;
+    use super::{args, live_session, opens_new_file, share_lock};
+
+    /// B9: the control port on locks inviting and letting in, naming the flag that unlocks them;
+    /// with the flag, or with no port, nothing is locked.
+    #[test]
+    fn the_control_port_locks_sharing_unless_the_flag_is_given() {
+        let why = share_lock(Some(7), false).unwrap_or_default();
+        assert!(why.contains(args::CONTROL_MAY_SHARE), "names the flag: {why}");
+        assert_eq!(share_lock(Some(7), true), None);
+        assert_eq!(share_lock(None, false), None);
+    }
+
+    /// B9 in the session the app starts with: a run with the control port on refuses an invite by
+    /// the flag's name before anything else; with the flag it does not.
+    #[test]
+    fn the_app_session_is_locked_while_the_port_is_on() {
+        let run = |argv: &[&str]| {
+            let a = args::parse(&argv.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+            let mut s = live_session(&a, a.control);
+            s.execute("file.new", &serde_json::json!({})).ok();
+            s.execute("collab.invite", &serde_json::json!({"forNode": "ab".repeat(32)})).map_err(|e| e.to_string())
+        };
+        let locked = run(&["--control", "7"]).unwrap_err();
+        assert!(locked.contains(args::CONTROL_MAY_SHARE), "{locked}");
+        let open = run(&["--control", "7", args::CONTROL_MAY_SHARE]).unwrap_err();
+        assert!(!open.contains(args::CONTROL_MAY_SHARE), "refused for another reason only: {open}");
+    }
 
     #[test]
     fn the_home_preference_starts_on_home_except_for_control_callers() {

@@ -655,3 +655,17 @@ fn a_rogue_cannot_add_an_author_line_for_another() {
         "a name other than",
     );
 }
+
+/// B9: while the control port locks sharing, inviting and letting in are refused by name, and
+/// revoking and the numbers still work.
+#[test]
+fn a_locked_run_neither_invites_nor_lets_in() {
+    let mut room = room(1, &[]);
+    room.s(0).live.share_lock = Some("start it with --control-may-share".into());
+    let invite = room.s(0).execute("collab.invite", &json!({"forNode": node('e'), "forName": "Eve"})).unwrap_err().to_string();
+    assert!(invite.contains("--control-may-share"), "{invite}");
+    let approve = room.s(0).execute("collab.approve", &json!({"node": node('e')})).unwrap_err().to_string();
+    assert!(approve.contains("--control-may-share"), "{approve}");
+    room.s(0).execute("collab.stats", &json!({})).unwrap();
+    room.s(0).execute("collab.revoke", &json!({"node": node('b')})).unwrap();
+}
