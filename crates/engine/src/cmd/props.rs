@@ -947,7 +947,10 @@ fn apply_text(cmd: &str, doc: &mut Document, id: NodeId, props: &Map<String, Val
             let t = text_mut(cmd, n)?;
             let len = t.char_count();
             t.replace_range(0, len, &normalize_line_endings(&s));
-            n.overrides.insert("characters".into());
+            // An override only inside an instance, as the window's text editor records it (#46).
+            if n.source.is_some() {
+                n.overrides.insert("characters".into());
+            }
         }
         "fontFamily"
         | "fontStyle"

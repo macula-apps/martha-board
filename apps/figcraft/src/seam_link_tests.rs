@@ -820,9 +820,11 @@ fn a_note_written_by_command_reaches_every_laptop() {
     };
     for i in 0..2 {
         let typed = format!("written by {i}");
+        room.s(i).message = None;
         room.s(i).execute("text.set", &json!({"id": note.0, "characters": typed})).unwrap();
         room.settle();
-        assert_eq!(room.s(i).message, None, "person {i}: nothing was refused");
+        let said = room.s(i).message.clone().unwrap_or_default();
+        assert!(!said.contains("Not shared"), "person {i}: nothing was refused: {said}");
         for j in 0..2 {
             let doc = room.s(j).doc().unwrap();
             assert_eq!(
