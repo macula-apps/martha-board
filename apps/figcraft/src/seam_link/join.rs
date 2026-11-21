@@ -35,6 +35,8 @@ pub struct JoinBoard {
     position: u64,
     /// A gap was found: the stream is dropped until the host's snapshot loads.
     held: bool,
+    /// What the shared board's items were signed with, deleted ones too (B4, r=2).
+    signed: guard::Signed,
     shown: Shown,
     /// Host messages refused here (B6, an unreadable one, another holder posing as the host).
     pub refused: u64,
@@ -57,6 +59,7 @@ impl JoinBoard {
             clients: BTreeMap::new(),
             position: 0,
             held: false,
+            signed: guard::Signed::default(),
             shown: Shown::default(),
             refused: 0,
             last_refusal: None,
@@ -117,6 +120,7 @@ impl JoinBoard {
         let Some(server_welcome) = welcome.for_node(&self.me_node) else { return };
         let Some(seat) = welcome.seat_of(&self.me_node).cloned() else { return };
         self.session.snapshot_loaded(crdt);
+        self.signed.learn(&welcome.snapshot);
         let again = self.me.is_some();
         self.clients = welcome.seats.iter().map(|s| (s.node.clone(), s.client_id)).collect();
         self.position = welcome.seq;
@@ -185,6 +189,7 @@ impl JoinBoard {
             }
             ServerMsg::Changes(acc) => {
                 self.position = acc.seq;
+                self.signed.learn(&acc.changes);
                 self.events.push(Event::Sync(ServerMsg::Changes(acc)));
             }
             ServerMsg::Reject { .. } => self.events.push(Event::Sync(msg)),
@@ -213,7 +218,7 @@ impl JoinBoard {
         if let Some(why) = guard::refused_any(changes)
             .or_else(|| guard::refused_facilitation(changes))
             .or_else(ballot)
-            .or_else(|| guard::refused_author(&self.me_name, changes, None))
+            .or_else(|| guard::refused_author(&self.me_name, changes, &self.signed))
         {
             return Err(why);
         }

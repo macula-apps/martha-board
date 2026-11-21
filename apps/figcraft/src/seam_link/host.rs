@@ -44,6 +44,8 @@ pub struct HostBoard {
     /// An upper bound on the board welcome's encoded size (r=3 M2): measured at share start,
     /// raised by each ordered batch, and measured again only near the ceiling.
     welcome_bound: usize,
+    /// What the shared board's items were signed with, deleted ones too (B4, r=2).
+    signed: guard::Signed,
     shown: Shown,
     /// Holder messages refused here (B1, B2, a ceiling, an unknown command).
     pub refused: u64,
@@ -102,11 +104,13 @@ impl HostBoard {
             seats: BTreeMap::new(),
             invited: BTreeMap::new(),
             welcome_bound: 0,
+            signed: guard::Signed::default(),
             shown: Shown::default(),
             refused: 0,
             last_refusal: None,
             events: Vec::new(),
         };
+        host.signed.learn(&snapshot);
         host.invited.insert(me_node.clone(), (name.to_string(), Access::Edit));
         host.me = host.seat(&me_node).ok_or("the host could not take its own seat")?;
         let size = wire::encode(&host.welcome()?)?.len();
@@ -267,7 +271,7 @@ impl HostBoard {
                 let why = guard::refused_any(changes)
                     .or_else(|| guard::refused_facilitation(changes))
                     .or_else(|| guard::refused_ballot(client, changes, Ballots::OwnOnly))
-                    .or_else(|| guard::refused_author(&name, changes, Some(self.server.document())))
+                    .or_else(|| guard::refused_author(&name, changes, &self.signed))
                     .or_else(|| self.order_fits(&msg).err());
                 if let Some(why) = why {
                     self.refuse(why.clone());
@@ -290,7 +294,8 @@ impl HostBoard {
     fn order(&mut self, client: u32, msg: ClientMsg) {
         let outs = self.server.receive(client, msg);
         for out in &outs {
-            if let Outgoing::All(m @ ServerMsg::Changes(_)) = out {
+            if let Outgoing::All(m @ ServerMsg::Changes(acc)) = out {
+                self.signed.learn(&acc.changes);
                 self.welcome_bound = self.welcome_bound.saturating_add(server_len(&To::All, m));
             }
         }
@@ -305,7 +310,7 @@ impl HostBoard {
         let name = self.my_name_and_color().0;
         let why = guard::refused_any(changes)
             .or_else(|| guard::refused_ballot(self.me, changes, Ballots::MayClear))
-            .or_else(|| guard::refused_author(&name, changes, Some(self.server.document())));
+            .or_else(|| guard::refused_author(&name, changes, &self.signed));
         if let Some(why) = why {
             return Err(why);
         }

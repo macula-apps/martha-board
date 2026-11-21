@@ -6,9 +6,11 @@
 //! A property, a node type or a document entry added to FigCraft later is refused until it is
 //! added to these lists on purpose.
 
-use figcraft_collab::{Change, DocProp, Document, Entry, Json, Prop};
+use std::collections::{HashMap, HashSet};
+
+use figcraft_collab::{Change, DocProp, Entry, Json, Prop};
 use figcraft_doc::color::Paint;
-use figcraft_doc::{BoardItem, FileKind, NodeKind};
+use figcraft_doc::{BoardItem, FileKind, NodeId, NodeKind};
 use figcraft_engine::board::AUTHOR_LAYER;
 use figcraft_engine::cmd::facilitate::live_voter;
 
@@ -191,27 +193,77 @@ fn text_in(value: &Json) -> Option<String> {
     value.read::<NodeKind>("kind").ok()?.text().map(|t| t.characters.clone())
 }
 
+/// Whether `props` name a layer the sticky's author line.
+fn is_author_line(props: &[(Prop, Json)]) -> bool {
+    props.iter().any(|(p, v)| *p == Prop::Name && v.read::<String>("name").is_ok_and(|n| n == AUTHOR_LAYER))
+}
+
+/// What each item and author line on the shared board was signed with, kept after it is deleted
+/// (B4, r=2): learnt from the board a laptop loads and from every batch the host orders, never
+/// forgotten. An undo or redo that re-creates a deleted item carries the name it had, and that is
+/// a restore, not a signature.
+#[derive(Default)]
+pub struct Signed {
+    by: HashMap<NodeId, String>,
+    lines: HashSet<NodeId>,
+}
+
+impl Signed {
+    /// Takes in what `changes`, as the shared board applies them, sign.
+    pub fn learn(&mut self, changes: &[Change]) {
+        for c in changes {
+            match c {
+                Change::Create { id, kind, props, .. } if is_author_line(props) => {
+                    self.lines.insert(*id);
+                    if let Some(text) = text_in(kind) {
+                        self.by.insert(*id, text);
+                    }
+                }
+                Change::Create { id, props, .. } => {
+                    if let Some(author) = props.iter().find_map(|(p, v)| (*p == Prop::Board).then(|| author_named(v)).flatten()) {
+                        self.by.insert(*id, author);
+                    }
+                }
+                Change::Set { id, prop: Prop::Board, value } => {
+                    if let Some(author) = author_named(value) {
+                        self.by.insert(*id, author);
+                    }
+                }
+                Change::Set { id, prop: Prop::Kind, value } if self.lines.contains(id) => {
+                    if let Some(text) = text_in(value) {
+                        self.by.insert(*id, text);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Whether re-creating `id` signed `name` brings it back as it was.
+    fn restores(&self, id: NodeId, name: &str) -> bool {
+        self.by.get(&id).is_some_and(|held| held == name)
+    }
+}
+
 /// Why `changes` from the holder the host named `name` sign something with another name (B4;
 /// `None`: they don't): a sticky or stamp whose author is not `name`, or the author line under a
-/// sticky (its [`AUTHOR_LAYER`]) written with other text. `doc` is the shared board the changes
-/// apply to, when known (the host's): with it, an edit of an author line already there is checked
-/// too. A holder may still type any name into a note: that is writing on the board.
-pub fn refused_author(name: &str, changes: &[Change], doc: Option<&Document>) -> Option<String> {
+/// sticky (its [`AUTHOR_LAYER`]) written with other text. `signed` is what the shared board's items
+/// were signed with: a re-created item that carries the name it had is a restore (an undo or redo
+/// of a delete), and passes. A holder may still type any name into a note: that is writing on the
+/// board.
+pub fn refused_author(name: &str, changes: &[Change], signed: &Signed) -> Option<String> {
     let other = |signed: String| (signed != name).then(|| format!("a name other than the one the host gave you ({signed})"));
     changes.iter().find_map(|c| match c {
-        Change::Create { kind, props, .. } => {
-            let author_line = props.iter().any(|(p, v)| *p == Prop::Name && v.read::<String>("name").is_ok_and(|n| n == AUTHOR_LAYER));
-            let line = author_line.then(|| text_in(kind)).flatten().and_then(other);
-            line.or_else(|| props.iter().find_map(|(p, v)| (*p == Prop::Board).then(|| author_named(v)).flatten().and_then(other)))
+        Change::Create { id, kind, props, .. } => {
+            let line = is_author_line(props).then(|| text_in(kind)).flatten();
+            let item = || props.iter().find_map(|(p, v)| (*p == Prop::Board).then(|| author_named(v)).flatten());
+            line.or_else(item).filter(|s| !signed.restores(*id, s)).and_then(other)
         }
         Change::Set { prop: Prop::Board, value, .. } => author_named(value).and_then(other),
         Change::Set { prop: Prop::Name, value, .. } if value.read::<String>("name").is_ok_and(|n| n == AUTHOR_LAYER) => {
             Some("a layer renamed to a sticky's author line".to_string())
         }
-        Change::Set { id, prop: Prop::Kind, value } => {
-            let is_line = doc.and_then(|d| d.node(*id)).is_some_and(|n| n.name == AUTHOR_LAYER);
-            is_line.then(|| text_in(value)).flatten().and_then(other)
-        }
+        Change::Set { id, prop: Prop::Kind, value } if signed.lines.contains(id) => text_in(value).and_then(other),
         _ => None,
     })
 }

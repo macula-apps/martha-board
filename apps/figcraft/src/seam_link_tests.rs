@@ -624,6 +624,64 @@ fn a_rogue_cannot_rewrite_an_author_line() {
     );
 }
 
+/// B4 (r=2): deleting another's sticky is undone and redone on every laptop, from either side. The
+/// undo brings the sticky back under the name it had: a restore, not a signature.
+#[test]
+fn deleting_anothers_sticky_undoes_and_redoes_on_every_laptop() {
+    for (maker, deleter) in [(0, 1), (1, 0)] {
+        let mut room = room(1, &[]);
+        let sticky = id_of(&room.s(maker).execute("board.sticky", &json!({"x": 0, "y": 0, "text": "mine"})).unwrap());
+        room.settle();
+        let signed = sticky_author(&mut room, maker, sticky);
+        assert!(!signed.is_empty(), "the sticky is signed");
+        let held = |room: &mut Room| (0..2).map(|i| sticky_author(room, i, sticky)).collect::<Vec<_>>();
+        room.s(deleter).execute("edit.delete", &json!({"ids": [sticky]})).unwrap();
+        room.settle();
+        assert_eq!(held(&mut room), ["", ""], "{deleter} deleted {maker}'s sticky everywhere");
+        for round in 0..2 {
+            room.s(deleter).execute("edit.undo", &json!({})).unwrap();
+            room.settle();
+            assert_eq!(held(&mut room), [signed.clone(), signed.clone()], "round {round}: the undo brought it back as it was");
+            room.s(deleter).execute("edit.redo", &json!({})).unwrap();
+            room.settle();
+            assert_eq!(held(&mut room), ["", ""], "round {round}: the redo deleted it again");
+        }
+        room.check();
+    }
+}
+
+/// B4 (r=2): a restore is only of the name an item had. A rogue that brings a deleted sticky back
+/// under another name is refused at the host.
+#[test]
+fn a_rogue_cannot_restore_a_sticky_under_another_name() {
+    let mut room = room(1, &[node('s')]);
+    let sticky = id_of(&room.s(0).execute("board.sticky", &json!({"x": 0, "y": 0, "text": "A"})).unwrap());
+    room.settle();
+    let mut rogue = room.rogue("Mallory");
+    let client = seated(&mut room, &mut rogue);
+    room.s(0).execute("edit.delete", &json!({"ids": [sticky]})).unwrap();
+    room.churn(&mut rogue, 10);
+    let frame = Json(serde_json::to_value(NodeKind::Frame).unwrap());
+    let signed = Json(serde_json::to_value(Some(figcraft_doc::BoardItem::Sticky { author: "Alice".into() })).unwrap());
+    let page = NodeId(1);
+    rogue_sends(
+        &mut rogue,
+        vec![Change::Create { id: NodeId(sticky), kind: frame, parent: Some(page), position: "a0".into(), props: vec![(Prop::Board, signed)] }],
+    );
+    room.churn(&mut rogue, 10);
+    let rejects: Vec<(To, String)> = from_host(&room)
+        .into_iter()
+        .filter_map(|m| match m {
+            FromHost::Msg { to, msg: ServerMsg::Reject { reason, .. } } => Some((to, reason)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(rejects.len(), 1, "one refusal: {rejects:?}");
+    assert_eq!(rejects[0].0, To::One(client), "told to the rogue only");
+    assert!(rejects[0].1.contains("a name other than"), "named: {}", rejects[0].1);
+    assert!(room.s(0).doc().unwrap().node(NodeId(sticky)).is_none(), "the sticky stays deleted");
+}
+
 /// B4: a holder that calls itself the host shows, on every laptop, as the name the host's invite
 /// gave it.
 #[test]
