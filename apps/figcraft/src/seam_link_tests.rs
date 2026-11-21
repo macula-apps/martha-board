@@ -650,6 +650,59 @@ fn deleting_anothers_sticky_undoes_and_redoes_on_every_laptop() {
     }
 }
 
+/// B4 (r=2): a sticky signed before the board was shared is restored too: the host knows what the
+/// board it shared was signed with.
+#[test]
+fn a_sticky_signed_before_sharing_comes_back_on_undo() {
+    let mut board = board("Storm");
+    let sticky = id_of(&board.execute("board.sticky", &json!({"x": 0, "y": 0, "text": "earlier", "author": "Earlier"})).unwrap());
+    let mut room = Room::with(board, 1, &[], real_ceilings(&node('a')));
+    room.settle();
+    room.s(1).execute("edit.delete", &json!({"ids": [sticky]})).unwrap();
+    room.settle();
+    room.s(1).execute("edit.undo", &json!({})).unwrap();
+    room.settle();
+    for i in 0..2 {
+        assert_eq!(sticky_author(&mut room, i, sticky), "Earlier", "person {i} has it back as it was");
+    }
+    room.check();
+}
+
+/// B4 (r=2): a holder knows the author lines of the board it holds, from the board it loaded and
+/// from each batch since: rewriting one is put back on its own laptop, and nothing goes out.
+#[test]
+fn a_holder_cannot_rewrite_an_author_line_it_holds() {
+    let mut room = room(1, &[node('t')]);
+    let early = id_of(&room.s(0).execute("board.sticky", &json!({"x": 0, "y": 0, "text": "A"})).unwrap());
+    room.settle();
+    let joiner = room.join();
+    room.settle();
+    let late = id_of(&room.s(0).execute("board.sticky", &json!({"x": 300, "y": 0, "text": "B"})).unwrap());
+    room.settle();
+    // The holder seated at the start learnt the late sticky from a batch; the joiner learnt the
+    // early one from the board it loaded.
+    for (i, sticky) in [(1, late), (joiner, early)] {
+        let line = {
+            let doc = room.s(i).doc().unwrap();
+            doc.nodes().find(|n| n.name == AUTHOR_LAYER && n.parent == Some(NodeId(sticky))).map(|n| n.id).expect("the sticky's author line")
+        };
+        let before = room.s(i).doc().unwrap().clone();
+        let changes = |room: &Room| room.sent(i, |k| matches!(k, Kind::Command { id, .. } if id == CHANGES)).len();
+        let sent = changes(&room);
+        // Typed straight into the layer, as the window's text editor does: the next sync asks.
+        if let NodeKind::Text(t) = &mut room.s(i).doc_mut().unwrap().node_mut(line).expect("the line").kind {
+            t.characters = "Mallory".into();
+        }
+        room.s(i).live_sync_in(|_| true);
+        assert!(*room.s(i).doc().unwrap() == before, "person {i}: the rewrite was put back");
+        let said = room.s(i).message.clone().unwrap_or_default();
+        assert!(said.contains("a name other than"), "person {i}: said by name: {said}");
+        room.settle();
+        assert_eq!(changes(&room), sent, "person {i}: no change went out");
+    }
+    room.check();
+}
+
 /// B4 (r=2): a restore is only of the name an item had. A rogue that brings a deleted sticky back
 /// under another name is refused at the host.
 #[test]
